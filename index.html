@@ -281,6 +281,17 @@
 </head>
 <body>
 
+<div class="profile-gate" id="teamGate" style="display:none;">
+  <div class="profile-card">
+    <div class="chip-logo"></div>
+    <h2>팀 코드를 입력해주세요</h2>
+    <p>소속 팀의 코드를 입력하면<br>우리 팀 고객만 안전하게 관리할 수 있어요.</p>
+    <input id="teamCodeInput" type="password" placeholder="팀 코드 입력" autocomplete="off" />
+    <button class="btn btn-primary" id="teamStartBtn">입장하기</button>
+    <div id="teamCodeError" style="color:#c0392b;font-size:12px;margin-top:10px;display:none;">팀 코드가 올바르지 않아요.</div>
+  </div>
+</div>
+
 <div class="profile-gate" id="profileGate" style="display:none;">
   <div class="profile-card">
     <div class="chip-logo"></div>
@@ -301,6 +312,7 @@
           <span>담당자별로 등록하고, 서버에서 한번에 모아봐요</span>
           <span class="profile-tag" id="profileTag">👤 -</span>
           <button class="profile-change" id="profileChangeBtn">변경</button>
+          <button class="profile-change" id="teamLogoutBtn" style="margin-left:6px;">팀 변경</button>
         </div>
       </div>
     </div>
@@ -643,6 +655,18 @@
 
 <script>
 (function(){
+  // ── 팀 코드 시스템 ──────────────────────────────────────────────
+  const TEAM_CODE = 'NTOP757687*';       // 우리 팀 코드
+  const ADMIN_CODE = 'saklian';           // 관리자 코드
+  const TEAM_STORAGE = 'nrc-team-code';   // localStorage 키
+  let currentTeam = null;                 // 현재 로그인된 팀 코드
+  let isAdmin = false;                    // 관리자 여부
+
+  // 저장 키에 팀 코드를 붙여서 팀별로 데이터 분리
+  function teamKey(baseKey){
+    return baseKey + '__' + (currentTeam || 'default');
+  }
+
   const STORAGE_KEY = 'contacts-data';
   const SETTINGS_KEY = 'app-settings';
   const PROFILE_KEY = 'my-profile';
@@ -724,23 +748,49 @@
   // ---------------- Storage (shared = "server") ----------------
   async function loadContacts(){
     try{
-      const res = await window.storage.get(STORAGE_KEY, true);
-      contacts = res && res.value ? JSON.parse(res.value) : [];
+      if(isAdmin){
+        // 관리자: 모든 팀의 고객을 합쳐서 조회
+        contacts = await loadAllTeamsContacts();
+      } else {
+        const res = await window.storage.get(teamKey(STORAGE_KEY), true);
+        contacts = res && res.value ? JSON.parse(res.value) : [];
+      }
     }catch(e){
       contacts = [];
     }
   }
   async function persist(){
+    if(isAdmin){ toast('관리자 모드에서는 저장이 제한돼요.'); return; }
     try{
-      const res = await window.storage.set(STORAGE_KEY, JSON.stringify(contacts), true);
+      const res = await window.storage.set(teamKey(STORAGE_KEY), JSON.stringify(contacts), true);
       if(!res) toast('저장에 실패했어요. 다시 시도해 주세요.');
     }catch(e){
       toast('저장 중 오류가 발생했어요.');
     }
   }
+
+  // 관리자용: 모든 팀 데이터 조회
+  async function loadAllTeamsContacts(){
+    try{
+      const url = `${SUPABASE_URL}/rest/v1/kv_store?id=like.${encodeURIComponent(STORAGE_KEY + '__')}*&select=id,value`;
+      const res = await fetch(url, { headers: { ...SB_HEADERS, 'Prefer': '' } });
+      if(!res.ok) return [];
+      const rows = await res.json();
+      let all = [];
+      rows.forEach(row => {
+        try{
+          const teamCode = row.id.split('__')[1] || '';
+          const list = JSON.parse(row.value);
+          list.forEach(c => { c._team = teamCode; });
+          all = all.concat(list);
+        }catch(e){}
+      });
+      return all;
+    }catch(e){ return []; }
+  }
   async function loadSettings(){
     try{
-      const res = await window.storage.get(SETTINGS_KEY, true);
+      const res = await window.storage.get(teamKey(SETTINGS_KEY), true);
       settings = res && res.value ? JSON.parse(res.value) : { cycleDays: 30 };
     }catch(e){
       settings = { cycleDays: 30 };
@@ -748,37 +798,56 @@
     $('cycleDaysInput').value = settings.cycleDays || 30;
   }
   async function persistSettings(){
-    try{ await window.storage.set(SETTINGS_KEY, JSON.stringify(settings), true); }
+    try{ await window.storage.set(teamKey(SETTINGS_KEY), JSON.stringify(settings), true); }
     catch(e){ toast('설정 저장 중 오류가 발생했어요.'); }
   }
   async function loadProfile(){
+    // 프로필은 기기별로 로컬 저장 (같은 팀 코드를 여러 명이 공유하므로)
     try{
-      const res = await window.storage.get(PROFILE_KEY, false);
-      profile = res && res.value ? JSON.parse(res.value) : null;
+      const raw = localStorage.getItem(teamKey(PROFILE_KEY));
+      profile = raw ? JSON.parse(raw) : null;
     }catch(e){
       profile = null;
     }
   }
   async function persistProfile(){
-    try{ await window.storage.set(PROFILE_KEY, JSON.stringify(profile), false); }
+    try{ localStorage.setItem(teamKey(PROFILE_KEY), JSON.stringify(profile)); }
     catch(e){ toast('프로필 저장 중 오류가 발생했어요.'); }
   }
 
   async function loadCash(){
     try{
-      const res = await window.storage.get(CASH_STORAGE_KEY, true);
-      cashRecords = res && res.value ? JSON.parse(res.value) : [];
+      if(isAdmin){
+        cashRecords = await loadAllTeamsCash();
+      } else {
+        const res = await window.storage.get(teamKey(CASH_STORAGE_KEY), true);
+        cashRecords = res && res.value ? JSON.parse(res.value) : [];
+      }
     }catch(e){
       cashRecords = [];
     }
   }
   async function persistCash(){
+    if(isAdmin){ toast('관리자 모드에서는 저장이 제한돼요.'); return; }
     try{
-      const res = await window.storage.set(CASH_STORAGE_KEY, JSON.stringify(cashRecords), true);
+      const res = await window.storage.set(teamKey(CASH_STORAGE_KEY), JSON.stringify(cashRecords), true);
       if(!res) toast('저장에 실패했어요. 다시 시도해 주세요.');
     }catch(e){
       toast('저장 중 오류가 발생했어요.');
     }
+  }
+  async function loadAllTeamsCash(){
+    try{
+      const url = `${SUPABASE_URL}/rest/v1/kv_store?id=like.${encodeURIComponent(CASH_STORAGE_KEY + '__')}*&select=id,value`;
+      const res = await fetch(url, { headers: { ...SB_HEADERS, 'Prefer': '' } });
+      if(!res.ok) return [];
+      const rows = await res.json();
+      let all = [];
+      rows.forEach(row => {
+        try{ all = all.concat(JSON.parse(row.value)); }catch(e){}
+      });
+      return all;
+    }catch(e){ return []; }
   }
 
   // ---------------- Date helpers ----------------
@@ -1879,12 +1948,52 @@
     if(action === 'mark-sent') markSent(id);
   });
 
-  async function init(){
+  // ── 팀 게이트 ──────────────────────────────────────────────
+  function showTeamGate(){
+    $('teamGate').style.display = 'flex';
+    $('app').style.display = 'none';
+    setTimeout(()=> $('teamCodeInput').focus(), 50);
+  }
+  function hideTeamGate(){
+    $('teamGate').style.display = 'none';
+    $('app').style.display = '';
+  }
+  async function confirmTeam(){
+    const code = $('teamCodeInput').value.trim();
+    const errEl = $('teamCodeError');
+    if(code === ADMIN_CODE){
+      isAdmin = true;
+      currentTeam = null;
+      localStorage.setItem(TEAM_STORAGE, code);
+      hideTeamGate();
+      await startApp();
+      toast('관리자 모드로 입장했어요 (전체 팀 조회)');
+      return;
+    }
+    if(code === TEAM_CODE){
+      isAdmin = false;
+      currentTeam = code;
+      localStorage.setItem(TEAM_STORAGE, code);
+      hideTeamGate();
+      await startApp();
+      return;
+    }
+    errEl.style.display = 'block';
+    $('teamCodeInput').value = '';
+  }
+
+  async function startApp(){
     await loadProfile();
     await loadSettings();
     await loadContacts();
     await loadCash();
-    if(!profile || !profile.name){
+    if(isAdmin){
+      // 관리자는 프로필 게이트 건너뛰고 바로 전체보기
+      profile = { name: '관리자' };
+      viewMode = 'all';
+      cashViewMode = 'all';
+      updateProfileTag();
+    } else if(!profile || !profile.name){
       showProfileGate('');
     } else {
       updateProfileTag();
@@ -1892,9 +2001,43 @@
     render();
     resetCashForm();
     $('dc_date').value = formatDate(todayDateOnly());
-    const dueToday = scopedContacts().filter(c=>{ const i = getDueInfo(c); return i && i.isDueNow; }).length;
-    if(dueToday > 0){
-      setTimeout(()=> toast(`오늘 충전 알림 대상 ${dueToday}명이 있어요`), 400);
+    if(!isAdmin){
+      const dueToday = scopedContacts().filter(c=>{ const i = getDueInfo(c); return i && i.isDueNow; }).length;
+      if(dueToday > 0){
+        setTimeout(()=> toast(`오늘 충전 알림 대상 ${dueToday}명이 있어요`), 400);
+      }
+    }
+  }
+
+  $('teamStartBtn').addEventListener('click', confirmTeam);
+  $('teamCodeInput').addEventListener('keydown', (e)=>{ if(e.key === 'Enter') confirmTeam(); });
+  $('teamLogoutBtn').addEventListener('click', ()=>{
+    if(confirm('팀 코드를 변경하시겠어요? 로그아웃됩니다.')){
+      localStorage.removeItem(TEAM_STORAGE);
+      currentTeam = null;
+      isAdmin = false;
+      contacts = []; cashRecords = [];
+      $('teamCodeInput').value = '';
+      $('teamCodeError').style.display = 'none';
+      showTeamGate();
+    }
+  });
+
+  async function init(){
+    // 자동 로그인 확인
+    const savedCode = localStorage.getItem(TEAM_STORAGE);
+    if(savedCode === ADMIN_CODE){
+      isAdmin = true;
+      currentTeam = null;
+      hideTeamGate();
+      await startApp();
+    } else if(savedCode === TEAM_CODE){
+      isAdmin = false;
+      currentTeam = savedCode;
+      hideTeamGate();
+      await startApp();
+    } else {
+      showTeamGate();
     }
   }
   init();
