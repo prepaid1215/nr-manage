@@ -3,6 +3,6 @@
       "target": {
         "namespace": "android_app",
         "package_name": "io.github.prepaid1215.twa",
-        "sha256_cert_fingerprints": ["81:5C:52:6C:D6:59:92:03:C5:71:BD:7E:57:8F:50:3B:62:F1:03:38:66:52:48:60:52:6C:AF:CB:28:B3:39:DF"]
+        "sha256_cert_fingerprints": ["A5:A8:D1:51:B2:DD:6C:DC:33:3D:49:C4:3C:99:F2:00:DB:DE:19:E3:73:0A:EB:90:2C:4E:FC:AE:61:84:24:3F"]
       }
     }]
