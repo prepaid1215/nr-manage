@@ -1830,10 +1830,14 @@
     const name = $('profileNameInput').value.trim();
     if(!name){ toast('이름을 입력해 주세요'); return; }
     profile = { name };
+    console.log('[confirmProfile] saving profile with key:', teamKey(PROFILE_KEY), 'profile:', profile);
     await persistProfile();
+    const check = localStorage.getItem(teamKey(PROFILE_KEY));
+    console.log('[confirmProfile] readback:', check);
     updateProfileTag();
     hideProfileGate();
     render();
+    console.log('[confirmProfile] done, profileGate display:', document.getElementById('profileGate').style.display);
   }
 
   // ---------------- Events ----------------
