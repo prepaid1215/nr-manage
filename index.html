@@ -663,8 +663,13 @@
   let isAdmin = false;                    // 관리자 여부
 
   // 저장 키에 팀 코드를 붙여서 팀별로 데이터 분리
+  // 특수문자(*, 공백 등)는 URL 문제를 일으키므로 안전한 문자로 변환
+  function safeTeamId(code){
+    if(!code) return 'default';
+    return code.replace(/[^a-zA-Z0-9]/g, '_');
+  }
   function teamKey(baseKey){
-    return baseKey + '__' + (currentTeam || 'default');
+    return baseKey + '__' + safeTeamId(currentTeam);
   }
 
   const STORAGE_KEY = 'contacts-data';
@@ -804,15 +809,21 @@
   async function loadProfile(){
     // 프로필은 기기별로 로컬 저장 (같은 팀 코드를 여러 명이 공유하므로)
     try{
-      const raw = localStorage.getItem(teamKey(PROFILE_KEY));
+      const key = teamKey(PROFILE_KEY);
+      const raw = localStorage.getItem(key);
       profile = raw ? JSON.parse(raw) : null;
     }catch(e){
       profile = null;
     }
   }
   async function persistProfile(){
-    try{ localStorage.setItem(teamKey(PROFILE_KEY), JSON.stringify(profile)); }
-    catch(e){ toast('프로필 저장 중 오류가 발생했어요.'); }
+    try{
+      const key = teamKey(PROFILE_KEY);
+      localStorage.setItem(key, JSON.stringify(profile));
+    }catch(e){
+      // localStorage 실패해도 메모리의 profile은 유지됨
+      console.warn('프로필 로컬 저장 실패:', e);
+    }
   }
 
   async function loadCash(){
