@@ -1,0 +1,1909 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>NRC 고객 관리</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0B6E63">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="NRC 고객관리">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #EEF1ED;
+    --surface: #FFFFFF;
+    --surface-2: #F6F7F4;
+    --ink: #1B1F1C;
+    --ink-soft: #5B645C;
+    --ink-faint: #8A9089;
+    --line: #DBDFD7;
+    --line-soft: #E7EAE4;
+    --teal: #0B6E63;
+    --teal-deep: #084F47;
+    --teal-tint: #E4F3EF;
+    --amber: #C98A2E;
+    --amber-tint: #FFF3E1;
+    --red: #C4483B;
+    --red-tint: #FBEAE7;
+    --radius: 10px;
+    --font-display: 'Sora', 'Noto Sans KR', sans-serif;
+    --font-body: 'Inter', 'Noto Sans KR', sans-serif;
+    --font-mono: 'IBM Plex Mono', 'Noto Sans KR', monospace;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection{ background: var(--teal-tint); color: var(--teal-deep); }
+  :focus-visible{ outline: 2px solid var(--teal); outline-offset: 2px; }
+
+  .app{ max-width: 1220px; margin: 0 auto; padding: 28px 20px 80px; }
+
+  /* ---------- Header ---------- */
+  .topbar{
+    display:flex; align-items:flex-end; justify-content:space-between;
+    gap: 20px; margin-bottom: 22px; flex-wrap: wrap;
+  }
+  .brand{ display:flex; align-items:center; gap: 12px; }
+  .chip-logo{
+    width: 34px; height: 24px; border-radius: 5px;
+    background: linear-gradient(135deg, var(--amber) 0%, #F0C97A 60%, var(--amber) 100%);
+    position: relative; flex-shrink:0;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08);
+  }
+  .chip-logo::before{
+    content:""; position:absolute; inset: 4px 6px;
+    border-top: 1px solid rgba(0,0,0,0.18);
+    border-bottom: 1px solid rgba(0,0,0,0.18);
+  }
+  .chip-logo::after{
+    content:""; position:absolute; left:50%; top:4px; bottom:4px; width:1px;
+    background: rgba(0,0,0,0.18);
+  }
+  h1{
+    font-family: var(--font-display); font-size: 20px; font-weight: 700;
+    margin: 0; letter-spacing: -0.01em;
+  }
+  .sub{ color: var(--ink-soft); font-size: 12.5px; margin-top: 2px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .profile-tag{
+    display:inline-flex; align-items:center; gap:5px; background: var(--teal-tint); color: var(--teal-deep);
+    padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight:600;
+  }
+  .profile-change{ color: var(--ink-faint); text-decoration: underline; cursor:pointer; font-size: 11.5px; background:none; border:none; padding:0; font-family: var(--font-body); }
+  .stats{ display:flex; gap: 10px; flex-wrap: wrap; }
+  .stat{
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 8px 14px; min-width: 84px;
+  }
+  .stat b{ display:block; font-family: var(--font-mono); font-size: 18px; }
+  .stat span{ font-size: 11px; color: var(--ink-soft); }
+
+  /* ---------- Toolbar ---------- */
+  .toolbar{
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 14px; display:flex; gap: 10px; flex-wrap: wrap; align-items:center;
+    margin-bottom: 14px;
+  }
+  .field{ display:flex; flex-direction:column; gap:4px; }
+  .field label{ font-size: 11px; color: var(--ink-soft); font-weight:500; }
+  input, select, textarea{
+    font-family: var(--font-body); font-size: 13.5px; color: var(--ink);
+    background: var(--surface-2); border: 1px solid var(--line);
+    border-radius: 7px; padding: 8px 10px;
+  }
+  input:focus, select:focus, textarea:focus{ background: var(--surface); }
+  .search-input{ min-width: 200px; }
+  .grow{ flex: 1; }
+  .btn{
+    font-family: var(--font-body); font-weight: 600; font-size: 13px;
+    border-radius: 7px; padding: 9px 15px; border: 1px solid transparent;
+    cursor: pointer; display:inline-flex; align-items:center; gap:6px;
+    transition: transform .05s ease;
+  }
+  .btn:active{ transform: scale(0.97); }
+  .btn-primary{ background: var(--teal); color: #fff; }
+  .btn-primary:hover{ background: var(--teal-deep); }
+  .btn-primary:disabled{ background: var(--ink-faint); cursor: not-allowed; }
+  .btn-ghost{ background: var(--surface); color: var(--ink); border-color: var(--line); }
+  .btn-ghost:hover{ border-color: var(--ink-faint); }
+  .btn-ghost.active{ background: var(--teal); color:#fff; border-color: var(--teal); }
+  .btn-amber{ background: var(--amber-tint); color: #7A521C; border-color: #EFD6A6; }
+  .btn-amber:hover{ background: #FCE7C1; }
+  .btn-danger{ background: var(--red-tint); color: var(--red); border-color: #F2CFC8; }
+  .btn-sm{ padding: 6px 10px; font-size: 12px; }
+  .seg{ display:flex; border: 1px solid var(--line); border-radius: 7px; overflow:hidden; }
+  .seg button{
+    border:none; background: var(--surface); padding: 8px 12px; font-size: 12.5px; font-weight:600;
+    color: var(--ink-soft); cursor:pointer; font-family: var(--font-body);
+  }
+  .seg button.active{ background: var(--teal); color:#fff; }
+
+  /* ---------- Table ---------- */
+  .table-wrap{
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    overflow-x: auto;
+  }
+  table{ width:100%; border-collapse: collapse; }
+  thead th{
+    text-align:left; font-size: 11.5px; color: var(--ink-soft); font-weight:600;
+    padding: 10px 12px; background: var(--surface-2); border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+  tbody td{
+    padding: 11px 12px; border-bottom: 1px solid var(--line-soft); font-size: 13px;
+    white-space: nowrap;
+  }
+  tbody tr:hover{ background: var(--surface-2); }
+  tbody tr:last-child td{ border-bottom: none; }
+  .mono{ font-family: var(--font-mono); font-size: 12.5px; }
+  .name-cell{ display:flex; align-items:center; gap:8px; font-weight:600; }
+  .avatar{
+    width:24px; height:24px; border-radius:50%; background: var(--teal-tint); color: var(--teal-deep);
+    font-size: 11px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .pill{
+    display:inline-block; padding: 3px 9px; border-radius: 999px; font-size: 11.5px; font-weight:600;
+  }
+  .pill-active{ background: var(--teal-tint); color: var(--teal-deep); }
+  .pill-stopped{ background: var(--red-tint); color: var(--red); }
+  .pill-pending{ background: var(--amber-tint); color: #8A5D1E; }
+  .pill-dday-danger{ background: var(--red-tint); color: var(--red); }
+  .pill-dday-warn{ background: var(--amber-tint); color: #8A5D1E; }
+  .pill-dday-safe{ background: var(--surface-2); color: var(--ink-soft); border: 1px solid var(--line); }
+  .due-cell-actions{ display:flex; gap:6px; margin-top:6px; }
+  .due-sent-tag{ font-size: 11px; color: var(--teal-deep); margin-top: 4px; }
+  .due-none{ color: var(--ink-faint); font-size: 12px; }
+  .row-actions{ display:flex; gap:6px; }
+  .icon-btn{
+    width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--line);
+    background: var(--surface); cursor: pointer; display:flex; align-items:center; justify-content:center;
+    color: var(--ink-soft); font-size: 13px; text-decoration:none;
+  }
+  .icon-btn:hover{ background: var(--surface-2); color: var(--ink); }
+  .empty{ padding: 60px 20px; text-align:center; color: var(--ink-soft); }
+  .empty b{ display:block; color: var(--ink); font-family: var(--font-display); font-size: 16px; margin-bottom: 6px; }
+
+  /* ---------- Modal ---------- */
+  .overlay{
+    position: fixed; inset:0; background: rgba(20,24,20,0.42);
+    display:flex; align-items:center; justify-content:center; padding: 20px; z-index: 50;
+  }
+  .modal{
+    width: 100%; max-width: 680px; background: var(--surface); border-radius: 14px;
+    max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+  }
+  .modal-head{
+    padding: 18px 22px; border-bottom: 1px solid var(--line);
+    display:flex; align-items:center; justify-content:space-between; gap: 12px;
+    position: sticky; top:0; background: var(--surface); z-index: 2;
+  }
+  .modal-head-left{ display:flex; align-items:center; gap:10px; }
+  .modal-title{ font-family: var(--font-display); font-size: 16px; font-weight:700; }
+  .close-x{ background:none; border:none; font-size: 18px; cursor:pointer; color: var(--ink-soft); }
+  .modal-body{ padding: 20px 22px 24px; }
+  .tabbar{ display:flex; gap:6px; margin-bottom: 18px; border-bottom: 1px solid var(--line); }
+  .tabbar button{
+    border:none; background:none; padding: 9px 4px; margin-right: 16px; font-size: 13px; font-weight:600;
+    color: var(--ink-faint); cursor:pointer; border-bottom: 2px solid transparent; font-family: var(--font-body);
+  }
+  .tabbar button.active{ color: var(--teal-deep); border-bottom-color: var(--teal); }
+  .tab-panel{ margin-bottom: 16px; }
+  .form-grid{ display:grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
+  .form-grid .full{ grid-column: 1 / -1; }
+  .form-grid label{ font-size: 12px; color: var(--ink-soft); font-weight:500; display:block; margin-bottom:4px; }
+  .form-grid input, .form-grid select, .form-grid textarea{ width:100%; }
+  .req::after{ content:" *"; color: var(--red); }
+  .modal-foot{
+    padding: 16px 22px; border-top: 1px solid var(--line); display:flex; justify-content:flex-end; gap:8px;
+  }
+  .hint{
+    background: var(--amber-tint); border: 1px solid #EFD6A6; color:#7A521C;
+    padding: 10px 12px; border-radius: 8px; font-size: 12px; margin: 10px 0; line-height:1.5;
+  }
+  .hint-teal{ background: var(--teal-tint); border-color: #BEE0D9; color: var(--teal-deep); }
+  .upload-box{
+    border: 1.5px dashed var(--line); border-radius: 10px; padding: 18px; text-align:center;
+    background: var(--surface-2);
+  }
+  .img-preview{ max-width: 100%; max-height: 220px; border-radius: 8px; margin-top: 12px; border: 1px solid var(--line); }
+  .ocr-progress{ margin-top: 10px; font-size: 12.5px; color: var(--ink-soft); }
+  .progress-bar{ height: 6px; background: var(--line-soft); border-radius: 999px; overflow:hidden; margin-top:6px; }
+  .progress-bar > div{ height:100%; background: var(--teal); transition: width .2s ease; width:0%; }
+  .backup-item{
+    display:flex; align-items:flex-start; gap:10px; padding: 10px 12px; border: 1px solid var(--line);
+    border-radius: 8px; margin-bottom: 8px; background: var(--surface-2); cursor:pointer;
+  }
+  .backup-item input[type=checkbox]{ margin-top: 3px; }
+  .backup-item b{ font-size: 13.5px; }
+  .backup-item .meta{ font-size: 11.5px; color: var(--ink-faint); margin-top: 2px; }
+  .backup-summary{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+
+  /* ---------- Profile gate ---------- */
+  .profile-gate{
+    position: fixed; inset:0; background: var(--bg); display:flex; align-items:center; justify-content:center;
+    z-index: 100; padding: 20px;
+  }
+  .profile-card{
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 32px;
+    width: 100%; max-width: 380px; text-align:center; box-shadow: 0 20px 60px rgba(0,0,0,0.08);
+  }
+  .profile-card .chip-logo{ margin: 0 auto 16px; width: 44px; height: 30px; }
+  .profile-card h2{ font-family: var(--font-display); font-size: 18px; margin: 0 0 6px; }
+  .profile-card p{ color: var(--ink-soft); font-size: 12.5px; margin: 0 0 18px; line-height:1.6; }
+  .profile-card input{ width:100%; margin-bottom: 12px; text-align:center; font-size: 14px; padding: 10px; }
+  .profile-card .btn{ width:100%; justify-content:center; }
+
+  @media (max-width: 720px){
+    .form-grid{ grid-template-columns: 1fr; }
+    table{ min-width: 980px; }
+    .topbar{ align-items: flex-start; }
+  }
+
+  .toast{
+    position: fixed; bottom: 24px; left:50%; transform: translateX(-50%);
+    background: var(--ink); color:#fff; padding: 10px 18px; border-radius: 999px;
+    font-size: 13px; box-shadow: 0 8px 24px rgba(0,0,0,0.25); opacity:0; pointer-events:none;
+    transition: opacity .2s ease, transform .2s ease; z-index: 100; max-width: 88vw; text-align:center;
+  }
+  .toast.show{ opacity:1; transform: translateX(-50%) translateY(-4px); }
+
+  .section-nav{ display:flex; gap:8px; margin-bottom:16px; }
+  .section-nav button{
+    font-family: var(--font-body); font-weight:600; font-size: 13px; padding: 9px 16px;
+    border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); cursor:pointer;
+  }
+  .section-nav button.active{ background: var(--ink); color:#fff; border-color: var(--ink); }
+
+  .cash-register-card{ background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
+  .cash-register-title{ font-size: 13px; font-weight:700; margin-bottom: 12px; }
+  .cash-form-row{ display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
+  .cash-form-row .field{ min-width: 110px; }
+  .cash-form-row input, .cash-form-row select{ width: 100%; }
+
+  .total-box{
+    display:flex; align-items:center; gap:8px; background: var(--teal-tint); border: 1px solid #BEE0D9;
+    color: var(--teal-deep); padding: 12px 16px; border-radius: var(--radius); font-weight:700; font-size: 14px;
+    margin-bottom: 14px;
+  }
+  .total-box .mono{ font-size: 16px; }
+</style>
+</head>
+<body>
+
+<div class="profile-gate" id="profileGate" style="display:none;">
+  <div class="profile-card">
+    <div class="chip-logo"></div>
+    <h2>담당자 이름을 알려주세요</h2>
+    <p>이 기기에서 등록하는 고객은 이 이름으로 저장돼요.<br>다른 담당자들과 같은 서버에 모여 함께 조회할 수 있어요.</p>
+    <input id="profileNameInput" type="text" placeholder="예: 주하루" />
+    <button class="btn btn-primary" id="profileStartBtn">시작하기</button>
+  </div>
+</div>
+
+<div class="app" id="app">
+  <div class="topbar">
+    <div class="brand">
+      <div class="chip-logo"></div>
+      <div>
+        <h1>NRC 고객 관리</h1>
+        <div class="sub">
+          <span>담당자별로 등록하고, 서버에서 한번에 모아봐요</span>
+          <span class="profile-tag" id="profileTag">👤 -</span>
+          <button class="profile-change" id="profileChangeBtn">변경</button>
+        </div>
+      </div>
+    </div>
+    <div class="stats" id="stats"></div>
+  </div>
+
+  <div class="section-nav">
+    <button id="navCustomers" class="active">👥 고객 관리</button>
+    <button id="navCash">💵 요금 현금전환</button>
+    <button id="navDaily">📅 일일 마감</button>
+  </div>
+
+  <div id="customerSection">
+  <div class="toolbar">
+    <div class="field">
+      <label>보기</label>
+      <div class="seg">
+        <button id="viewMine" class="active">내 고객</button>
+        <button id="viewAll">전체보기</button>
+      </div>
+    </div>
+    <div class="field" id="authorFilterWrap" style="display:none;">
+      <label for="filterAuthor">담당자</label>
+      <select id="filterAuthor"><option value="">전체</option></select>
+    </div>
+    <div class="field grow">
+      <label for="searchInput">검색</label>
+      <input id="searchInput" class="search-input" type="text" placeholder="이름, 번호, 회원번호로 검색" />
+    </div>
+    <div class="field">
+      <label for="filterCarrier">통신사</label>
+      <select id="filterCarrier"><option value="">전체</option></select>
+    </div>
+    <div class="field">
+      <label for="filterStatus">사용상태</label>
+      <select id="filterStatus"><option value="">전체</option></select>
+    </div>
+    <div class="field">
+      <label for="cycleDaysInput">충전주기(일)</label>
+      <input id="cycleDaysInput" type="number" min="1" style="width:76px;" value="30" />
+    </div>
+    <div class="field" style="justify-content:flex-end;">
+      <label>&nbsp;</label>
+      <button class="btn btn-ghost" id="dueOnlyToggle" title="오늘 충전 알림이 필요한 고객만 보기">🔔 알림 대상만</button>
+    </div>
+    <div class="field" style="justify-content:flex-end; flex-direction:row; gap:8px; margin-top:auto;">
+      <button class="btn btn-amber" id="exportAllBtn" title="전체 연락처를 .vcf 파일로 내보내 폰 연락처 앱에 추가">📇 연락처로 내보내기</button>
+      <button class="btn btn-primary" id="addBtn">+ 고객 등록</button>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>이름 / 회원번호</th>
+          <th>개통번호</th>
+          <th>연락번호</th>
+          <th>통신사</th>
+          <th>요금제</th>
+          <th>구분</th>
+          <th>사용상태</th>
+          <th>개통일</th>
+          <th>충전 알림</th>
+          <th>등록자</th>
+          <th style="text-align:right;">관리</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div class="empty" id="emptyState" style="display:none;">
+      <b>표시할 고객이 없어요</b>
+      '고객 등록' 버튼을 눌러 첫 고객 정보를 추가해 보세요.
+    </div>
+  </div>
+  </div>
+
+  <div id="cashSection" style="display:none;">
+    <div class="toolbar">
+      <div class="field">
+        <label>보기</label>
+        <div class="seg">
+          <button id="cashViewMine" class="active">내 등록</button>
+          <button id="cashViewAll">전체보기</button>
+        </div>
+      </div>
+      <div class="field" id="cashAuthorFilterWrap" style="display:none;">
+        <label for="cashFilterAuthor">담당자</label>
+        <select id="cashFilterAuthor"><option value="">전체</option></select>
+      </div>
+      <div class="field grow">
+        <label for="cashSearchInput">검색</label>
+        <input id="cashSearchInput" type="text" placeholder="소비자명으로 검색" />
+      </div>
+      <div class="field">
+        <label for="cashFromDate">전환일(시작)</label>
+        <input id="cashFromDate" type="date" style="width:150px;" />
+      </div>
+      <div class="field">
+        <label for="cashToDate">전환일(종료)</label>
+        <input id="cashToDate" type="date" style="width:150px;" />
+      </div>
+      <div class="field">
+        <label for="cashFilterRevenueType">매출구분</label>
+        <select id="cashFilterRevenueType"><option value="">전체</option></select>
+      </div>
+      <div class="field" style="justify-content:flex-end; flex-direction:row; gap:8px; margin-top:auto;">
+        <button class="btn btn-amber" id="cashExportBtn">⬇️ 내역 다운로드</button>
+      </div>
+    </div>
+
+    <div class="cash-register-card">
+      <div class="cash-register-title">요금현금전환 등록/수정</div>
+      <div class="cash-form-row">
+        <div class="field">
+          <label>구분</label>
+          <select id="cash_type"><option>신규개통</option><option>재충전</option><option>취소</option></select>
+        </div>
+        <div class="field grow" style="min-width:160px;">
+          <label>소비자명</label>
+          <input id="cash_name" list="cashNameList" placeholder="예: 고승광" />
+          <datalist id="cashNameList"></datalist>
+        </div>
+        <div class="field">
+          <label>전환일</label>
+          <input id="cash_date" type="date" />
+        </div>
+        <div class="field">
+          <label>현금전환금액</label>
+          <input id="cash_amount" type="number" min="0" step="100" placeholder="0" />
+        </div>
+        <div class="field">
+          <label>매출구분</label>
+          <select id="cash_revenueType">
+            <option>현금입금</option><option>카드전표</option><option>센터매출</option><option>직접충전</option>
+          </select>
+        </div>
+        <div class="field grow" style="min-width:160px;">
+          <label>비고</label>
+          <input id="cash_note" type="text" placeholder="메모" />
+        </div>
+        <div class="field" style="flex-direction:row; gap:8px;">
+          <button class="btn btn-primary" id="cashAddBtn">추가</button>
+          <button class="btn btn-ghost" id="cashCancelEditBtn" style="display:none;">취소</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="total-box">
+      💰 총현금전환금액: <span class="mono" id="cashTotalAmount">0원</span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th><th>구분</th><th>소비자명</th><th>전환일</th><th>현금전환금액</th>
+            <th>매출구분</th><th>비고</th><th>담당자</th><th>등록일</th><th style="text-align:right;">관리</th>
+          </tr>
+        </thead>
+        <tbody id="cashTbody"></tbody>
+      </table>
+      <div class="empty" id="cashEmptyState" style="display:none;">
+        <b>등록된 전환 내역이 없어요</b>
+        위에서 정보를 입력하고 '추가'를 눌러보세요.
+      </div>
+    </div>
+  </div>
+
+  <div id="dailySection" style="display:none;">
+    <div class="cash-register-card">
+      <div class="cash-register-title">일일 마감 내역 만들기</div>
+      <div class="cash-form-row">
+        <div class="field">
+          <label>마감 날짜</label>
+          <input id="dc_date" type="date" />
+        </div>
+        <div class="field">
+          <label>현재요금잔액 (직접 입력)</label>
+          <input id="dc_balance" type="number" min="0" step="1000" placeholder="예: 183472" style="width:160px;" />
+        </div>
+        <div class="field" style="flex-direction:row; gap:8px;">
+          <button class="btn btn-primary" id="dc_generateBtn">마감 내역 만들기</button>
+        </div>
+      </div>
+      <div class="hint hint-teal">🔢 K망/L망 개통 대수는 '개통관리'의 개통일 기준으로, 신규개통/재충전 금액은 '요금현금전환'의 전환일 기준으로 자동 집계돼요. (내 등록 기준)</div>
+    </div>
+
+    <div id="dc_previewWrap" style="display:none;">
+      <div class="cash-register-card">
+        <div class="cash-register-title">미리보기</div>
+        <pre id="dc_preview" style="white-space:pre-wrap; font-family: var(--font-mono); font-size:13.5px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 14px; margin:0;"></pre>
+        <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">
+          <button class="btn btn-ghost" id="dc_copyBtn">📋 복사하기</button>
+          <button class="btn btn-primary" id="dc_calendarBtn">📅 구글 캘린더에 저장</button>
+        </div>
+        <div class="hint" id="dc_calendarHint" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay" style="display:none;">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-head-left">
+        <div class="chip-logo" style="width:26px;height:18px;"></div>
+        <div class="modal-title" id="modalTitle">고객 등록</div>
+      </div>
+      <button class="close-x" id="closeModalBtn">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <div class="tabbar" id="tabbar">
+        <button class="tab-btn active" data-tab="direct">✍️ 직접 작성</button>
+        <button class="tab-btn" data-tab="paste">📋 카톡 문자 붙여넣기</button>
+        <button class="tab-btn" data-tab="screenshot">🖼️ 카톡 캡쳐본</button>
+        <button class="tab-btn" data-tab="backup">📄 카톡 백업본</button>
+      </div>
+
+      <div class="tab-panel" id="panelPaste" style="display:none;">
+        <div class="field full">
+          <label for="pasteTextarea">카톡 메시지 텍스트를 그대로 복사해서 붙여넣어주세요</label>
+          <textarea id="pasteTextarea" rows="7" style="width:100%; font-family: var(--font-mono); font-size:12.5px;" placeholder="처리번호: 20260727000018&#10;통신사: LGU&#10;가입구분: 신규가입&#10;..."></textarea>
+        </div>
+        <button class="btn btn-primary btn-sm" id="parsePasteBtn" style="margin-top:8px;">붙여넣은 텍스트로 채우기</button>
+        <div class="hint hint-teal">📋 카톡 메시지를 길게 눌러 '복사'한 뒤 여기에 붙여넣으면, 이미지 인식(OCR)보다 훨씬 정확하게 채워져요. 고객 여러 명을 한번에 등록하려면 '카톡 백업본' 탭을 이용해 주세요.</div>
+      </div>
+
+      <div class="tab-panel" id="panelScreenshot" style="display:none;">
+        <div class="upload-box">
+          <div style="font-size:13px; margin-bottom:8px;">개통 완료 알림톡 캡쳐 이미지를 올려주세요</div>
+          <input type="file" id="screenshotInput" accept="image/*" />
+          <img id="screenshotPreview" class="img-preview" style="display:none;" />
+          <div class="ocr-progress" id="ocrProgress" style="display:none;"></div>
+          <div class="progress-bar" id="ocrProgressBar" style="display:none;"><div id="ocrProgressFill"></div></div>
+        </div>
+        <div class="hint hint-teal">🔍 이미지에서 텍스트를 자동으로 읽어 아래 항목을 채워드려요. 인식 결과는 꼭 확인 후 저장해 주세요. (첫 인식 시 언어 데이터를 내려받아 시간이 조금 걸릴 수 있어요)</div>
+      </div>
+
+      <div class="tab-panel" id="panelBackup" style="display:none;">
+        <div class="upload-box">
+          <div style="font-size:13px; margin-bottom:8px;">카카오톡 '대화 내보내기'로 저장한 .txt 파일을 올려주세요</div>
+          <input type="file" id="backupInput" accept=".txt" />
+        </div>
+        <div class="hint hint-teal">📄 파일 안에서 개통 완료 알림 메시지를 모두 찾아 목록으로 보여드려요. 원하는 건만 선택해서 한번에 등록할 수 있어요.</div>
+        <div id="backupResults"></div>
+      </div>
+
+      <div class="tab-panel" id="panelDirect">
+        <div class="form-grid">
+          <div>
+            <label class="req">개통명의자 (이름)</label>
+            <input id="f_name" type="text" placeholder="예: 김수빈" />
+          </div>
+          <div>
+            <label class="req">개통번호 (선불번호)</label>
+            <input id="f_phone" type="tel" placeholder="010-0000-0000" />
+          </div>
+          <div>
+            <label>연락번호 (실사용 연락처)</label>
+            <input id="f_contactPhone" type="tel" placeholder="010-0000-0000" />
+          </div>
+          <div>
+            <label>회원번호</label>
+            <input id="f_memberNo" type="text" placeholder="예: 928714" />
+          </div>
+          <div>
+            <label>통신사</label>
+            <input id="f_carrier" list="carrierList" placeholder="예: SKT" />
+            <datalist id="carrierList">
+              <option value="SKT"></option><option value="KT"></option><option value="LG U+"></option><option value="알뜰폰"></option>
+            </datalist>
+          </div>
+          <div>
+            <label>요금제</label>
+            <input id="f_plan" type="text" placeholder="예: L플랫폼 7GB+" />
+          </div>
+          <div>
+            <label>구분</label>
+            <select id="f_type">
+              <option>신규</option><option>번호이동</option><option>기기변경</option>
+            </select>
+          </div>
+          <div>
+            <label>가입유형</label>
+            <select id="f_subType">
+              <option>선불</option><option>후불</option>
+            </select>
+          </div>
+          <div>
+            <label>사용상태</label>
+            <select id="f_status">
+              <option>사용중</option><option>일시정지</option><option>해지</option>
+            </select>
+          </div>
+          <div>
+            <label>개통일</label>
+            <input id="f_activationDate" type="date" />
+          </div>
+          <div>
+            <label>매출자</label>
+            <input id="f_seller" type="text" placeholder="예: 김수빈" />
+          </div>
+          <div>
+            <label>담당</label>
+            <input id="f_manager" type="text" placeholder="예: 주하루" />
+          </div>
+          <div>
+            <label>개통유입채널</label>
+            <input id="f_channel" type="text" placeholder="예: 네이버 광고" />
+          </div>
+          <div>
+            <label>처리번호</label>
+            <input id="f_processNo" type="text" placeholder="통신사 처리번호" />
+          </div>
+          <div class="full">
+            <label>등록 담당자</label>
+            <input id="f_author" type="text" placeholder="담당자 이름" />
+          </div>
+          <div class="full">
+            <label>비고</label>
+            <textarea id="f_note" rows="2" placeholder="메모"></textarea>
+          </div>
+          <div class="full hint">
+            💡 저장하면 이 화면에서 바로 연락처 파일(.vcf)도 만들 수 있어요. 폰에서 그 파일을 열면 '연락처 추가' 화면으로 연결돼요.
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-foot" id="modalFoot">
+      <button class="btn btn-ghost" id="cancelBtn">취소</button>
+      <button class="btn btn-primary" id="saveBtn">저장</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  const STORAGE_KEY = 'contacts-data';
+  const SETTINGS_KEY = 'app-settings';
+  const PROFILE_KEY = 'my-profile';
+
+  // ── Supabase 연결 설정 ──────────────────────────────────────────────
+  const SUPABASE_URL = 'https://mmdvblgqmtbsrnzhifux.supabase.co';
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1tZHZibGdxbXRic3JuemhpZnV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYzMzYyNjIsImV4cCI6MjEwMTkxMjI2Mn0.dpz41corIRkiVCNR7VdMlFB73vydc4KMq1GTtTZel8A';
+  const SB_HEADERS = {
+    'Content-Type': 'application/json',
+    'apikey': SUPABASE_KEY,
+    'Authorization': 'Bearer ' + SUPABASE_KEY,
+    'Prefer': 'resolution=merge-duplicates'
+  };
+
+  // kv_store 테이블: id TEXT PK, value TEXT, shared BOOLEAN
+  async function sbGet(key, shared){
+    try{
+      const url = `${SUPABASE_URL}/rest/v1/kv_store?id=eq.${encodeURIComponent(key)}&select=value`;
+      const res = await fetch(url, { headers: { ...SB_HEADERS, 'Prefer': '' } });
+      if(!res.ok) return null;
+      const arr = await res.json();
+      return arr && arr[0] ? { value: arr[0].value } : null;
+    }catch(e){ return null; }
+  }
+  async function sbSet(key, value, shared){
+    try{
+      const url = `${SUPABASE_URL}/rest/v1/kv_store`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: SB_HEADERS,
+        body: JSON.stringify({ id: key, value: value, shared: !!shared })
+      });
+      return res.ok;
+    }catch(e){ return false; }
+  }
+
+  // window.storage 폴리필 — 기존 코드 변경 최소화
+  window.storage = {
+    get: sbGet,
+    set: sbSet,
+    delete: async()=> true,
+    list: async()=> ({ keys: [] })
+  };
+
+  let contacts = [];
+  let editingId = null;
+  let settings = { cycleDays: 30 };
+  let profile = null;
+  let dueOnlyFilter = false;
+  let viewMode = 'mine'; // 'mine' | 'all'
+  let backupCandidates = [];
+  let lastFailCount = 0;
+  let cashRecords = [];
+  let cashViewMode = 'mine';
+  let cashEditingId = null;
+  const CASH_STORAGE_KEY = 'cash-conversions-data';
+
+  const $ = (id) => document.getElementById(id);
+  const tbody = $('tbody');
+  const emptyState = $('emptyState');
+  const statsEl = $('stats');
+  const overlay = $('overlay');
+  const toastEl = $('toast');
+
+  function toast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    setTimeout(()=> toastEl.classList.remove('show'), 2200);
+  }
+
+  function uid(){
+    return 'c_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,8);
+  }
+
+  function escapeHtml(str){
+    return (str||'').replace(/[&<>"']/g, (c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // ---------------- Storage (shared = "server") ----------------
+  async function loadContacts(){
+    try{
+      const res = await window.storage.get(STORAGE_KEY, true);
+      contacts = res && res.value ? JSON.parse(res.value) : [];
+    }catch(e){
+      contacts = [];
+    }
+  }
+  async function persist(){
+    try{
+      const res = await window.storage.set(STORAGE_KEY, JSON.stringify(contacts), true);
+      if(!res) toast('저장에 실패했어요. 다시 시도해 주세요.');
+    }catch(e){
+      toast('저장 중 오류가 발생했어요.');
+    }
+  }
+  async function loadSettings(){
+    try{
+      const res = await window.storage.get(SETTINGS_KEY, true);
+      settings = res && res.value ? JSON.parse(res.value) : { cycleDays: 30 };
+    }catch(e){
+      settings = { cycleDays: 30 };
+    }
+    $('cycleDaysInput').value = settings.cycleDays || 30;
+  }
+  async function persistSettings(){
+    try{ await window.storage.set(SETTINGS_KEY, JSON.stringify(settings), true); }
+    catch(e){ toast('설정 저장 중 오류가 발생했어요.'); }
+  }
+  async function loadProfile(){
+    try{
+      const res = await window.storage.get(PROFILE_KEY, false);
+      profile = res && res.value ? JSON.parse(res.value) : null;
+    }catch(e){
+      profile = null;
+    }
+  }
+  async function persistProfile(){
+    try{ await window.storage.set(PROFILE_KEY, JSON.stringify(profile), false); }
+    catch(e){ toast('프로필 저장 중 오류가 발생했어요.'); }
+  }
+
+  async function loadCash(){
+    try{
+      const res = await window.storage.get(CASH_STORAGE_KEY, true);
+      cashRecords = res && res.value ? JSON.parse(res.value) : [];
+    }catch(e){
+      cashRecords = [];
+    }
+  }
+  async function persistCash(){
+    try{
+      const res = await window.storage.set(CASH_STORAGE_KEY, JSON.stringify(cashRecords), true);
+      if(!res) toast('저장에 실패했어요. 다시 시도해 주세요.');
+    }catch(e){
+      toast('저장 중 오류가 발생했어요.');
+    }
+  }
+
+  // ---------------- Date helpers ----------------
+  function parseISODate(str){
+    if(!str) return null;
+    const [y,m,d] = str.split('-').map(Number);
+    if(!y || !m || !d) return null;
+    return new Date(y, m-1, d);
+  }
+  function todayDateOnly(){
+    const n = new Date();
+    return new Date(n.getFullYear(), n.getMonth(), n.getDate());
+  }
+  function addDays(date, n){
+    const d = new Date(date);
+    d.setDate(d.getDate() + n);
+    return d;
+  }
+  function daysBetween(a, b){ return Math.round((b - a) / 86400000); }
+  function formatDate(d){
+    const p = (n)=> String(n).padStart(2,'0');
+    return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+  }
+  function computeDueDate(activationDateStr, cycleDays){
+    const start = parseISODate(activationDateStr);
+    if(!start) return null;
+    let due = addDays(start, cycleDays);
+    const today = todayDateOnly();
+    while(due < today){ due = addDays(due, cycleDays); }
+    return due;
+  }
+  function getDueInfo(c){
+    const cycleDays = Number(settings.cycleDays) || 30;
+    const due = computeDueDate(c.activationDate, cycleDays);
+    if(!due) return null;
+    const today = todayDateOnly();
+    const diff = daysBetween(today, due);
+    let sentForCycle = false;
+    if(c.lastReminderSentAt){
+      const sentDate = parseISODate(c.lastReminderSentAt);
+      const cycleStart = addDays(due, -cycleDays);
+      if(sentDate && sentDate > cycleStart) sentForCycle = true;
+    }
+    let ddayClass, ddayLabel;
+    if(diff < 0){ ddayClass = 'pill-dday-danger'; ddayLabel = `D+${Math.abs(diff)}`; }
+    else if(diff === 0){ ddayClass = 'pill-dday-danger'; ddayLabel = 'D-DAY'; }
+    else if(diff <= 3){ ddayClass = 'pill-dday-warn'; ddayLabel = `D-${diff}`; }
+    else { ddayClass = 'pill-dday-safe'; ddayLabel = `D-${diff}`; }
+    const isDueNow = diff <= 0 && !sentForCycle;
+    return { due, diff, ddayClass, ddayLabel, sentForCycle, isDueNow, dueStr: formatDate(due) };
+  }
+  function smsTemplate(c){
+    return `${c.name} 고객님, 선불폰 요금 충전 예정일이 도래했습니다. 편하실 때 충전 부탁드립니다. 감사합니다.`;
+  }
+  function renderDueCell(c){
+    const info = getDueInfo(c);
+    if(!info) return `<span class="due-none">개통일 미입력</span>`;
+    let actionsHtml = '';
+    const targetPhone = c.contactPhone || c.phone || '';
+    if(info.isDueNow){
+      actionsHtml = `
+        <div class="due-cell-actions">
+          <a class="icon-btn" href="sms:${encodeURIComponent(targetPhone)}?&body=${encodeURIComponent(smsTemplate(c))}" title="문자 보내기">📩</a>
+          <button class="icon-btn" data-action="mark-sent" data-id="${c.id}" title="발송 완료 표시">✅</button>
+        </div>`;
+    } else if(info.sentForCycle){
+      actionsHtml = `<div class="due-sent-tag">✓ 이번 회차 발송완료</div>`;
+    }
+    return `
+      <div style="display:flex; align-items:center; gap:6px;">
+        <span class="pill ${info.ddayClass}">${info.ddayLabel}</span>
+        <span class="mono" style="font-size:11px;color:var(--ink-faint);">${info.dueStr}</span>
+      </div>
+      ${actionsHtml}
+    `;
+  }
+
+  // ---------------- Kakao message parser ----------------
+  // Fixed template: 처리번호 / 통신사 / 가입구분 / 가입유형 / 가입 요금제 / 이름 / 개통번호 / 연락번호
+  const LABELS = ['처리번호','통신사','가입구분','가입유형','가입\\s*요금제','이름','개통번호','개통\\s*실패\\s*사유','연락번호'];
+
+  function grabField(block, label){
+    const others = LABELS.filter(l => l !== label).join('|');
+    const re = new RegExp(label + '\\s*[:：]\\s*([\\s\\S]*?)(?=(?:' + others + ')\\s*[:：]|$)', 'm');
+    const m = block.match(re);
+    return m ? m[1].trim().replace(/[\s,.]+$/, '') : '';
+  }
+
+  function formatPhoneDashes(raw){
+    const digits = (raw||'').replace(/\D/g,'');
+    if(digits.length === 11) return digits.slice(0,3)+'-'+digits.slice(3,7)+'-'+digits.slice(7);
+    if(digits.length === 10) return digits.slice(0,3)+'-'+digits.slice(3,6)+'-'+digits.slice(6);
+    return raw.trim();
+  }
+
+  function normalizeCarrier(raw){
+    if(/LG/i.test(raw)) return 'LG U+';
+    if(/SKT|SK텔레콤/i.test(raw)) return 'SKT';
+    if(/^KT|케이티/i.test(raw)) return 'KT';
+    if(/알뜰/i.test(raw)) return '알뜰폰';
+    return raw.trim();
+  }
+  function normalizeType(raw){
+    if(/신규/.test(raw)) return '신규';
+    if(/번호이동/.test(raw)) return '번호이동';
+    if(/기기변경/.test(raw)) return '기기변경';
+    return raw.trim();
+  }
+  function normalizeSubType(raw){
+    if(/선불/.test(raw)) return '선불';
+    if(/후불/.test(raw)) return '후불';
+    return raw.trim();
+  }
+
+  function findPhoneNumbers(text){
+    const re = /01[016789][-\s]?\d{3,4}[-\s]?\d{4}/g;
+    const matches = text.match(re) || [];
+    return matches.map(s => s.replace(/[-\s]/g, ''));
+  }
+  // These four fields have small, known vocabularies / strict digit-length patterns,
+  // so we search the WHOLE OCR text for the value itself — independent of whether the
+  // Korean label text ("통신사:", "가입구분:" ...) was read correctly. This is far more
+  // resilient than label-matching, since OCR mangles Korean labels more than short
+  // keywords or digit runs.
+  function findCarrierAnywhere(text){
+    if(/LG\s*U?\+?/i.test(text)) return 'LG U+';
+    if(/SKT|SK\s*텔레콤/i.test(text)) return 'SKT';
+    if(/\bKT\b|케이티/i.test(text)) return 'KT';
+    if(/알뜰/.test(text)) return '알뜰폰';
+    return '';
+  }
+  function findTypeAnywhere(text){
+    if(/신규\s*가?입?/.test(text)) return '신규';
+    if(/번호\s*이동/.test(text)) return '번호이동';
+    if(/기기\s*변경/.test(text)) return '기기변경';
+    return '';
+  }
+  function findSubTypeAnywhere(text){
+    if(/선\s*불/.test(text)) return '선불';
+    if(/후\s*불/.test(text)) return '후불';
+    return '';
+  }
+  function findProcessNoAnywhere(text){
+    const m = text.match(/\b\d{12,16}\b/);
+    return m ? m[0] : '';
+  }
+
+  function findNameAnywhere(block){
+    const lines = block.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const phoneLineIdx = lines.findIndex(l => /01[016789][-\s]?\d{3,4}[-\s]?\d{4}/.test(l));
+    const candidates = phoneLineIdx > 0 ? lines.slice(0, phoneLineIdx) : lines;
+    // Scan backwards for a short standalone Hangul line (2–4 syllables) — the name
+    // line always sits directly above the phone-number lines in this template.
+    for(let i = candidates.length - 1; i >= 0; i--){
+      let line = candidates[i];
+      const colonIdx = line.search(/[:：]/);
+      if(colonIdx !== -1) line = line.slice(colonIdx + 1).trim();
+      if(/^[가-힣]{2,4}$/.test(line)) return line;
+    }
+    return '';
+  }
+
+  function parseOneBlock(block){
+    // Pattern search goes FIRST for these enum/digit-like fields, label matching is the
+    // fallback — not the other way around. A mis-OCR'd label can still yield some
+    // (wrong) non-empty text, which would otherwise block the much more reliable
+    // pattern search from ever running.
+    const processNo = findProcessNoAnywhere(block) || grabField(block, '처리번호');
+    const carrier = findCarrierAnywhere(block) || normalizeCarrier(grabField(block, '통신사'));
+    const type = findTypeAnywhere(block) || normalizeType(grabField(block, '가입구분'));
+    const subType = findSubTypeAnywhere(block) || normalizeSubType(grabField(block, '가입유형'));
+    const plan = grabField(block, '가입\\s*요금제');
+    const name = grabField(block, '이름') || findNameAnywhere(block);
+    const foundPhones = findPhoneNumbers(block).map(formatPhoneDashes);
+    const phone = foundPhones[0] || formatPhoneDashes(grabField(block, '개통번호'));
+    const contactPhone = foundPhones[1] || formatPhoneDashes(grabField(block, '연락번호'));
+
+    return { processNo, carrier, type, subType, plan, name, phone, contactPhone };
+  }
+
+  function parseKakaoBlocksLegacy(text){
+    const idxs = [];
+    const re = /처리번호\s*[:：]/g;
+    let m;
+    while((m = re.exec(text))) idxs.push(m.index);
+    if(idxs.length === 0) return [];
+    return idxs
+      .map((start,i) => text.slice(start, idxs[i+1] ?? text.length))
+      .map(parseOneBlock)
+      .filter(r => r.name || r.phone);
+  }
+
+  // Splits a KakaoTalk "대화 내보내기" .txt export into individual messages,
+  // tracking the date-divider lines so each message gets a real calendar date.
+  function splitKakaoMessages(text){
+    const lines = text.split(/\r?\n/);
+    const headerRe = /^\[(.+?)\]\s*\[(오전|오후)\s*(\d{1,2}):(\d{2})\]\s*(.*)$/;
+    const dateRe = /^-+\s*(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일.*-+$/;
+    let currentDate = null;
+    const messages = [];
+    let current = null;
+    for(const line of lines){
+      const dm = line.match(dateRe);
+      if(dm){ currentDate = { y:Number(dm[1]), m:Number(dm[2]), d:Number(dm[3]) }; continue; }
+      const hm = line.match(headerRe);
+      if(hm){
+        if(current) messages.push(current);
+        current = { sender: hm[1], date: currentDate, lines: [hm[5]] };
+      } else if(current){
+        current.lines.push(line);
+      }
+    }
+    if(current) messages.push(current);
+    return messages;
+  }
+
+  // Main entry point for parsing an uploaded backup file.
+  // Returns { candidates, failCount } — failed activation attempts are detected and excluded.
+  function parseKakaoBackupText(text){
+    const messages = splitKakaoMessages(text);
+    let candidates = [];
+    let failCount = 0;
+
+    if(messages.length > 0){
+      messages.forEach(msg => {
+        const blockText = msg.lines.join('\n');
+        if(!/처리번호/.test(blockText)) return; // not an activation alarm message
+        const isFailure = /실패/.test(blockText);
+        const isSuccess = /완료/.test(blockText);
+        if(isFailure && !isSuccess){ failCount++; return; }
+        const parsed = parseOneBlock(blockText);
+        if(msg.date){
+          const p = (n)=> String(n).padStart(2,'0');
+          parsed.activationDate = `${msg.date.y}-${p(msg.date.m)}-${p(msg.date.d)}`;
+        }
+        if(parsed.name || parsed.phone) candidates.push(parsed);
+      });
+    }
+
+    if(candidates.length === 0 && failCount === 0){
+      // Fallback for export formats that don't match the expected header pattern
+      candidates = parseKakaoBlocksLegacy(text);
+    }
+    return { candidates, failCount };
+  }
+
+  // ---------------- OCR (lazy-loaded Tesseract.js) ----------------
+  let tesseractLoadPromise = null;
+  function loadTesseract(){
+    if(window.Tesseract) return Promise.resolve(window.Tesseract);
+    if(tesseractLoadPromise) return tesseractLoadPromise;
+    tesseractLoadPromise = new Promise((resolve, reject)=>{
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+      s.onload = ()=> resolve(window.Tesseract);
+      s.onerror = ()=> reject(new Error('OCR 라이브러리를 불러오지 못했어요'));
+      document.head.appendChild(s);
+    });
+    return tesseractLoadPromise;
+  }
+
+  function preprocessImageForOcr(file){
+    return new Promise((resolve, reject)=>{
+      const img = new Image();
+      img.onload = ()=>{
+        const scale = img.width < 900 ? 2 : 1;
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        URL.revokeObjectURL(img.src);
+        resolve(canvas);
+      };
+      img.onerror = ()=> reject(new Error('이미지를 불러오지 못했어요'));
+      img.src = URL.createObjectURL(file);
+    });
+  }
+
+  async function runOcrOnFile(file){
+    const progressEl = $('ocrProgress');
+    const barWrap = $('ocrProgressBar');
+    const fill = $('ocrProgressFill');
+    progressEl.style.display = 'block';
+    barWrap.style.display = 'block';
+    progressEl.textContent = 'OCR 엔진을 불러오는 중...';
+    const [Tesseract, ocrInput] = await Promise.all([loadTesseract(), preprocessImageForOcr(file)]);
+    progressEl.textContent = '이미지를 분석하는 중...';
+    const { data } = await Tesseract.recognize(ocrInput, 'kor+eng', {
+      logger: (m)=>{
+        if(m.status){
+          const pct = typeof m.progress === 'number' ? Math.round(m.progress*100) : 0;
+          fill.style.width = pct + '%';
+          const statusMap = { 'loading tesseract core':'엔진 준비 중', 'initializing tesseract':'초기화 중', 'loading language traineddata':'언어 데이터 로딩 중', 'initializing api':'준비 중', 'recognizing text':'텍스트 인식 중' };
+          progressEl.textContent = (statusMap[m.status] || m.status) + ` (${pct}%)`;
+        }
+      }
+    });
+    progressEl.style.display = 'none';
+    barWrap.style.display = 'none';
+    return data.text || '';
+  }
+
+  // ---------------- View helpers ----------------
+  function initials(name){ return name ? name.trim().slice(0,1) : '?'; }
+  function statusPillClass(status){
+    if(status === '사용중') return 'pill-active';
+    if(status === '해지') return 'pill-stopped';
+    return 'pill-pending';
+  }
+
+  function scopedContacts(){
+    if(viewMode === 'mine') return contacts.filter(c => c.author === (profile && profile.name));
+    const authorFilter = $('filterAuthor').value;
+    return authorFilter ? contacts.filter(c => c.author === authorFilter) : contacts;
+  }
+
+  function populateFilterOptions(){
+    const scope = viewMode === 'mine' ? contacts.filter(c => c.author === (profile && profile.name)) : contacts;
+    const carriers = Array.from(new Set(scope.map(c=>c.carrier).filter(Boolean)));
+    const statuses = Array.from(new Set(scope.map(c=>c.status).filter(Boolean)));
+    const authors = Array.from(new Set(contacts.map(c=>c.author).filter(Boolean)));
+    const carrierSel = $('filterCarrier');
+    const statusSel = $('filterStatus');
+    const authorSel = $('filterAuthor');
+    const curCarrier = carrierSel.value, curStatus = statusSel.value, curAuthor = authorSel.value;
+    carrierSel.innerHTML = '<option value="">전체</option>' + carriers.map(c=>`<option ${c===curCarrier?'selected':''}>${escapeHtml(c)}</option>`).join('');
+    statusSel.innerHTML = '<option value="">전체</option>' + statuses.map(s=>`<option ${s===curStatus?'selected':''}>${escapeHtml(s)}</option>`).join('');
+    authorSel.innerHTML = '<option value="">전체</option>' + authors.map(a=>`<option ${a===curAuthor?'selected':''}>${escapeHtml(a)}</option>`).join('');
+  }
+
+  function getFiltered(){
+    const q = $('searchInput').value.trim().toLowerCase();
+    const carrier = $('filterCarrier').value;
+    const status = $('filterStatus').value;
+    return scopedContacts()
+      .filter(c => !carrier || c.carrier === carrier)
+      .filter(c => !status || c.status === status)
+      .filter(c => {
+        if(!q) return true;
+        return [c.name, c.phone, c.contactPhone, c.memberNo, c.seller, c.manager].some(v => (v||'').toLowerCase().includes(q));
+      })
+      .filter(c => {
+        if(!dueOnlyFilter) return true;
+        const info = getDueInfo(c);
+        return info && info.isDueNow;
+      })
+      .sort((a,b) => (b.activationDate||'').localeCompare(a.activationDate||'') || (b.createdAt||0) - (a.createdAt||0));
+  }
+
+  function renderStats(){
+    const scope = scopedContacts();
+    const total = scope.length;
+    const active = scope.filter(c=>c.status==='사용중').length;
+    const stopped = scope.filter(c=>c.status==='해지').length;
+    const dueToday = scope.filter(c=>{ const i = getDueInfo(c); return i && i.isDueNow; }).length;
+    statsEl.innerHTML = `
+      <div class="stat"><b>${total}</b><span>${viewMode==='mine'?'내 고객':'표시된 고객'}</span></div>
+      <div class="stat"><b>${active}</b><span>사용중</span></div>
+      <div class="stat"><b>${stopped}</b><span>해지</span></div>
+      <div class="stat" style="${dueToday>0 ? 'border-color:#F2CFC8; background:var(--red-tint);' : ''}"><b style="${dueToday>0?'color:var(--red);':''}">${dueToday}</b><span>충전 알림 대상</span></div>
+    `;
+  }
+
+  function render(){
+    populateFilterOptions();
+    renderStats();
+    const rows = getFiltered();
+    if(rows.length === 0){
+      tbody.innerHTML = '';
+      emptyState.style.display = 'block';
+      return;
+    }
+    emptyState.style.display = 'none';
+    tbody.innerHTML = rows.map(c => `
+      <tr>
+        <td>
+          <div class="name-cell">
+            <div class="avatar">${escapeHtml(initials(c.name))}</div>
+            <div>
+              <div>${escapeHtml(c.name || '-')}</div>
+              <div class="mono" style="color:var(--ink-faint); font-size:11px;">${escapeHtml(c.memberNo || '-')}</div>
+            </div>
+          </div>
+        </td>
+        <td class="mono">${escapeHtml(c.phone || '-')}</td>
+        <td class="mono">${escapeHtml(c.contactPhone || '-')}</td>
+        <td>${escapeHtml(c.carrier || '-')}</td>
+        <td>${escapeHtml(c.plan || '-')}</td>
+        <td>${escapeHtml(c.type || '-')}</td>
+        <td><span class="pill ${statusPillClass(c.status)}">${escapeHtml(c.status || '-')}</span></td>
+        <td class="mono">${escapeHtml(c.activationDate || '-')}</td>
+        <td>${renderDueCell(c)}</td>
+        <td>${escapeHtml(c.author || '-')}</td>
+        <td>
+          <div class="row-actions" style="justify-content:flex-end;">
+            <button class="icon-btn" data-action="vcard" data-id="${c.id}" title="연락처 앱으로 저장">📇</button>
+            <button class="icon-btn" data-action="edit" data-id="${c.id}" title="수정">✎</button>
+            <button class="icon-btn" data-action="delete" data-id="${c.id}" title="삭제">🗑</button>
+          </div>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  // ---------------- Cash conversion (요금현금전환) ----------------
+  function formatCurrency(n){
+    return (Number(n) || 0).toLocaleString('ko-KR') + '원';
+  }
+  function scopedCash(){
+    if(cashViewMode === 'mine') return cashRecords.filter(r => r.author === (profile && profile.name));
+    const authorFilter = $('cashFilterAuthor').value;
+    return authorFilter ? cashRecords.filter(r => r.author === authorFilter) : cashRecords;
+  }
+  function populateCashFilterOptions(){
+    const revenueTypes = Array.from(new Set(cashRecords.map(r=>r.revenueType).filter(Boolean)));
+    const authors = Array.from(new Set(cashRecords.map(r=>r.author).filter(Boolean)));
+    const revSel = $('cashFilterRevenueType');
+    const authorSel = $('cashFilterAuthor');
+    const curRev = revSel.value, curAuthor = authorSel.value;
+    revSel.innerHTML = '<option value="">전체</option>' + revenueTypes.map(t=>`<option ${t===curRev?'selected':''}>${escapeHtml(t)}</option>`).join('');
+    authorSel.innerHTML = '<option value="">전체</option>' + authors.map(a=>`<option ${a===curAuthor?'selected':''}>${escapeHtml(a)}</option>`).join('');
+    // suggest known customer names while typing 소비자명
+    const names = Array.from(new Set(contacts.map(c=>c.name).filter(Boolean)));
+    $('cashNameList').innerHTML = names.map(n=>`<option value="${escapeHtml(n)}"></option>`).join('');
+  }
+  function getCashFiltered(){
+    const q = $('cashSearchInput').value.trim().toLowerCase();
+    const from = $('cashFromDate').value;
+    const to = $('cashToDate').value;
+    const revType = $('cashFilterRevenueType').value;
+    return scopedCash()
+      .filter(r => !q || (r.consumerName||'').toLowerCase().includes(q))
+      .filter(r => !from || (r.conversionDate && r.conversionDate >= from))
+      .filter(r => !to || (r.conversionDate && r.conversionDate <= to))
+      .filter(r => !revType || r.revenueType === revType)
+      .sort((a,b) => (b.conversionDate||'').localeCompare(a.conversionDate||'') || (b.createdAt||0) - (a.createdAt||0));
+  }
+  function renderCash(){
+    populateCashFilterOptions();
+    const rows = getCashFiltered();
+    const total = rows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+    $('cashTotalAmount').textContent = formatCurrency(total);
+    const tbody = $('cashTbody');
+    if(rows.length === 0){
+      tbody.innerHTML = '';
+      $('cashEmptyState').style.display = 'block';
+      return;
+    }
+    $('cashEmptyState').style.display = 'none';
+    tbody.innerHTML = rows.map((r, i) => `
+      <tr>
+        <td class="mono">${rows.length - i}</td>
+        <td>${escapeHtml(r.type || '-')}</td>
+        <td style="font-weight:600;">${escapeHtml(r.consumerName || '-')}</td>
+        <td class="mono">${escapeHtml(r.conversionDate || '-')}</td>
+        <td class="mono">${formatCurrency(r.amount)}</td>
+        <td>${escapeHtml(r.revenueType || '-')}</td>
+        <td>${escapeHtml(r.note || '-')}</td>
+        <td>${escapeHtml(r.author || '-')}</td>
+        <td class="mono" style="font-size:11px;">${r.createdAt ? new Date(r.createdAt).toLocaleDateString('ko-KR') : '-'}</td>
+        <td>
+          <div class="row-actions" style="justify-content:flex-end;">
+            <button class="icon-btn" data-cash-action="edit" data-id="${r.id}" title="수정">✎</button>
+            <button class="icon-btn" data-cash-action="delete" data-id="${r.id}" title="삭제">🗑</button>
+          </div>
+        </td>
+      </tr>
+    `).join('');
+  }
+  function resetCashForm(){
+    $('cash_type').value = '신규개통';
+    $('cash_name').value = '';
+    $('cash_date').value = formatDate(todayDateOnly());
+    $('cash_amount').value = '';
+    $('cash_revenueType').value = '현금입금';
+    $('cash_note').value = '';
+    $('cashAddBtn').textContent = '추가';
+    $('cashCancelEditBtn').style.display = 'none';
+    cashEditingId = null;
+  }
+  async function saveCashRecord(){
+    const consumerName = $('cash_name').value.trim();
+    const amount = Number($('cash_amount').value);
+    if(!consumerName){ toast('소비자명을 입력해 주세요'); return; }
+    if(!amount || amount <= 0){ toast('현금전환금액을 입력해 주세요'); return; }
+    const data = {
+      type: $('cash_type').value,
+      consumerName,
+      conversionDate: $('cash_date').value || formatDate(todayDateOnly()),
+      amount,
+      revenueType: $('cash_revenueType').value,
+      note: $('cash_note').value.trim(),
+    };
+    if(cashEditingId){
+      const idx = cashRecords.findIndex(x=>x.id===cashEditingId);
+      if(idx>-1) cashRecords[idx] = { ...cashRecords[idx], ...data };
+      toast('수정했어요');
+    } else {
+      cashRecords.push({ id: uid(), createdAt: Date.now(), author: (profile && profile.name) || '', ...data });
+      toast('등록했어요');
+    }
+    await persistCash();
+    resetCashForm();
+    renderCash();
+  }
+  function editCashRecord(id){
+    const r = cashRecords.find(x=>x.id===id);
+    if(!r) return;
+    cashEditingId = id;
+    $('cash_type').value = r.type || '신규개통';
+    $('cash_name').value = r.consumerName || '';
+    $('cash_date').value = r.conversionDate || '';
+    $('cash_amount').value = r.amount || '';
+    $('cash_revenueType').value = r.revenueType || '현금입금';
+    $('cash_note').value = r.note || '';
+    $('cashAddBtn').textContent = '수정 완료';
+    $('cashCancelEditBtn').style.display = 'inline-flex';
+    $('cash_name').scrollIntoView({ behavior:'smooth', block:'center' });
+  }
+  async function deleteCashRecord(id){
+    const r = cashRecords.find(x=>x.id===id);
+    if(!r) return;
+    if(!confirm(`'${r.consumerName}' 전환 내역을 삭제할까요?`)) return;
+    cashRecords = cashRecords.filter(x=>x.id!==id);
+    await persistCash();
+    renderCash();
+    toast('삭제했어요');
+  }
+  function exportCashCsv(){
+    const rows = getCashFiltered();
+    if(rows.length === 0){ toast('내보낼 내역이 없어요'); return; }
+    const header = ['구분','소비자명','전환일','현금전환금액','매출구분','비고','담당자','등록일'];
+    const lines = [header.join(',')];
+    rows.forEach(r => {
+      const vals = [
+        r.type, r.consumerName, r.conversionDate, r.amount, r.revenueType,
+        (r.note||'').replace(/[\r\n]/g,' '), r.author,
+        r.createdAt ? new Date(r.createdAt).toLocaleString('ko-KR') : ''
+      ];
+      lines.push(vals.map(v => `"${String(v ?? '').replace(/"/g,'""')}"`).join(','));
+    });
+    const csv = '\uFEFF' + lines.join('\r\n');
+    downloadFile('cash-conversions.csv', csv, 'text/csv;charset=utf-8');
+    toast(`${rows.length}건 내보냈어요`);
+  }
+
+  // ---------------- Daily close report (일일 마감) ----------------
+  function buildDailyReport(dateStr, balance){
+    const d = parseISODate(dateStr);
+    const dateLabel = d ? `${d.getMonth()+1}월 ${d.getDate()}일` : dateStr;
+    const myName = (profile && profile.name) || '';
+
+    const dayContacts = contacts.filter(c => c.activationDate === dateStr && c.author === myName);
+    const counts = {};
+    dayContacts.forEach(c => {
+      const raw = c.carrier || '';
+      let key = '기타';
+      if(/KT/i.test(raw)) key = 'K망';
+      else if(/LG/i.test(raw)) key = 'L망';
+      else if(/SKT/i.test(raw)) key = 'S망';
+      else if(/알뜰/.test(raw)) key = '알뜰폰';
+      else if(raw) key = raw;
+      counts[key] = (counts[key] || 0) + 1;
+    });
+    if(!('K망' in counts)) counts['K망'] = 0;
+    if(!('L망' in counts)) counts['L망'] = 0;
+
+    const dayCash = cashRecords.filter(r => r.conversionDate === dateStr && r.author === myName);
+    const newAmount = dayCash.filter(r => r.type === '신규개통').reduce((s,r)=> s + (Number(r.amount)||0), 0);
+    const rechargeAmount = dayCash.filter(r => r.type === '재충전').reduce((s,r)=> s + (Number(r.amount)||0), 0);
+    const total = newAmount + rechargeAmount;
+
+    const lines = [myName, '신규개통', dateLabel, '신규개통'];
+    const priority = ['K망', 'L망'];
+    priority.forEach(k => lines.push(`${k} ${counts[k]}대`));
+    Object.keys(counts).filter(k => !priority.includes(k)).forEach(k => lines.push(`${k} ${counts[k]}대`));
+    lines.push(`신규개통 ${newAmount.toLocaleString('ko-KR')}원`);
+    lines.push(`재충전 ${rechargeAmount.toLocaleString('ko-KR')}원`);
+    lines.push(`총 ${total.toLocaleString('ko-KR')}원`);
+    lines.push(`현재요금잔액 ${(Number(balance)||0).toLocaleString('ko-KR')}원`);
+    return lines.join('\n');
+  }
+
+  function getDailyActivationCount(dateStr){
+    const myName = (profile && profile.name) || '';
+    return contacts.filter(c => c.activationDate === dateStr && c.author === myName).length;
+  }
+
+  function handleGenerateDailyReport(){
+    const dateStr = $('dc_date').value;
+    if(!dateStr){ toast('마감 날짜를 선택해 주세요'); return; }
+    if(!profile || !profile.name){ toast('담당자 프로필을 먼저 설정해 주세요'); return; }
+    const balance = $('dc_balance').value;
+    const report = buildDailyReport(dateStr, balance);
+    $('dc_preview').textContent = report;
+    $('dc_previewWrap').style.display = 'block';
+    $('dc_calendarHint').style.display = 'none';
+  }
+
+  async function handleCopyDailyReport(){
+    const text = $('dc_preview').textContent;
+    try{
+      await navigator.clipboard.writeText(text);
+      toast('복사했어요. 캘린더 앱에 붙여넣으세요');
+    }catch(e){
+      toast('복사에 실패했어요. 텍스트를 직접 선택해 복사해 주세요');
+    }
+  }
+
+  async function handleSaveToGoogleCalendar(){
+    const dateStr = $('dc_date').value;
+    const report = $('dc_preview').textContent;
+    if(!dateStr || !report){ toast('먼저 마감 내역을 만들어 주세요'); return; }
+    const btn = $('dc_calendarBtn');
+    const hint = $('dc_calendarHint');
+    btn.disabled = true;
+    btn.textContent = '저장 중...';
+    hint.style.display = 'none';
+    try{
+      const myName = (profile && profile.name) || '';
+      const count = getDailyActivationCount(dateStr);
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 1000,
+          messages: [{
+            role: 'user',
+            content: `${dateStr} 날짜로 구글 캘린더에 종일(all-day) 일정을 하나 만들어줘.\n제목: "${myName} - ${count}개"\n설명(description)에는 그냥 "${count}개" 라고만 넣어줘.\n반드시 Google Calendar 도구를 사용해서 실제로 일정을 생성해줘.`
+          }],
+          mcp_servers: [{ type: 'url', url: 'https://calendarmcp.googleapis.com/mcp/v1', name: 'google-calendar' }]
+        })
+      });
+      const data = await response.json();
+      const content = data.content || [];
+      const toolResults = content.filter(b => b.type === 'mcp_tool_result');
+      const textBlocks = content.filter(b => b.type === 'text').map(b => b.text).join(' ');
+      if(toolResults.length > 0){
+        toast('구글 캘린더에 저장했어요');
+        hint.textContent = '✅ 캘린더에 저장 완료. 안드로이드 캘린더 앱이 구글 계정과 동기화돼 있으면 곧 거기에도 보여요.';
+        hint.className = 'hint hint-teal';
+        hint.style.display = 'block';
+      } else {
+        toast('캘린더 저장을 확인하지 못했어요');
+        hint.textContent = '⚠️ ' + (textBlocks || '구글 캘린더 연동을 확인해 주세요.') + ' 안 되면 "복사하기"로 직접 붙여넣어 주세요.';
+        hint.className = 'hint';
+        hint.style.display = 'block';
+      }
+    }catch(e){
+      toast('캘린더 저장 중 오류가 발생했어요');
+      hint.textContent = '⚠️ 오류가 발생했어요. "복사하기"로 직접 캘린더에 붙여넣어 주세요.';
+      hint.className = 'hint';
+      hint.style.display = 'block';
+    }finally{
+      btn.disabled = false;
+      btn.textContent = '📅 구글 캘린더에 저장';
+    }
+  }
+
+  // ---------------- vCard export ----------------
+  function vCardEscape(str){
+    return (str||'').replace(/\\/g,'\\\\').replace(/\n/g,'\\n').replace(/,/g,'\\,').replace(/;/g,'\\;');
+  }
+  function toVCard(c){
+    const noteParts = [
+      c.memberNo ? `회원번호 ${c.memberNo}` : '',
+      c.manager ? `담당 ${c.manager}` : '',
+      c.seller ? `매출자 ${c.seller}` : '',
+      c.activationDate ? `개통일 ${c.activationDate}` : '',
+      c.type ? `구분 ${c.type}` : '',
+      c.subType ? `가입유형 ${c.subType}` : '',
+      c.channel ? `유입채널 ${c.channel}` : '',
+      c.status ? `상태 ${c.status}` : '',
+      c.processNo ? `처리번호 ${c.processNo}` : '',
+      c.note ? c.note : ''
+    ].filter(Boolean).join(' / ');
+    const lines = [
+      'BEGIN:VCARD',
+      'VERSION:3.0',
+      `FN:${vCardEscape(c.name)}`,
+      `TEL;TYPE=CELL:${vCardEscape(c.contactPhone || c.phone)}`,
+    ];
+    if(c.contactPhone && c.phone && c.contactPhone !== c.phone){
+      lines.push(`TEL;TYPE=OTHER:${vCardEscape(c.phone)}`);
+    }
+    lines.push(`ORG:${vCardEscape((c.carrier||'') + (c.plan ? ' - ' + c.plan : ''))}`);
+    if(noteParts) lines.push(`NOTE:${vCardEscape(noteParts)}`);
+    lines.push('END:VCARD');
+    return lines.filter(Boolean).join('\r\n');
+  }
+  function downloadFile(filename, content, mime){
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    setTimeout(()=> URL.revokeObjectURL(url), 2000);
+  }
+  function exportOne(id){
+    const c = contacts.find(x=>x.id===id);
+    if(!c) return;
+    downloadFile(`${c.name || 'contact'}.vcf`, toVCard(c), 'text/vcard');
+    toast('연락처 파일을 열어 폰 주소록에 추가하세요');
+  }
+  function exportAll(){
+    const scope = getFiltered();
+    if(scope.length === 0){ toast('내보낼 고객이 없어요'); return; }
+    const combined = scope.map(toVCard).join('\r\n');
+    downloadFile('nrc-contacts.vcf', combined, 'text/vcard');
+    toast(`${scope.length}명의 연락처 파일을 내보냈어요`);
+  }
+
+  // ---------------- Modal / form ----------------
+  function switchTab(tab){
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    $('panelPaste').style.display = tab === 'paste' ? 'block' : 'none';
+    $('panelScreenshot').style.display = tab === 'screenshot' ? 'block' : 'none';
+    $('panelBackup').style.display = tab === 'backup' ? 'block' : 'none';
+    // The direct-entry form doubles as the review/edit form for the paste and
+    // screenshot flows, so it stays visible for those too — only 'backup' hides it.
+    $('panelDirect').style.display = tab === 'backup' ? 'none' : 'block';
+    $('modalFoot').style.display = tab === 'backup' ? 'none' : 'flex';
+  }
+
+  function fillForm(c){
+    $('f_name').value = c?.name || '';
+    $('f_phone').value = c?.phone || '';
+    $('f_contactPhone').value = c?.contactPhone || '';
+    $('f_memberNo').value = c?.memberNo || '';
+    $('f_carrier').value = c?.carrier || '';
+    $('f_plan').value = c?.plan || '';
+    $('f_type').value = c?.type || '신규';
+    $('f_subType').value = c?.subType || '선불';
+    $('f_status').value = c?.status || '사용중';
+    $('f_activationDate').value = c?.activationDate || formatDate(todayDateOnly());
+    $('f_seller').value = c?.seller || '';
+    $('f_manager').value = c?.manager || '';
+    $('f_channel').value = c?.channel || '';
+    $('f_processNo').value = c?.processNo || '';
+    $('f_author').value = c?.author || (profile && profile.name) || '';
+    $('f_note').value = c?.note || '';
+  }
+
+  function openModal(id){
+    editingId = id || null;
+    $('modalTitle').textContent = id ? '고객 정보 수정' : '고객 등록';
+    const c = id ? contacts.find(x=>x.id===id) : null;
+    fillForm(c);
+
+    $('tabbar').style.display = id ? 'none' : 'flex';
+    if(id){
+      $('panelDirect').style.display = 'block';
+      $('panelPaste').style.display = 'none';
+      $('panelScreenshot').style.display = 'none';
+      $('panelBackup').style.display = 'none';
+      $('modalFoot').style.display = 'flex';
+    } else {
+      switchTab('paste');
+    }
+    $('pasteTextarea').value = '';
+    $('screenshotInput').value = '';
+    $('screenshotPreview').style.display = 'none';
+    $('backupInput').value = '';
+    $('backupResults').innerHTML = '';
+    backupCandidates = [];
+    lastFailCount = 0;
+
+    overlay.style.display = 'flex';
+    setTimeout(()=> $('f_name').focus(), 50);
+  }
+  function closeModal(){
+    overlay.style.display = 'none';
+    editingId = null;
+  }
+
+  async function saveForm(){
+    const name = $('f_name').value.trim();
+    const phone = $('f_phone').value.trim();
+    if(!name || !phone){
+      toast('이름과 개통번호는 꼭 입력해 주세요');
+      return;
+    }
+    const data = {
+      name, phone,
+      contactPhone: $('f_contactPhone').value.trim(),
+      memberNo: $('f_memberNo').value.trim(),
+      carrier: $('f_carrier').value.trim(),
+      plan: $('f_plan').value.trim(),
+      type: $('f_type').value,
+      subType: $('f_subType').value,
+      status: $('f_status').value,
+      activationDate: $('f_activationDate').value,
+      seller: $('f_seller').value.trim(),
+      manager: $('f_manager').value.trim(),
+      channel: $('f_channel').value.trim(),
+      processNo: $('f_processNo').value.trim(),
+      author: $('f_author').value.trim() || (profile && profile.name) || '',
+      note: $('f_note').value.trim(),
+    };
+    if(editingId){
+      const idx = contacts.findIndex(x=>x.id===editingId);
+      if(idx>-1) contacts[idx] = { ...contacts[idx], ...data };
+      toast('수정했어요');
+    } else {
+      contacts.push({ id: uid(), createdAt: Date.now(), ...data });
+      toast('등록했어요');
+    }
+    await persist();
+    closeModal();
+    render();
+  }
+
+  async function deleteContact(id){
+    const c = contacts.find(x=>x.id===id);
+    if(!c) return;
+    if(!confirm(`'${c.name}' 고객 정보를 삭제할까요?`)) return;
+    contacts = contacts.filter(x=>x.id!==id);
+    await persist();
+    render();
+    toast('삭제했어요');
+  }
+
+  async function markSent(id){
+    const c = contacts.find(x=>x.id===id);
+    if(!c) return;
+    c.lastReminderSentAt = formatDate(todayDateOnly());
+    await persist();
+    render();
+    toast(`'${c.name}' 고객 발송완료로 표시했어요`);
+  }
+
+  // ---------------- Paste-text flow (most reliable — no OCR involved) ----------------
+  function handlePasteParse(){
+    const text = $('pasteTextarea').value.trim();
+    if(!text){ toast('붙여넣은 텍스트가 없어요'); return; }
+    if(/실패/.test(text) && !/완료/.test(text)){
+      toast('⚠️ 개통 실패 메시지로 보여요. 그래도 채워드릴게요, 내용을 확인해 주세요');
+    }
+    const parsed = parseOneBlock(text);
+    if(parsed.name || parsed.phone){
+      $('f_name').value = parsed.name || '';
+      $('f_phone').value = parsed.phone || '';
+      $('f_contactPhone').value = parsed.contactPhone || '';
+      $('f_carrier').value = parsed.carrier || '';
+      $('f_plan').value = parsed.plan || '';
+      if(parsed.type) $('f_type').value = parsed.type;
+      if(parsed.subType) $('f_subType').value = parsed.subType;
+      $('f_processNo').value = parsed.processNo || '';
+      toast('텍스트에서 인식 완료! 아래 내용을 확인 후 저장하세요');
+    } else {
+      toast('텍스트에서 정보를 찾지 못했어요. 형식을 확인해 주세요');
+    }
+  }
+
+  // ---------------- Screenshot OCR flow ----------------
+  async function handleScreenshotFile(file){
+    if(!file) return;
+    const preview = $('screenshotPreview');
+    preview.src = URL.createObjectURL(file);
+    preview.style.display = 'block';
+    try{
+      const text = await runOcrOnFile(file);
+      const parsed = parseOneBlock(text);
+      if(parsed.name || parsed.phone){
+        $('f_name').value = parsed.name || '';
+        $('f_phone').value = parsed.phone || '';
+        $('f_contactPhone').value = parsed.contactPhone || '';
+        $('f_carrier').value = parsed.carrier || '';
+        $('f_plan').value = parsed.plan || '';
+        if(parsed.type) $('f_type').value = parsed.type;
+        if(parsed.subType) $('f_subType').value = parsed.subType;
+        $('f_processNo').value = parsed.processNo || '';
+        toast('자동 인식 완료! 아래 내용을 확인 후 저장하세요');
+      } else {
+        toast('자동 인식에 실패했어요. 이미지를 보며 직접 입력해 주세요');
+      }
+    }catch(e){
+      $('ocrProgress').style.display = 'none';
+      $('ocrProgressBar').style.display = 'none';
+      toast('인식 중 오류가 발생했어요. 직접 입력해 주세요');
+    }
+  }
+
+  // ---------------- Backup file flow ----------------
+  function renderBackupResults(){
+    const wrap = $('backupResults');
+    if(backupCandidates.length === 0){
+      wrap.innerHTML = `<div class="hint">인식된 개통 정보가 없어요. 파일 형식을 확인해 주세요.</div>`;
+      return;
+    }
+    const checkedCount = backupCandidates.filter(c=>c.include).length;
+    wrap.innerHTML = `
+      ${lastFailCount > 0 ? `<div class="hint">⚠️ 개통 실패 이력 ${lastFailCount}건은 자동으로 제외했어요.</div>` : ''}
+      <div class="backup-summary">
+        <div style="font-size:12.5px; color:var(--ink-soft);">${backupCandidates.length}건 발견됨</div>
+        <button class="btn btn-primary btn-sm" id="importBackupBtn">선택 항목 등록하기 (${checkedCount})</button>
+      </div>
+      ${backupCandidates.map((c, i) => `
+        <label class="backup-item">
+          <input type="checkbox" data-idx="${i}" ${c.include ? 'checked' : ''} />
+          <div>
+            <b>${escapeHtml(c.name || '이름 미상')}</b> · ${escapeHtml(c.phone || '-')}
+            <div class="meta">${escapeHtml(c.carrier||'-')} · ${escapeHtml(c.plan||'-')} · 개통일 ${escapeHtml(c.activationDate||'미상')} · 처리번호 ${escapeHtml(c.processNo||'-')}</div>
+          </div>
+        </label>
+      `).join('')}
+    `;
+    wrap.querySelectorAll('input[type=checkbox]').forEach(cb => {
+      cb.addEventListener('change', (e)=>{
+        backupCandidates[Number(e.target.dataset.idx)].include = e.target.checked;
+        renderBackupResults();
+      });
+    });
+    const importBtn = $('importBackupBtn');
+    if(importBtn) importBtn.addEventListener('click', importBackupCandidates);
+  }
+
+  async function handleBackupFile(file){
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = (e)=>{
+      const text = e.target.result;
+      const { candidates, failCount } = parseKakaoBackupText(text);
+      backupCandidates = candidates.map(c => ({ ...c, include: true }));
+      lastFailCount = failCount;
+      renderBackupResults();
+    };
+    reader.onerror = ()=> toast('파일을 읽는 중 오류가 발생했어요');
+    reader.readAsText(file, 'utf-8');
+  }
+
+  async function importBackupCandidates(){
+    const chosen = backupCandidates.filter(c => c.include && (c.name || c.phone));
+    if(chosen.length === 0){ toast('등록할 항목을 선택해 주세요'); return; }
+    const today = formatDate(todayDateOnly());
+    chosen.forEach(c => {
+      contacts.push({
+        id: uid(), createdAt: Date.now(),
+        name: c.name, phone: c.phone, contactPhone: c.contactPhone,
+        memberNo: '', carrier: c.carrier, plan: c.plan, type: c.type || '신규',
+        subType: c.subType || '선불', status: '사용중', activationDate: c.activationDate || today,
+        seller: '', manager: '', channel: '', processNo: c.processNo,
+        author: (profile && profile.name) || '', note: ''
+      });
+    });
+    await persist();
+    closeModal();
+    render();
+    toast(`${chosen.length}건 등록했어요`);
+  }
+
+  // ---------------- Profile gate ----------------
+  function showProfileGate(prefill){
+    $('profileNameInput').value = prefill || '';
+    $('profileGate').style.display = 'flex';
+    setTimeout(()=> $('profileNameInput').focus(), 50);
+  }
+  function hideProfileGate(){ $('profileGate').style.display = 'none'; }
+  function updateProfileTag(){
+    $('profileTag').textContent = '👤 ' + ((profile && profile.name) || '-');
+  }
+
+  async function confirmProfile(){
+    const name = $('profileNameInput').value.trim();
+    if(!name){ toast('이름을 입력해 주세요'); return; }
+    profile = { name };
+    await persistProfile();
+    updateProfileTag();
+    hideProfileGate();
+    render();
+  }
+
+  // ---------------- Events ----------------
+  $('addBtn').addEventListener('click', ()=> openModal(null));
+  $('closeModalBtn').addEventListener('click', closeModal);
+  $('cancelBtn').addEventListener('click', closeModal);
+  $('saveBtn').addEventListener('click', saveForm);
+  $('exportAllBtn').addEventListener('click', exportAll);
+  overlay.addEventListener('click', (e)=>{ if(e.target === overlay) closeModal(); });
+  $('searchInput').addEventListener('input', render);
+  $('filterCarrier').addEventListener('change', render);
+  $('filterStatus').addEventListener('change', render);
+  $('filterAuthor').addEventListener('change', render);
+  $('cycleDaysInput').addEventListener('change', async (e)=>{
+    const v = Math.max(1, Number(e.target.value) || 30);
+    settings.cycleDays = v;
+    e.target.value = v;
+    await persistSettings();
+    render();
+  });
+  $('dueOnlyToggle').addEventListener('click', ()=>{
+    dueOnlyFilter = !dueOnlyFilter;
+    $('dueOnlyToggle').classList.toggle('active', dueOnlyFilter);
+    render();
+  });
+  $('viewMine').addEventListener('click', ()=>{
+    viewMode = 'mine';
+    $('viewMine').classList.add('active');
+    $('viewAll').classList.remove('active');
+    $('authorFilterWrap').style.display = 'none';
+    render();
+  });
+  $('viewAll').addEventListener('click', ()=>{
+    viewMode = 'all';
+    $('viewAll').classList.add('active');
+    $('viewMine').classList.remove('active');
+    $('authorFilterWrap').style.display = 'flex';
+    render();
+  });
+  document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape') closeModal(); });
+
+  document.querySelectorAll('.tab-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=> switchTab(btn.dataset.tab));
+  });
+  $('screenshotInput').addEventListener('change', (e)=> handleScreenshotFile(e.target.files[0]));
+  $('backupInput').addEventListener('change', (e)=> handleBackupFile(e.target.files[0]));
+  $('parsePasteBtn').addEventListener('click', handlePasteParse);
+
+  $('profileStartBtn').addEventListener('click', confirmProfile);
+  $('profileNameInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter') confirmProfile(); });
+  $('profileChangeBtn').addEventListener('click', ()=> showProfileGate(profile && profile.name));
+
+  // Section nav
+  $('navCustomers').addEventListener('click', ()=>{
+    $('navCustomers').classList.add('active');
+    $('navCash').classList.remove('active');
+    $('navDaily').classList.remove('active');
+    $('customerSection').style.display = 'block';
+    $('cashSection').style.display = 'none';
+    $('dailySection').style.display = 'none';
+  });
+  $('navCash').addEventListener('click', ()=>{
+    $('navCash').classList.add('active');
+    $('navCustomers').classList.remove('active');
+    $('navDaily').classList.remove('active');
+    $('cashSection').style.display = 'block';
+    $('customerSection').style.display = 'none';
+    $('dailySection').style.display = 'none';
+    renderCash();
+  });
+  $('navDaily').addEventListener('click', ()=>{
+    $('navDaily').classList.add('active');
+    $('navCustomers').classList.remove('active');
+    $('navCash').classList.remove('active');
+    $('dailySection').style.display = 'block';
+    $('customerSection').style.display = 'none';
+    $('cashSection').style.display = 'none';
+  });
+  $('dc_generateBtn').addEventListener('click', handleGenerateDailyReport);
+  $('dc_copyBtn').addEventListener('click', handleCopyDailyReport);
+  $('dc_calendarBtn').addEventListener('click', handleSaveToGoogleCalendar);
+
+  // Cash section events
+  $('cashViewMine').addEventListener('click', ()=>{
+    cashViewMode = 'mine';
+    $('cashViewMine').classList.add('active');
+    $('cashViewAll').classList.remove('active');
+    $('cashAuthorFilterWrap').style.display = 'none';
+    renderCash();
+  });
+  $('cashViewAll').addEventListener('click', ()=>{
+    cashViewMode = 'all';
+    $('cashViewAll').classList.add('active');
+    $('cashViewMine').classList.remove('active');
+    $('cashAuthorFilterWrap').style.display = 'flex';
+    renderCash();
+  });
+  $('cashSearchInput').addEventListener('input', renderCash);
+  $('cashFromDate').addEventListener('change', renderCash);
+  $('cashToDate').addEventListener('change', renderCash);
+  $('cashFilterRevenueType').addEventListener('change', renderCash);
+  $('cashFilterAuthor').addEventListener('change', renderCash);
+  $('cashAddBtn').addEventListener('click', saveCashRecord);
+  $('cashCancelEditBtn').addEventListener('click', resetCashForm);
+  $('cashExportBtn').addEventListener('click', exportCashCsv);
+  $('cashTbody').addEventListener('click', (e)=>{
+    const btn = e.target.closest('button[data-cash-action]');
+    if(!btn) return;
+    const id = btn.dataset.id;
+    const action = btn.dataset.cashAction;
+    if(action === 'edit') editCashRecord(id);
+    if(action === 'delete') deleteCashRecord(id);
+  });
+
+  tbody.addEventListener('click', (e)=>{
+    const btn = e.target.closest('button[data-action]');
+    if(!btn) return;
+    const id = btn.dataset.id;
+    const action = btn.dataset.action;
+    if(action === 'edit') openModal(id);
+    if(action === 'delete') deleteContact(id);
+    if(action === 'vcard') exportOne(id);
+    if(action === 'mark-sent') markSent(id);
+  });
+
+  async function init(){
+    await loadProfile();
+    await loadSettings();
+    await loadContacts();
+    await loadCash();
+    if(!profile || !profile.name){
+      showProfileGate('');
+    } else {
+      updateProfileTag();
+    }
+    render();
+    resetCashForm();
+    $('dc_date').value = formatDate(todayDateOnly());
+    const dueToday = scopedContacts().filter(c=>{ const i = getDueInfo(c); return i && i.isDueNow; }).length;
+    if(dueToday > 0){
+      setTimeout(()=> toast(`오늘 충전 알림 대상 ${dueToday}명이 있어요`), 400);
+    }
+  }
+  init();
+})();
+</script>
+<script>
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  }
+</script>
+</body>
+</html>
