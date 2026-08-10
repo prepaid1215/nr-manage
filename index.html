@@ -377,6 +377,7 @@
           <th>사용상태</th>
           <th>개통일</th>
           <th>충전 알림</th>
+          <th>약정 만료</th>
           <th>등록자</th>
           <th style="text-align:right;">관리</th>
         </tr>
@@ -612,6 +613,15 @@
           <div>
             <label>개통일</label>
             <input id="f_activationDate" type="date" />
+          </div>
+          <div>
+            <label>약정기간</label>
+            <select id="f_contractMonths">
+              <option value="0">없음</option>
+              <option value="6">6개월</option>
+              <option value="12">12개월</option>
+              <option value="24">24개월</option>
+            </select>
           </div>
           <div>
             <label>매출자</label>
@@ -913,6 +923,32 @@
   function smsTemplate(c){
     return `${c.name} 고객님, 선불폰 요금 충전 예정일이 도래했습니다. 편하실 때 충전 부탁드립니다. 감사합니다.`;
   }
+
+  // ── 약정 만료 계산 ──────────────────────────────────────────────
+  function addMonths(date, n){
+    const d = new Date(date);
+    d.setMonth(d.getMonth() + n);
+    return d;
+  }
+  function getContractInfo(c){
+    const months = Number(c.contractMonths) || 0;
+    if(months <= 0) return null; // 약정 없음
+    const start = parseISODate(c.activationDate);
+    if(!start) return null;
+    const expiry = addMonths(start, months);
+    const today = todayDateOnly();
+    const diff = daysBetween(today, expiry);
+    // 만료 30일 전부터 알림
+    const isNearExpiry = diff <= 30;
+    let ddayClass, ddayLabel;
+    if(diff < 0){ ddayClass = 'pill-dday-danger'; ddayLabel = `만료+${Math.abs(diff)}`; }
+    else if(diff === 0){ ddayClass = 'pill-dday-danger'; ddayLabel = '만료 D-DAY'; }
+    else if(diff <= 7){ ddayClass = 'pill-dday-danger'; ddayLabel = `만료 D-${diff}`; }
+    else if(diff <= 30){ ddayClass = 'pill-dday-warn'; ddayLabel = `만료 D-${diff}`; }
+    else { ddayClass = 'pill-dday-safe'; ddayLabel = `만료 D-${diff}`; }
+    return { expiry, diff, ddayClass, ddayLabel, isNearExpiry, expiryStr: formatDate(expiry), months };
+  }
+
   function renderDueCell(c){
     const info = getDueInfo(c);
     if(!info) return `<span class="due-none">개통일 미입력</span>`;
@@ -936,7 +972,27 @@
     `;
   }
 
-  // ---------------- Kakao message parser ----------------
+  function renderContractCell(c){
+    const info = getContractInfo(c);
+    if(!info) return `<span class="due-none">-</span>`;
+    const targetPhone = c.contactPhone || c.phone || '';
+    let actionsHtml = '';
+    if(info.isNearExpiry){
+      const msg = `${c.name} 고객님, 약정 만료일이 다가오고 있습니다(${info.expiryStr}). 재약정 상담 도와드리겠습니다. 감사합니다.`;
+      actionsHtml = `
+        <div class="due-cell-actions">
+          <a class="icon-btn" href="sms:${encodeURIComponent(targetPhone)}?&body=${encodeURIComponent(msg)}" title="만료 안내 문자">📩</a>
+        </div>`;
+    }
+    return `
+      <div style="display:flex; align-items:center; gap:6px;">
+        <span class="pill ${info.ddayClass}">${info.ddayLabel}</span>
+        <span class="mono" style="font-size:11px;color:var(--ink-faint);">${info.expiryStr}</span>
+      </div>
+      ${actionsHtml}
+    `;
+  }
+
   // Fixed template: 처리번호 / 통신사 / 가입구분 / 가입유형 / 가입 요금제 / 이름 / 개통번호 / 연락번호
   const LABELS = ['처리번호','통신사','가입구분','가입유형','가입\\s*요금제','이름','개통번호','개통\\s*실패\\s*사유','연락번호'];
 
@@ -1217,11 +1273,12 @@
     const active = scope.filter(c=>c.status==='사용중').length;
     const stopped = scope.filter(c=>c.status==='해지').length;
     const dueToday = scope.filter(c=>{ const i = getDueInfo(c); return i && i.isDueNow; }).length;
+    const nearExpiry = scope.filter(c=>{ const i = getContractInfo(c); return i && i.isNearExpiry; }).length;
     statsEl.innerHTML = `
       <div class="stat"><b>${total}</b><span>${viewMode==='mine'?'내 고객':'표시된 고객'}</span></div>
       <div class="stat"><b>${active}</b><span>사용중</span></div>
-      <div class="stat"><b>${stopped}</b><span>해지</span></div>
       <div class="stat" style="${dueToday>0 ? 'border-color:#F2CFC8; background:var(--red-tint);' : ''}"><b style="${dueToday>0?'color:var(--red);':''}">${dueToday}</b><span>충전 알림 대상</span></div>
+      <div class="stat" style="${nearExpiry>0 ? 'border-color:#F2CFC8; background:var(--red-tint);' : ''}"><b style="${nearExpiry>0?'color:var(--red);':''}">${nearExpiry}</b><span>약정 만료 임박</span></div>
     `;
   }
 
@@ -1254,6 +1311,7 @@
         <td><span class="pill ${statusPillClass(c.status)}">${escapeHtml(c.status || '-')}</span></td>
         <td class="mono">${escapeHtml(c.activationDate || '-')}</td>
         <td>${renderDueCell(c)}</td>
+        <td>${renderContractCell(c)}</td>
         <td>${escapeHtml(c.author || '-')}</td>
         <td>
           <div class="row-actions" style="justify-content:flex-end;">
@@ -1599,6 +1657,7 @@
     $('f_subType').value = c?.subType || '선불';
     $('f_status').value = c?.status || '사용중';
     $('f_activationDate').value = c?.activationDate || formatDate(todayDateOnly());
+    $('f_contractMonths').value = (c?.contractMonths != null ? c.contractMonths : 0);
     $('f_seller').value = c?.seller || '';
     $('f_manager').value = c?.manager || '';
     $('f_channel').value = c?.channel || '';
@@ -1656,6 +1715,7 @@
       subType: $('f_subType').value,
       status: $('f_status').value,
       activationDate: $('f_activationDate').value,
+      contractMonths: Number($('f_contractMonths').value) || 0,
       seller: $('f_seller').value.trim(),
       manager: $('f_manager').value.trim(),
       channel: $('f_channel').value.trim(),
@@ -1830,14 +1890,10 @@
     const name = $('profileNameInput').value.trim();
     if(!name){ toast('이름을 입력해 주세요'); return; }
     profile = { name };
-    console.log('[confirmProfile] saving profile with key:', teamKey(PROFILE_KEY), 'profile:', profile);
     await persistProfile();
-    const check = localStorage.getItem(teamKey(PROFILE_KEY));
-    console.log('[confirmProfile] readback:', check);
     updateProfileTag();
     hideProfileGate();
     render();
-    console.log('[confirmProfile] done, profileGate display:', document.getElementById('profileGate').style.display);
   }
 
   // ---------------- Events ----------------
@@ -2020,6 +2076,10 @@
       const dueToday = scopedContacts().filter(c=>{ const i = getDueInfo(c); return i && i.isDueNow; }).length;
       if(dueToday > 0){
         setTimeout(()=> toast(`오늘 충전 알림 대상 ${dueToday}명이 있어요`), 400);
+      }
+      const nearExpiry = scopedContacts().filter(c=>{ const i = getContractInfo(c); return i && i.isNearExpiry; }).length;
+      if(nearExpiry > 0){
+        setTimeout(()=> toast(`약정 만료 임박 고객 ${nearExpiry}명이 있어요`), 900);
       }
     }
   }
