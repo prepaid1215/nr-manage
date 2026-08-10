@@ -1,1 +1,8 @@
-
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "io.github.prepaid1215.twa",
+        "sha256_cert_fingerprints": ["81:5C:52:6C:D6:59:92:03:C5:71:BD:7E:57:8F:50:3B:62:F1:03:38:66:52:48:60:52:6C:AF:CB:28:B3:39:DF"]
+      }
+    }]
