@@ -2,7 +2,7 @@
   "name": "NRC 고객 관리",
   "short_name": "NRC관리",
   "description": "NRC 선불폰 고객 관리 앱",
-  "start_url": "/index.html",
+  "start_url": "/nr-manage/",
   "display": "standalone",
   "background_color": "#EEF1ED",
   "theme_color": "#0B6E63",
