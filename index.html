@@ -1391,22 +1391,55 @@
     }
   }
 
-  function handleSaveToGoogleCalendar(){
+  async function handleSaveToGoogleCalendar(){
     const dateStr = $('dc_date').value;
     const report = $('dc_preview').textContent;
     if(!dateStr || !report){ toast('먼저 마감 내역을 만들어 주세요'); return; }
     const myName = (profile && profile.name) || '';
     const count = getDailyActivationCount(dateStr);
+    const hint = $('dc_calendarHint');
+
+    // 1. Supabase에 저장
+    try{
+      const recordId = 'report_' + myName + '_' + dateStr;
+      const res = await fetch(SUPABASE_URL + '/rest/v1/daily_reports', {
+        method: 'POST',
+        headers: { ...SB_HEADERS },
+        body: JSON.stringify({
+          id: recordId,
+          author: myName,
+          report_date: dateStr,
+          content: report
+        })
+      });
+      if(res.ok || res.status === 409){
+        toast('서버에 저장했어요');
+      } else {
+        toast('서버 저장 실패 - 캘린더는 계속 진행해요');
+      }
+    }catch(e){
+      toast('서버 저장 중 오류 - 캘린더는 계속 진행해요');
+    }
+
+    // 2. 구글 캘린더로 이동 (모바일 앱 우선)
     const title = encodeURIComponent(myName + ' - ' + count + '개');
     const details = encodeURIComponent(report);
     const dateFormatted = dateStr.replace(/-/g, '');
-    const hint = $('dc_calendarHint');
     const calUrl = 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + title + '&dates=' + dateFormatted + '/' + dateFormatted + '&details=' + details;
-    window.open(calUrl, '_blank');
-    hint.textContent = '✅ 구글 캘린더가 열렸어요. 내용 확인 후 저장 버튼을 눌러주세요.';
+    // 모바일이면 구글 캘린더 앱 intent로 열기
+    const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
+    if(isMobile && /Android/i.test(navigator.userAgent)){
+      // Android: intent URL로 구글 캘린더 앱 직접 실행
+      const intentUrl = 'intent://calendar.google.com/calendar/render?action=TEMPLATE&text=' + title + '&dates=' + dateFormatted + '/' + dateFormatted + '&details=' + details + '#Intent;scheme=https;package=com.google.android.calendar;end';
+      const a = document.createElement('a');
+      a.href = intentUrl;
+      a.click();
+    } else {
+      window.open(calUrl, '_blank');
+    }
+    hint.textContent = '✅ 서버 저장 완료! 구글 캘린더 앱이 열렸어요. 내용 확인 후 저장 버튼을 눌러주세요.';
     hint.className = 'hint hint-teal';
     hint.style.display = 'block';
-    toast('구글 캘린더로 이동했어요');
   }
 
   // ---------------- vCard export ----------------
