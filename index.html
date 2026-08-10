@@ -1391,55 +1391,22 @@
     }
   }
 
-  async function handleSaveToGoogleCalendar(){
+  function handleSaveToGoogleCalendar(){
     const dateStr = $('dc_date').value;
     const report = $('dc_preview').textContent;
     if(!dateStr || !report){ toast('먼저 마감 내역을 만들어 주세요'); return; }
-    const btn = $('dc_calendarBtn');
+    const myName = (profile && profile.name) || '';
+    const count = getDailyActivationCount(dateStr);
+    const title = encodeURIComponent(myName + ' - ' + count + '개');
+    const details = encodeURIComponent(report);
+    const dateFormatted = dateStr.replace(/-/g, '');
     const hint = $('dc_calendarHint');
-    btn.disabled = true;
-    btn.textContent = '저장 중...';
-    hint.style.display = 'none';
-    try{
-      const myName = (profile && profile.name) || '';
-      const count = getDailyActivationCount(dateStr);
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
-          max_tokens: 1000,
-          messages: [{
-            role: 'user',
-            content: `${dateStr} 날짜로 구글 캘린더에 종일(all-day) 일정을 하나 만들어줘.\n제목: "${myName} - ${count}개"\n설명(description)에는 그냥 "${count}개" 라고만 넣어줘.\n반드시 Google Calendar 도구를 사용해서 실제로 일정을 생성해줘.`
-          }],
-          mcp_servers: [{ type: 'url', url: 'https://calendarmcp.googleapis.com/mcp/v1', name: 'google-calendar' }]
-        })
-      });
-      const data = await response.json();
-      const content = data.content || [];
-      const toolResults = content.filter(b => b.type === 'mcp_tool_result');
-      const textBlocks = content.filter(b => b.type === 'text').map(b => b.text).join(' ');
-      if(toolResults.length > 0){
-        toast('구글 캘린더에 저장했어요');
-        hint.textContent = '✅ 캘린더에 저장 완료. 안드로이드 캘린더 앱이 구글 계정과 동기화돼 있으면 곧 거기에도 보여요.';
-        hint.className = 'hint hint-teal';
-        hint.style.display = 'block';
-      } else {
-        toast('캘린더 저장을 확인하지 못했어요');
-        hint.textContent = '⚠️ ' + (textBlocks || '구글 캘린더 연동을 확인해 주세요.') + ' 안 되면 "복사하기"로 직접 붙여넣어 주세요.';
-        hint.className = 'hint';
-        hint.style.display = 'block';
-      }
-    }catch(e){
-      toast('캘린더 저장 중 오류가 발생했어요');
-      hint.textContent = '⚠️ 오류가 발생했어요. "복사하기"로 직접 캘린더에 붙여넣어 주세요.';
-      hint.className = 'hint';
-      hint.style.display = 'block';
-    }finally{
-      btn.disabled = false;
-      btn.textContent = '📅 구글 캘린더에 저장';
-    }
+    const calUrl = 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + title + '&dates=' + dateFormatted + '/' + dateFormatted + '&details=' + details;
+    window.open(calUrl, '_blank');
+    hint.textContent = '✅ 구글 캘린더가 열렸어요. 내용 확인 후 저장 버튼을 눌러주세요.';
+    hint.className = 'hint hint-teal';
+    hint.style.display = 'block';
+    toast('구글 캘린더로 이동했어요');
   }
 
   // ---------------- vCard export ----------------
