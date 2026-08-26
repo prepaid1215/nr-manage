@@ -635,10 +635,6 @@
             <label>개통유입채널</label>
             <input id="f_channel" type="text" placeholder="예: 네이버 광고" />
           </div>
-          <div>
-            <label>처리번호</label>
-            <input id="f_processNo" type="text" placeholder="통신사 처리번호" />
-          </div>
           <div class="full">
             <label>등록 담당자</label>
             <input id="f_author" type="text" placeholder="담당자 이름" />
@@ -993,7 +989,7 @@
     `;
   }
 
-  // Fixed template: 처리번호 / 통신사 / 가입구분 / 가입유형 / 가입 요금제 / 이름 / 개통번호 / 연락번호
+  // 알림 메시지 템플릿: 처리번호는 메시지 식별용으로만 사용 / 나머지 항목만 고객 데이터로 활용
   const LABELS = ['처리번호','통신사','가입구분','가입유형','가입\\s*요금제','이름','개통번호','개통\\s*실패\\s*사유','연락번호'];
 
   function grabField(block, label){
@@ -1082,7 +1078,7 @@
     // fallback — not the other way around. A mis-OCR'd label can still yield some
     // (wrong) non-empty text, which would otherwise block the much more reliable
     // pattern search from ever running.
-    const processNo = findProcessNoAnywhere(block) || grabField(block, '처리번호');
+    // 처리번호는 알림 메시지 구분에만 사용하고 고객 데이터에는 저장하지 않음
     const carrier = findCarrierAnywhere(block) || normalizeCarrier(grabField(block, '통신사'));
     const type = findTypeAnywhere(block) || normalizeType(grabField(block, '가입구분'));
     const subType = findSubTypeAnywhere(block) || normalizeSubType(grabField(block, '가입유형'));
@@ -1092,7 +1088,7 @@
     const phone = foundPhones[0] || formatPhoneDashes(grabField(block, '개통번호'));
     const contactPhone = foundPhones[1] || formatPhoneDashes(grabField(block, '연락번호'));
 
-    return { processNo, carrier, type, subType, plan, name, phone, contactPhone };
+    return { carrier, type, subType, plan, name, phone, contactPhone };
   }
 
   function parseKakaoBlocksLegacy(text){
@@ -1594,7 +1590,6 @@
       c.subType ? `가입유형 ${c.subType}` : '',
       c.channel ? `유입채널 ${c.channel}` : '',
       c.status ? `상태 ${c.status}` : '',
-      c.processNo ? `처리번호 ${c.processNo}` : '',
       c.note ? c.note : ''
     ].filter(Boolean).join(' / ');
     const lines = [
@@ -1661,7 +1656,6 @@
     $('f_seller').value = c?.seller || '';
     $('f_manager').value = c?.manager || '';
     $('f_channel').value = c?.channel || '';
-    $('f_processNo').value = c?.processNo || '';
     $('f_author').value = c?.author || (profile && profile.name) || '';
     $('f_note').value = c?.note || '';
   }
@@ -1719,7 +1713,6 @@
       seller: $('f_seller').value.trim(),
       manager: $('f_manager').value.trim(),
       channel: $('f_channel').value.trim(),
-      processNo: $('f_processNo').value.trim(),
       author: $('f_author').value.trim() || (profile && profile.name) || '',
       note: $('f_note').value.trim(),
     };
@@ -1771,7 +1764,6 @@
       $('f_plan').value = parsed.plan || '';
       if(parsed.type) $('f_type').value = parsed.type;
       if(parsed.subType) $('f_subType').value = parsed.subType;
-      $('f_processNo').value = parsed.processNo || '';
       toast('텍스트에서 인식 완료! 아래 내용을 확인 후 저장하세요');
     } else {
       toast('텍스트에서 정보를 찾지 못했어요. 형식을 확인해 주세요');
@@ -1795,8 +1787,7 @@
         $('f_plan').value = parsed.plan || '';
         if(parsed.type) $('f_type').value = parsed.type;
         if(parsed.subType) $('f_subType').value = parsed.subType;
-        $('f_processNo').value = parsed.processNo || '';
-        toast('자동 인식 완료! 아래 내용을 확인 후 저장하세요');
+          toast('자동 인식 완료! 아래 내용을 확인 후 저장하세요');
       } else {
         toast('자동 인식에 실패했어요. 이미지를 보며 직접 입력해 주세요');
       }
@@ -1826,7 +1817,7 @@
           <input type="checkbox" data-idx="${i}" ${c.include ? 'checked' : ''} />
           <div>
             <b>${escapeHtml(c.name || '이름 미상')}</b> · ${escapeHtml(c.phone || '-')}
-            <div class="meta">${escapeHtml(c.carrier||'-')} · ${escapeHtml(c.plan||'-')} · 개통일 ${escapeHtml(c.activationDate||'미상')} · 처리번호 ${escapeHtml(c.processNo||'-')}</div>
+            <div class="meta">${escapeHtml(c.carrier||'-')} · ${escapeHtml(c.plan||'-')} · 개통일 ${escapeHtml(c.activationDate||'미상')}</div>
           </div>
         </label>
       `).join('')}
@@ -1865,7 +1856,7 @@
         name: c.name, phone: c.phone, contactPhone: c.contactPhone,
         memberNo: '', carrier: c.carrier, plan: c.plan, type: c.type || '신규',
         subType: c.subType || '선불', status: '사용중', activationDate: c.activationDate || today,
-        seller: '', manager: '', channel: '', processNo: c.processNo,
+        seller: '', manager: '', channel: '',
         author: (profile && profile.name) || '', note: ''
       });
     });
