@@ -298,6 +298,58 @@
     .choice-grid{ grid-template-columns: repeat(2, minmax(0,1fr)); }
   }
 
+
+  @media (max-width: 720px){
+    .app{ padding: 18px 12px 72px; }
+    .toolbar{ padding: 12px; gap:8px; }
+    .toolbar .field, .toolbar .grow{ width:100%; }
+    .toolbar .field[style*="flex-direction:row"]{ width:100%; justify-content:stretch; }
+    .toolbar .field[style*="flex-direction:row"] .btn{ flex:1; justify-content:center; }
+    .stats{ width:100%; display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:8px; }
+    .stat{ min-width:0; }
+    .section-nav{ display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); }
+    .section-nav button{ padding:10px 8px; font-size:12px; }
+
+    .customer-table-wrap{
+      background: transparent;
+      border: none;
+      overflow: visible;
+    }
+    #customerTable{ min-width: 0; width:100%; border-collapse: separate; border-spacing: 0; }
+    #customerTable thead{ display:none; }
+    #customerTable tbody{ display:flex; flex-direction:column; gap:12px; }
+    #customerTable tr{
+      display:grid; grid-template-columns: 1fr 1fr; column-gap:12px; row-gap:4px;
+      background: var(--surface); border:1px solid var(--line);
+      border-radius: 14px; padding: 12px; box-shadow: 0 4px 14px rgba(0,0,0,0.04);
+    }
+    #customerTable td{
+      display:block; width:100%; padding:6px 0; border:none; white-space:normal; font-size:12.5px;
+    }
+    #customerTable td::before{
+      content: attr(data-label); display:block; margin-bottom:2px;
+      font-size:11px; font-weight:600; color: var(--ink-soft); line-height:1.35;
+    }
+    #customerTable td.mobile-header-cell,
+    #customerTable td.mobile-actions-cell,
+    #customerTable td.mobile-wide-cell{ grid-column: 1 / -1; }
+    #customerTable td.mobile-header-cell{
+      display:block; padding: 0 0 10px; margin-bottom: 4px; border-bottom: 1px solid var(--line-soft);
+    }
+    #customerTable td.mobile-header-cell::before{ display:none; }
+    #customerTable td.mobile-header-cell .name-cell{ align-items:flex-start; }
+    #customerTable td.mobile-header-cell .avatar{ width:30px; height:30px; font-size:12px; }
+    #customerTable td.mobile-actions-cell{ padding-top:10px; margin-top:4px; border-top:1px solid var(--line-soft); }
+    #customerTable td.mobile-actions-cell .row-actions{ width:100%; justify-content:flex-end; }
+    #customerTable .mono{ font-size:12px; }
+    #customerTable .due-cell-actions{ flex-wrap:wrap; }
+    #customerTable .pill{ font-size:11px; }
+
+    .modal{ max-height: 94vh; }
+    .modal-head, .modal-body, .modal-foot{ padding-left: 14px; padding-right: 14px; }
+    .tabbar{ overflow-x:auto; white-space:nowrap; }
+  }
+
 </style>
 </head>
 <body>
@@ -385,8 +437,8 @@
     </div>
   </div>
 
-  <div class="table-wrap">
-    <table>
+  <div class="table-wrap customer-table-wrap">
+    <table id="customerTable">
       <thead>
         <tr>
           <th>이름 / 회원번호</th>
@@ -707,7 +759,6 @@
             💡 저장하면 이 화면에서 바로 연락처 파일(.vcf)도 만들 수 있어요. 폰에서 그 파일을 열면 '연락처 추가' 화면으로 연결돼요.
           </div>
         </div>
-      </div>
       </div>
 
     </div>
@@ -1351,26 +1402,26 @@
     emptyState.style.display = 'none';
     tbody.innerHTML = rows.map(c => `
       <tr>
-        <td>
+        <td class="mobile-header-cell" data-label="이름 / 회원번호">
           <div class="name-cell">
             <div class="avatar">${escapeHtml(initials(c.name))}</div>
             <div>
               <div>${escapeHtml(c.name || '-')}</div>
-              <div class="mono" style="color:var(--ink-faint); font-size:11px;">${escapeHtml(c.memberNo || '-')}</div>
+              <div class="mono" style="color:var(--ink-faint); font-size:11px;">회원번호 ${escapeHtml(c.memberNo || '-')}</div>
             </div>
           </div>
         </td>
-        <td class="mono">${escapeHtml(c.phone || '-')}</td>
-        <td class="mono">${escapeHtml(c.contactPhone || '-')}</td>
-        <td>${escapeHtml(c.carrier || '-')}</td>
-        <td>${escapeHtml(c.plan || '-')}</td>
-        <td>${escapeHtml(c.type || '-')}</td>
-        <td><span class="pill ${statusPillClass(c.status)}">${escapeHtml(c.status || '-')}</span></td>
-        <td class="mono">${escapeHtml(c.activationDate || '-')}</td>
-        <td>${renderDueCell(c)}</td>
-        <td>${renderContractCell(c)}</td>
-        <td>${escapeHtml(c.author || '-')}</td>
-        <td>
+        <td class="mono" data-label="개통번호">${escapeHtml(c.phone || '-')}</td>
+        <td class="mono" data-label="연락번호">${escapeHtml(c.contactPhone || '-')}</td>
+        <td data-label="통신사">${escapeHtml(c.carrier || '-')}</td>
+        <td class="mobile-wide-cell" data-label="요금제">${escapeHtml(c.plan || '-')}</td>
+        <td data-label="구분">${escapeHtml(c.type || '-')}</td>
+        <td data-label="사용상태"><span class="pill ${statusPillClass(c.status)}">${escapeHtml(c.status || '-')}</span></td>
+        <td class="mono" data-label="개통일">${escapeHtml(c.activationDate || '-')}</td>
+        <td data-label="충전 알림">${renderDueCell(c)}</td>
+        <td data-label="약정 만료">${renderContractCell(c)}</td>
+        <td data-label="등록자">${escapeHtml(c.author || '-')}</td>
+        <td class="mobile-actions-cell" data-label="관리">
           <div class="row-actions" style="justify-content:flex-end;">
             <button class="icon-btn" data-action="vcard" data-id="${c.id}" title="연락처 앱으로 저장">📇</button>
             <button class="icon-btn" data-action="edit" data-id="${c.id}" title="수정">✎</button>
