@@ -277,6 +277,27 @@
     margin-bottom: 14px;
   }
   .total-box .mono{ font-size: 16px; }
+
+  .inline-pair{ display:grid; grid-template-columns: 100px 1fr; gap:8px; }
+  .stack-gap{ display:flex; flex-direction:column; gap:4px; }
+  .choice-section{ margin-top: 2px; }
+  .choice-section label{ margin-bottom:8px; }
+  .choice-row{ display:flex; gap:10px; flex-wrap:wrap; }
+  .choice-btn{
+    border:1px solid #CBD4E1; background:#fff; color:#24324A; border-radius:12px;
+    padding: 10px 16px; min-width: 110px; font-size:13px; font-weight:600; cursor:pointer;
+    font-family: var(--font-body);
+  }
+  .choice-btn.active{ background:#2D48A0; border-color:#2D48A0; color:#fff; }
+  .choice-grid{ display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap:10px; }
+  .choice-grid .choice-btn{ min-width: 0; width:100%; }
+  .form-select{ width:100%; }
+  .sr-only{ position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+  @media (max-width: 720px){
+    .inline-pair{ grid-template-columns: 1fr; }
+    .choice-grid{ grid-template-columns: repeat(2, minmax(0,1fr)); }
+  }
+
 </style>
 </head>
 <body>
@@ -565,6 +586,21 @@
 
       <div class="tab-panel" id="panelDirect">
         <div class="form-grid">
+          <input id="f_activationDate" type="hidden" />
+          <input id="f_status" type="hidden" />
+          <input id="f_processNo" type="hidden" />
+          <input id="f_activationMethod" type="hidden" />
+          <input id="f_route" type="hidden" />
+
+          <div>
+            <label>회원번호</label>
+            <input id="f_memberNo" type="text" placeholder="예: 928714" />
+          </div>
+          <div>
+            <label>매출자</label>
+            <input id="f_seller" type="text" placeholder="예: 김수빈" />
+          </div>
+
           <div>
             <label class="req">개통명의자 (이름)</label>
             <input id="f_name" type="text" placeholder="예: 김수빈" />
@@ -573,25 +609,35 @@
             <label class="req">개통번호 (선불번호)</label>
             <input id="f_phone" type="tel" placeholder="010-0000-0000" />
           </div>
+
           <div>
             <label>연락번호 (실사용 연락처)</label>
             <input id="f_contactPhone" type="tel" placeholder="010-0000-0000" />
           </div>
           <div>
-            <label>회원번호</label>
-            <input id="f_memberNo" type="text" placeholder="예: 928714" />
+            <label>통신사 / 요금제</label>
+            <div class="inline-pair">
+              <select id="f_carrier" class="form-select">
+                <option value="">선택</option>
+                <option value="KT">KT</option>
+                <option value="LG U+">LG U+</option>
+                <option value="SKT">SKT</option>
+                <option value="알뜰폰">알뜰폰</option>
+              </select>
+              <div class="stack-gap">
+                <input id="f_plan" type="text" list="planList" placeholder="예: 선불 LTE 기본1" />
+                <datalist id="planList">
+                  <option value="선불 LTE 기본1"></option>
+                  <option value="396 39,600"></option>
+                  <option value="459 45,900"></option>
+                  <option value="464 46,400"></option>
+                  <option value="15G 33,000"></option>
+                  <option value="300MB 라이트 33,000"></option>
+                </datalist>
+              </div>
+            </div>
           </div>
-          <div>
-            <label>통신사</label>
-            <input id="f_carrier" list="carrierList" placeholder="예: SKT" />
-            <datalist id="carrierList">
-              <option value="SKT"></option><option value="KT"></option><option value="LG U+"></option><option value="알뜰폰"></option>
-            </datalist>
-          </div>
-          <div>
-            <label>요금제</label>
-            <input id="f_plan" type="text" placeholder="예: L플랫폼 7GB+" />
-          </div>
+
           <div>
             <label>구분</label>
             <select id="f_type">
@@ -604,15 +650,10 @@
               <option>선불</option><option>후불</option>
             </select>
           </div>
+
           <div>
-            <label>사용상태</label>
-            <select id="f_status">
-              <option>사용중</option><option>일시정지</option><option>해지</option>
-            </select>
-          </div>
-          <div>
-            <label>개통일</label>
-            <input id="f_activationDate" type="date" />
+            <label>담당</label>
+            <input id="f_manager" type="text" placeholder="예: 주하루" />
           </div>
           <div>
             <label>약정기간</label>
@@ -623,18 +664,37 @@
               <option value="24">24개월</option>
             </select>
           </div>
-          <div>
-            <label>매출자</label>
-            <input id="f_seller" type="text" placeholder="예: 김수빈" />
+
+          <input id="f_channel" type="hidden" />
+
+          <div class="full choice-section">
+            <label>개통방법</label>
+            <div class="choice-row" id="activationMethodGroup" data-target="f_activationMethod">
+              <button type="button" class="choice-btn active" data-value="플랫폼">플랫폼</button>
+              <button type="button" class="choice-btn" data-value="앤스마트">앤스마트</button>
+              <button type="button" class="choice-btn" data-value="지점방문">지점방문</button>
+            </div>
           </div>
-          <div>
-            <label>담당</label>
-            <input id="f_manager" type="text" placeholder="예: 주하루" />
+
+          <div class="full choice-section">
+            <label>루트(유입경로)</label>
+            <div class="choice-grid" id="routeGroup" data-target="f_route">
+              <button type="button" class="choice-btn active" data-value="메인블로그">메인블로그</button>
+              <button type="button" class="choice-btn" data-value="슬룸">슬룸</button>
+              <button type="button" class="choice-btn" data-value="유튜브">유튜브</button>
+              <button type="button" class="choice-btn" data-value="당근">당근</button>
+              <button type="button" class="choice-btn" data-value="인스타">인스타</button>
+              <button type="button" class="choice-btn" data-value="스레드">스레드</button>
+              <button type="button" class="choice-btn" data-value="광고">광고</button>
+              <button type="button" class="choice-btn" data-value="오픈채팅">오픈채팅</button>
+              <button type="button" class="choice-btn" data-value="워드프레스">워드프레스</button>
+              <button type="button" class="choice-btn" data-value="티스토리">티스토리</button>
+              <button type="button" class="choice-btn" data-value="네이버플레이스">네이버플레이스</button>
+              <button type="button" class="choice-btn" data-value="카페">카페</button>
+              <button type="button" class="choice-btn" data-value="기타">기타</button>
+            </div>
           </div>
-          <div>
-            <label>개통유입채널</label>
-            <input id="f_channel" type="text" placeholder="예: 네이버 광고" />
-          </div>
+
           <div class="full">
             <label>등록 담당자</label>
             <input id="f_author" type="text" placeholder="담당자 이름" />
@@ -647,6 +707,7 @@
             💡 저장하면 이 화면에서 바로 연락처 파일(.vcf)도 만들 수 있어요. 폰에서 그 파일을 열면 '연락처 추가' 화면으로 연결돼요.
           </div>
         </div>
+      </div>
       </div>
 
     </div>
@@ -989,7 +1050,7 @@
     `;
   }
 
-  // 알림 메시지 템플릿: 처리번호는 메시지 식별용으로만 사용 / 나머지 항목만 고객 데이터로 활용
+  // Fixed template: 처리번호 / 통신사 / 가입구분 / 가입유형 / 가입 요금제 / 이름 / 개통번호 / 연락번호
   const LABELS = ['처리번호','통신사','가입구분','가입유형','가입\\s*요금제','이름','개통번호','개통\\s*실패\\s*사유','연락번호'];
 
   function grabField(block, label){
@@ -1078,7 +1139,7 @@
     // fallback — not the other way around. A mis-OCR'd label can still yield some
     // (wrong) non-empty text, which would otherwise block the much more reliable
     // pattern search from ever running.
-    // 처리번호는 알림 메시지 구분에만 사용하고 고객 데이터에는 저장하지 않음
+    const processNo = findProcessNoAnywhere(block) || grabField(block, '처리번호');
     const carrier = findCarrierAnywhere(block) || normalizeCarrier(grabField(block, '통신사'));
     const type = findTypeAnywhere(block) || normalizeType(grabField(block, '가입구분'));
     const subType = findSubTypeAnywhere(block) || normalizeSubType(grabField(block, '가입유형'));
@@ -1088,7 +1149,7 @@
     const phone = foundPhones[0] || formatPhoneDashes(grabField(block, '개통번호'));
     const contactPhone = foundPhones[1] || formatPhoneDashes(grabField(block, '연락번호'));
 
-    return { carrier, type, subType, plan, name, phone, contactPhone };
+    return { processNo, carrier, type, subType, plan, name, phone, contactPhone };
   }
 
   function parseKakaoBlocksLegacy(text){
@@ -1588,7 +1649,8 @@
       c.activationDate ? `개통일 ${c.activationDate}` : '',
       c.type ? `구분 ${c.type}` : '',
       c.subType ? `가입유형 ${c.subType}` : '',
-      c.channel ? `유입채널 ${c.channel}` : '',
+      c.activationMethod ? `개통방법 ${c.activationMethod}` : '',
+      (c.route || c.channel) ? `유입경로 ${c.route || c.channel}` : '',
       c.status ? `상태 ${c.status}` : '',
       c.note ? c.note : ''
     ].filter(Boolean).join(' / ');
@@ -1630,6 +1692,43 @@
   }
 
   // ---------------- Modal / form ----------------
+  function syncChoiceGroup(groupId, value){
+    const group = $(groupId);
+    if(!group) return;
+    const buttons = Array.from(group.querySelectorAll('.choice-btn'));
+    let matched = false;
+    buttons.forEach(btn => {
+      const active = (btn.dataset.value || '') === (value || '');
+      btn.classList.toggle('active', active);
+      if(active) matched = true;
+    });
+    if(!matched && buttons[0]){
+      buttons.forEach((btn, idx) => btn.classList.toggle('active', idx === 0));
+      const target = $(group.dataset.target);
+      if(target) target.value = buttons[0].dataset.value || '';
+    }
+  }
+
+  function bindChoiceGroup(groupId, defaultValue){
+    const group = $(groupId);
+    if(!group) return;
+    const target = $(group.dataset.target);
+    const buttons = Array.from(group.querySelectorAll('.choice-btn'));
+    group.addEventListener('click', (e)=>{
+      const btn = e.target.closest('.choice-btn');
+      if(!btn) return;
+      const value = btn.dataset.value || '';
+      if(target) target.value = value;
+      if(groupId === 'routeGroup' && $('f_channel')) $('f_channel').value = value;
+      buttons.forEach(b => b.classList.toggle('active', b === btn));
+    });
+    if(target && !target.value){
+      target.value = defaultValue || (buttons[0] ? buttons[0].dataset.value || '' : '');
+    }
+    syncChoiceGroup(groupId, target ? target.value : defaultValue);
+    if(groupId === 'routeGroup' && $('f_channel')) $('f_channel').value = target ? target.value : (defaultValue || '');
+  }
+
   function switchTab(tab){
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
     $('panelPaste').style.display = tab === 'paste' ? 'block' : 'none';
@@ -1642,22 +1741,27 @@
   }
 
   function fillForm(c){
+    $('f_memberNo').value = c?.memberNo || '';
+    $('f_seller').value = c?.seller || '';
     $('f_name').value = c?.name || '';
     $('f_phone').value = c?.phone || '';
     $('f_contactPhone').value = c?.contactPhone || '';
-    $('f_memberNo').value = c?.memberNo || '';
     $('f_carrier').value = c?.carrier || '';
     $('f_plan').value = c?.plan || '';
     $('f_type').value = c?.type || '신규';
     $('f_subType').value = c?.subType || '선불';
+    $('f_manager').value = c?.manager || '';
+    $('f_contractMonths').value = (c?.contractMonths != null ? c.contractMonths : 0);
+    $('f_channel').value = c?.route || c?.channel || '메인블로그';
     $('f_status').value = c?.status || '사용중';
     $('f_activationDate').value = c?.activationDate || formatDate(todayDateOnly());
-    $('f_contractMonths').value = (c?.contractMonths != null ? c.contractMonths : 0);
-    $('f_seller').value = c?.seller || '';
-    $('f_manager').value = c?.manager || '';
-    $('f_channel').value = c?.channel || '';
+    $('f_processNo').value = c?.processNo || '';
+    $('f_activationMethod').value = c?.activationMethod || '플랫폼';
+    $('f_route').value = c?.route || c?.channel || '메인블로그';
     $('f_author').value = c?.author || (profile && profile.name) || '';
     $('f_note').value = c?.note || '';
+    syncChoiceGroup('activationMethodGroup', $('f_activationMethod').value);
+    syncChoiceGroup('routeGroup', $('f_route').value);
   }
 
   function openModal(id){
@@ -1707,12 +1811,14 @@
       plan: $('f_plan').value.trim(),
       type: $('f_type').value,
       subType: $('f_subType').value,
-      status: $('f_status').value,
-      activationDate: $('f_activationDate').value,
+      status: $('f_status').value || '사용중',
+      activationDate: $('f_activationDate').value || formatDate(todayDateOnly()),
       contractMonths: Number($('f_contractMonths').value) || 0,
       seller: $('f_seller').value.trim(),
       manager: $('f_manager').value.trim(),
-      channel: $('f_channel').value.trim(),
+      channel: $('f_route').value.trim(),
+      activationMethod: $('f_activationMethod').value.trim(),
+      route: $('f_route').value.trim(),
       author: $('f_author').value.trim() || (profile && profile.name) || '',
       note: $('f_note').value.trim(),
     };
@@ -1764,6 +1870,7 @@
       $('f_plan').value = parsed.plan || '';
       if(parsed.type) $('f_type').value = parsed.type;
       if(parsed.subType) $('f_subType').value = parsed.subType;
+      $('f_processNo').value = '';
       toast('텍스트에서 인식 완료! 아래 내용을 확인 후 저장하세요');
     } else {
       toast('텍스트에서 정보를 찾지 못했어요. 형식을 확인해 주세요');
@@ -1787,7 +1894,8 @@
         $('f_plan').value = parsed.plan || '';
         if(parsed.type) $('f_type').value = parsed.type;
         if(parsed.subType) $('f_subType').value = parsed.subType;
-          toast('자동 인식 완료! 아래 내용을 확인 후 저장하세요');
+        $('f_processNo').value = '';
+        toast('자동 인식 완료! 아래 내용을 확인 후 저장하세요');
       } else {
         toast('자동 인식에 실패했어요. 이미지를 보며 직접 입력해 주세요');
       }
@@ -1856,7 +1964,7 @@
         name: c.name, phone: c.phone, contactPhone: c.contactPhone,
         memberNo: '', carrier: c.carrier, plan: c.plan, type: c.type || '신규',
         subType: c.subType || '선불', status: '사용중', activationDate: c.activationDate || today,
-        seller: '', manager: '', channel: '',
+        seller: '', manager: '', channel: '', activationMethod: '플랫폼', route: '메인블로그',
         author: (profile && profile.name) || '', note: ''
       });
     });
@@ -1892,6 +2000,8 @@
   $('closeModalBtn').addEventListener('click', closeModal);
   $('cancelBtn').addEventListener('click', closeModal);
   $('saveBtn').addEventListener('click', saveForm);
+  bindChoiceGroup('activationMethodGroup', '플랫폼');
+  bindChoiceGroup('routeGroup', '메인블로그');
   $('exportAllBtn').addEventListener('click', exportAll);
   overlay.addEventListener('click', (e)=>{ if(e.target === overlay) closeModal(); });
   $('searchInput').addEventListener('input', render);
