@@ -311,39 +311,58 @@
     .section-nav button{ padding:10px 8px; font-size:12px; }
 
     .customer-table-wrap{
-      background: transparent;
-      border: none;
-      overflow: visible;
+      overflow-x:auto;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
     }
-    #customerTable{ min-width: 0; width:100%; border-collapse: separate; border-spacing: 0; }
+    #customerTable{ min-width: 520px; width:100%; border-collapse: collapse; }
     #customerTable thead{ display:none; }
-    #customerTable tbody{ display:flex; flex-direction:column; gap:12px; }
-    #customerTable tr{
-      display:grid; grid-template-columns: 1fr 1fr; column-gap:12px; row-gap:4px;
-      background: var(--surface); border:1px solid var(--line);
-      border-radius: 14px; padding: 12px; box-shadow: 0 4px 14px rgba(0,0,0,0.04);
+    #customerTable tbody tr.mobile-split-top td,
+    #customerTable tbody tr.mobile-split-bottom td{
+      padding: 8px 8px;
+      white-space: normal;
+      vertical-align: top;
+      border-bottom: 1px solid var(--line-soft);
+      font-size: 12px;
     }
-    #customerTable td{
-      display:block; width:100%; padding:6px 0; border:none; white-space:normal; font-size:12.5px;
+    #customerTable tbody tr.mobile-split-top td.rowspan-name{
+      width: 114px;
+      min-width: 114px;
+      border-right: 1px solid var(--line-soft);
+      background: #FBFCFA;
     }
-    #customerTable td::before{
-      content: attr(data-label); display:block; margin-bottom:2px;
-      font-size:11px; font-weight:600; color: var(--ink-soft); line-height:1.35;
+    #customerTable tbody tr.mobile-split-bottom td{ padding-top: 6px; padding-bottom: 10px; }
+    #customerTable tbody tr.mobile-split-bottom.last-in-group td,
+    #customerTable tbody tr.mobile-split-bottom td.last-in-group{ border-bottom: 1px solid var(--line); }
+    #customerTable .mobile-mini-label{
+      display:block;
+      font-size: 10.5px;
+      font-weight: 600;
+      color: var(--ink-soft);
+      margin-bottom: 3px;
+      line-height: 1.3;
     }
-    #customerTable td.mobile-header-cell,
-    #customerTable td.mobile-actions-cell,
-    #customerTable td.mobile-wide-cell{ grid-column: 1 / -1; }
-    #customerTable td.mobile-header-cell{
-      display:block; padding: 0 0 10px; margin-bottom: 4px; border-bottom: 1px solid var(--line-soft);
+    #customerTable .mobile-main-value{
+      display:block;
+      font-size: 12px;
+      color: var(--ink);
+      line-height: 1.35;
+      word-break: break-word;
     }
-    #customerTable td.mobile-header-cell::before{ display:none; }
-    #customerTable td.mobile-header-cell .name-cell{ align-items:flex-start; }
-    #customerTable td.mobile-header-cell .avatar{ width:30px; height:30px; font-size:12px; }
-    #customerTable td.mobile-actions-cell{ padding-top:10px; margin-top:4px; border-top:1px solid var(--line-soft); }
-    #customerTable td.mobile-actions-cell .row-actions{ width:100%; justify-content:flex-end; }
-    #customerTable .mono{ font-size:12px; }
-    #customerTable .due-cell-actions{ flex-wrap:wrap; }
-    #customerTable .pill{ font-size:11px; }
+    #customerTable .mobile-sub-value{
+      display:block;
+      font-size: 10.5px;
+      color: var(--ink-faint);
+      line-height: 1.3;
+      margin-top: 3px;
+    }
+    #customerTable .rowspan-name .name-cell{ align-items:flex-start; }
+    #customerTable .rowspan-name .avatar{ width:28px; height:28px; font-size:12px; }
+    #customerTable .mobile-actions-inline{ display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
+    #customerTable .mobile-pill-wrap{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+    #customerTable .icon-btn{ width:26px; height:26px; }
+    #customerTable .due-cell-actions{ display:none; }
 
     .modal{ max-height: 94vh; }
     .modal-head, .modal-body, .modal-foot{ padding-left: 14px; padding-right: 14px; }
@@ -1101,6 +1120,77 @@
     `;
   }
 
+
+  function isMobileCustomerView(){
+    return window.innerWidth <= 720;
+  }
+
+  function renderDueCompact(c){
+    const info = getDueInfo(c);
+    if(!info) return `<span class="mobile-main-value">개통일 없음</span>`;
+    const sent = info.sentForCycle ? `<span class="mobile-sub-value">이번 회차 발송완료</span>` : '';
+    return `
+      <div class="mobile-pill-wrap">
+        <span class="pill ${info.ddayClass}">${info.ddayLabel}</span>
+        <span class="mono" style="font-size:10.5px;color:var(--ink-faint);">${info.dueStr}</span>
+      </div>
+      ${sent}
+    `;
+  }
+
+  function renderContractCompact(c){
+    const info = getContractInfo(c);
+    if(!info) return `<span class="mobile-main-value">-</span>`;
+    return `
+      <div class="mobile-pill-wrap">
+        <span class="pill ${info.ddayClass}">${info.ddayLabel}</span>
+        <span class="mono" style="font-size:10.5px;color:var(--ink-faint);">${info.expiryStr}</span>
+      </div>
+    `;
+  }
+
+  function renderMobileCustomerRows(c, isLast){
+    return `
+      <tr class="mobile-split-top">
+        <td class="rowspan-name" rowspan="2">
+          <div class="name-cell">
+            <div class="avatar">${escapeHtml(initials(c.name))}</div>
+            <div>
+              <div>${escapeHtml(c.name || '-')}</div>
+              <div class="mono" style="color:var(--ink-faint); font-size:10.5px;">회원번호 ${escapeHtml(c.memberNo || '-')}</div>
+            </div>
+          </div>
+          <div class="mobile-actions-inline">
+            <button class="icon-btn" data-action="vcard" data-id="${c.id}" title="연락처 앱으로 저장">📇</button>
+            <button class="icon-btn" data-action="edit" data-id="${c.id}" title="수정">✎</button>
+            <button class="icon-btn" data-action="delete" data-id="${c.id}" title="삭제">🗑</button>
+          </div>
+        </td>
+        <td>
+          <span class="mobile-mini-label">개통번호</span>
+          <span class="mobile-main-value mono">${escapeHtml(c.phone || '-')}</span>
+        </td>
+        <td>
+          <span class="mobile-mini-label">연락번호</span>
+          <span class="mobile-main-value mono">${escapeHtml(c.contactPhone || '-')}</span>
+        </td>
+      </tr>
+      <tr class="mobile-split-bottom ${isLast ? 'last-in-group' : ''}">
+        <td>
+          <span class="mobile-mini-label">통신/상태</span>
+          <span class="mobile-main-value">${escapeHtml(c.carrier || '-')} · ${escapeHtml(c.type || '-')}</span>
+          <span class="mobile-sub-value"><span class="pill ${statusPillClass(c.status)}">${escapeHtml(c.status || '-')}</span> · 개통 ${escapeHtml(c.activationDate || '-')}</span>
+        </td>
+        <td class="${isLast ? 'last-in-group' : ''}">
+          <span class="mobile-mini-label">요금/알림</span>
+          <span class="mobile-main-value">${escapeHtml(c.plan || '-')}</span>
+          <div style="margin-top:4px;">${renderDueCompact(c)}</div>
+          <div style="margin-top:4px;">${renderContractCompact(c)}</div>
+        </td>
+      </tr>
+    `;
+  }
+
   // Fixed template: 처리번호 / 통신사 / 가입구분 / 가입유형 / 가입 요금제 / 이름 / 개통번호 / 연락번호
   const LABELS = ['처리번호','통신사','가입구분','가입유형','가입\\s*요금제','이름','개통번호','개통\\s*실패\\s*사유','연락번호'];
 
@@ -1400,28 +1490,32 @@
       return;
     }
     emptyState.style.display = 'none';
+    if(isMobileCustomerView()){
+      tbody.innerHTML = rows.map((c, idx) => renderMobileCustomerRows(c, idx === rows.length - 1)).join('');
+      return;
+    }
     tbody.innerHTML = rows.map(c => `
       <tr>
-        <td class="mobile-header-cell" data-label="이름 / 회원번호">
+        <td>
           <div class="name-cell">
             <div class="avatar">${escapeHtml(initials(c.name))}</div>
             <div>
               <div>${escapeHtml(c.name || '-')}</div>
-              <div class="mono" style="color:var(--ink-faint); font-size:11px;">회원번호 ${escapeHtml(c.memberNo || '-')}</div>
+              <div class="mono" style="color:var(--ink-faint); font-size:11px;">${escapeHtml(c.memberNo || '-')}</div>
             </div>
           </div>
         </td>
-        <td class="mono" data-label="개통번호">${escapeHtml(c.phone || '-')}</td>
-        <td class="mono" data-label="연락번호">${escapeHtml(c.contactPhone || '-')}</td>
-        <td data-label="통신사">${escapeHtml(c.carrier || '-')}</td>
-        <td class="mobile-wide-cell" data-label="요금제">${escapeHtml(c.plan || '-')}</td>
-        <td data-label="구분">${escapeHtml(c.type || '-')}</td>
-        <td data-label="사용상태"><span class="pill ${statusPillClass(c.status)}">${escapeHtml(c.status || '-')}</span></td>
-        <td class="mono" data-label="개통일">${escapeHtml(c.activationDate || '-')}</td>
-        <td data-label="충전 알림">${renderDueCell(c)}</td>
-        <td data-label="약정 만료">${renderContractCell(c)}</td>
-        <td data-label="등록자">${escapeHtml(c.author || '-')}</td>
-        <td class="mobile-actions-cell" data-label="관리">
+        <td class="mono">${escapeHtml(c.phone || '-')}</td>
+        <td class="mono">${escapeHtml(c.contactPhone || '-')}</td>
+        <td>${escapeHtml(c.carrier || '-')}</td>
+        <td>${escapeHtml(c.plan || '-')}</td>
+        <td>${escapeHtml(c.type || '-')}</td>
+        <td><span class="pill ${statusPillClass(c.status)}">${escapeHtml(c.status || '-')}</span></td>
+        <td class="mono">${escapeHtml(c.activationDate || '-')}</td>
+        <td>${renderDueCell(c)}</td>
+        <td>${renderContractCell(c)}</td>
+        <td>${escapeHtml(c.author || '-')}</td>
+        <td>
           <div class="row-actions" style="justify-content:flex-end;">
             <button class="icon-btn" data-action="vcard" data-id="${c.id}" title="연락처 앱으로 저장">📇</button>
             <button class="icon-btn" data-action="edit" data-id="${c.id}" title="수정">✎</button>
@@ -2056,6 +2150,7 @@
   $('exportAllBtn').addEventListener('click', exportAll);
   overlay.addEventListener('click', (e)=>{ if(e.target === overlay) closeModal(); });
   $('searchInput').addEventListener('input', render);
+  window.addEventListener('resize', render);
   $('filterCarrier').addEventListener('change', render);
   $('filterStatus').addEventListener('change', render);
   $('filterAuthor').addEventListener('change', render);
