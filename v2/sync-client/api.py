@@ -46,6 +46,7 @@ DATA_DIR = Path(__file__).parent / "data"
 sync_state = {"running": False, "completed": False, "error": None, "message": "대기 중"}
 SCHEDULES_FILE = DATA_DIR / "sync_schedules.json"
 KEYRING_SERVICE = "NRC-Management-Scheduler"
+MANUAL_KEYRING_SERVICE = "NRC-Management-Manual"
 SUPABASE_URL = "https://ymagjzwebshfnjiisrao.supabase.co"
 SUPABASE_KEY = "sb_publishable_odxxHbBufV-ZSFlVJ8xFiw_18hBVyJf"
 
@@ -193,10 +194,18 @@ def sync_combined():
         return jsonify({"ok": True, "message": "이미 수집 중입니다."})
 
     body = request.json or {}
+    app_user_id = str(body.get("appUserId", ""))
     login_id = str(body.get("loginId", "")).strip()
     password = str(body.get("password", ""))
+    saved_text = keyring.get_password(MANUAL_KEYRING_SERVICE, app_user_id) if app_user_id else None
+    if (not login_id or not password) and saved_text:
+        saved = json.loads(saved_text)
+        login_id = login_id or saved.get("loginId", "")
+        password = password or saved.get("password", "")
     if len(login_id) < 3 or len(password) < 4:
         return jsonify({"ok": False, "message": "NRC 홈페이지 아이디와 비밀번호를 확인하세요."}), 400
+    if body.get("remember") and app_user_id:
+        keyring.set_password(MANUAL_KEYRING_SERVICE, app_user_id, json.dumps({"loginId": login_id, "password": password}))
 
     def _run():
         sync_state.update(running=True, completed=False, error=None, message="NRC 로그인 및 10단계 수집 중...")
@@ -210,6 +219,25 @@ def sync_combined():
 
     threading.Thread(target=_run, daemon=True).start()
     return jsonify({"ok": True, "message": "10단계 수집을 시작했습니다."})
+
+
+@app.route("/api/manual-credentials", methods=["GET", "DELETE"])
+def manual_credentials():
+    body = request.json or {} if request.method == "DELETE" else {}
+    app_user_id = str(request.args.get("appUserId", "") if request.method == "GET" else body.get("appUserId", ""))
+    if not app_user_id:
+        return jsonify({"ok": False, "message": "앱 사용자 정보가 필요합니다."}), 400
+    if request.method == "DELETE":
+        try:
+            keyring.delete_password(MANUAL_KEYRING_SERVICE, app_user_id)
+        except keyring.errors.PasswordDeleteError:
+            pass
+        return jsonify({"ok": True})
+    saved_text = keyring.get_password(MANUAL_KEYRING_SERVICE, app_user_id)
+    if not saved_text:
+        return jsonify({"ok": True, "saved": False})
+    saved = json.loads(saved_text)
+    return jsonify({"ok": True, "saved": True, "loginId": saved.get("loginId", "")})
 
 
 def run_scheduled_collection(schedule_item):
