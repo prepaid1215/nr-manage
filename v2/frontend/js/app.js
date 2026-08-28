@@ -1,5 +1,5 @@
 import{supabase,signUp,signIn,currentProfile}from'./supabase.js?v=20260829-11';
-import{customersPage}from'./customers.js?v=20260829-20';
+import{customersPage}from'./customers.js?v=20260829-21';
 const $=id=>document.getElementById(id);let me=null,authMode='login';const menus=[['home','홈'],['collect','수집'],['customers','고객'],['activity','활동'],['organization','조직'],['performance','실적'],['commission','수당'],['closing','마감'],['settings','설정']];
 function nav(){const html=menus.map(([id,label])=>`<button data-page="${id}">${label}</button>`).join('');$('topNav').innerHTML=html;$('bottomNav').innerHTML=menus.slice(0,4).concat([['more','더보기']]).map(([id,label])=>`<button data-page="${id}">${label}</button>`).join('');document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>show(b.dataset.page))}
 function home(){const frag=$('homeTemplate').content.cloneNode(true);$('content').replaceChildren(frag);$('monthlySummary').textContent='개통 0건 · 신규 0건 · 재구매 0건 · 매출 0원'}
