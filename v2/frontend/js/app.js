@@ -48,13 +48,13 @@ async function home() {
   $("content").replaceChildren(frag);
   $("content").insertAdjacentHTML(
     "afterbegin",
-    `<section class="card home-nrc"><div class="section-head"><div><h2>NRC 매출 대시보드</h2><p class="help" id="homeNrcUpdated">최근 수집 데이터를 불러오는 중...</p></div><button class="primary compact" id="homeCollect" type="button">매출받기</button></div><div id="homeNrcDashboard"><p class="help">수집된 매출 데이터가 없습니다.</p></div></section>`,
+    `<section class="card home-nrc"><div class="section-head"><div><h2>NRC 매출 대시보드</h2><p class="help" id="homeNrcUpdated">최근 수집 데이터를 불러오는 중...</p></div><button class="primary compact" id="homeCollect" type="button">매출받기</button></div><div id="homeCollectStatus" class="connection-status" hidden></div><div id="homeCollectError" class="error"></div><div id="homeNrcDashboard"><p class="help">수집된 매출 데이터가 없습니다.</p></div></section>`,
   );
   $("content").insertAdjacentHTML(
     "beforeend",
     `<section class="card"><h2>알림</h2><div id="homeAlerts" class="home-alerts"><p class="help">알림을 불러오는 중...</p></div></section>`,
   );
-  $("homeCollect").onclick = () => settings("collection");
+  $("homeCollect").onclick = runHomeCollection;
   const date = new Date(),
     today = localDate(date),
     month = today.slice(0, 7),
@@ -435,7 +435,7 @@ async function organizationDashboard() {
       Number(item?.ordPv || 0) +
       Number(item?.maxPv || 0) +
       Number(item?.minPv || 0);
-    const treeNode = (item, path = new Set(), relation = "본") => {
+    const treeNode = (item, path = new Set()) => {
       if (path.has(String(item.userId))) return "";
       const next = new Set(path);
       next.add(String(item.userId));
@@ -446,11 +446,11 @@ async function organizationDashboard() {
             String(a.abPos || "").localeCompare(String(b.abPos || "")) ||
             String(a.userId).localeCompare(String(b.userId)),
         );
-      const content = `<span class="sales-summary"><b>${safe(item.userName || "이름 없음")} <small>(${safe(item.userId || "코드 없음")})</small></b><em>${safe(relation)}</em><span>대실적 : <strong>${number(item.maxPv)}</strong></span><span>소실적 : <strong>${number(item.minPv)}</strong></span></span>`;
+      const content = `<span class="sales-summary"><b>${safe(item.userName || "이름 없음")} <small>(${safe(item.userId || "코드 없음")}) (${safe(item.rankName || "회원")})</small></b><span>대실적 : <strong>${number(item.maxPv)}</strong></span><span>소실적 : <strong>${number(item.minPv)}</strong></span></span>`;
       if (!descendants.length) {
         return `<li><button class="family-node family-leaf" data-member="${safe(item.userId)}" type="button">${content}</button></li>`;
       }
-      return `<li><details class="family-branch"><summary class="family-node" data-member="${safe(item.userId)}">${content}</summary><ul>${descendants.map((child, index) => treeNode(child, next, `서브${index + 1}`)).join("")}</ul></details></li>`;
+      return `<li><details class="family-branch"><summary class="family-node" data-member="${safe(item.userId)}">${content}</summary><ul>${descendants.map((child) => treeNode(child, next)).join("")}</ul></details></li>`;
     };
     const horizontalTreeNode = (item, path = new Set()) => {
       if (path.has(String(item.userId))) return "";
@@ -730,6 +730,58 @@ async function localApi(path, options = {}) {
   if (!response.ok || !data.ok)
     throw Error(data.message || "로컬 동기화 프로그램 요청에 실패했습니다.");
   return data;
+}
+async function runHomeCollection() {
+  const button = $("homeCollect"),
+    status = $("homeCollectStatus"),
+    errorBox = $("homeCollectError");
+  errorBox.textContent = "";
+  status.hidden = false;
+  status.textContent = "매출 데이터 수집을 시작합니다...";
+  button.disabled = true;
+  button.textContent = "수집 중...";
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    await localApi("/api/sync/combined", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ appUserId: user.id }),
+    });
+    let result = null;
+    for (let index = 0; index < 150; index++) {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      const current = await localApi("/api/status");
+      status.textContent = current.sync?.message || "매출 데이터 수집 중...";
+      if (current.sync?.error) throw Error(current.sync.error);
+      if (current.sync?.completed) {
+        result = await localApi("/api/combined");
+        break;
+      }
+    }
+    if (!result)
+      throw Error("수집 시간이 오래 걸립니다. 잠시 후 다시 눌러주세요.");
+    const { error } = await supabase.from("nrc_sync_snapshots").insert({
+      owner_id: user.id,
+      source_account_id:
+        result.data?.rstLst?.[0]?.userId || me.member_no || "saved",
+      snapshot_type: "combined",
+      payload: result.data,
+      collected_at: result.collected_at || new Date().toISOString(),
+    });
+    if (error) throw error;
+    status.textContent = "매출·소비자회선 수집 완료";
+    await home();
+  } catch (error) {
+    status.hidden = true;
+    errorBox.textContent = /아이디와 비밀번호|확인하세요/i.test(error.message)
+      ? "설정 → 수집에서 NRC 로그인 정보를 최초 한 번 저장해 주세요."
+      : error.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = "매출받기";
+  }
 }
 async function loadLocalStatus() {
   const box = $("nrcStatus");
