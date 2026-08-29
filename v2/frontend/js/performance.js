@@ -24,7 +24,8 @@ export async function performancePage(root) {
   const savedMinorTarget = Number(
     localStorage.getItem("nrc-performance-minor-target") || 200000,
   );
-  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>목표 실적 계산기</h2><p class="help">대실적·소실적 목표를 각각 입력해 부족분과 추천 회원을 계산합니다.</p></div></div><p id="perfSource" class="help"></p><label>계산할 회원<select id="perfMember"></select></label><div class="activity-grid two"><label>대실적 목표 NV<input id="perfMajorTarget" type="number" min="1" step="1000" value="${savedMajorTarget}"></label><label>소실적 목표 NV<input id="perfMinorTarget" type="number" min="1" step="1000" value="${savedMinorTarget}"></label></div><button id="perfRun" class="primary">부족분 계산</button><div id="perfError" class="error"></div></section><section id="perfResult"></section>`;
+  const savedClosingMember = localStorage.getItem("nrc-closing-member") || "";
+  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>마감 실적 계산기</h2><p class="help">마감할 사업자를 선택하고 목표를 입력하세요.</p></div></div><p id="perfSource" class="help"></p><label>마감할 사업자<select id="perfMember"></select></label><div class="activity-grid two"><label>대실적 목표 NV<input id="perfMajorTarget" type="number" min="1" step="1000" value="${savedMajorTarget}"></label><label>소실적 목표 NV<input id="perfMinorTarget" type="number" min="1" step="1000" value="${savedMinorTarget}"></label></div><button id="perfRun" class="primary">부족분 계산</button><div id="perfError" class="error"></div></section><section id="perfResult"></section>`;
   const $ = (id) => document.getElementById(id);
   const { data, error } = await supabase
     .from("nrc_sync_snapshots")
@@ -59,6 +60,9 @@ export async function performancePage(root) {
         `<option value="${safe(row.userId)}">${safe(row.userName)} (${safe(row.userId)})</option>`,
     )
     .join("");
+  if (savedClosingMember && model.byId.has(savedClosingMember)) {
+    $("perfMember").value = savedClosingMember;
+  }
 
   $("perfRun").onclick = () => {
     try {
@@ -68,6 +72,7 @@ export async function performancePage(root) {
         majorTarget,
         minorTarget,
       });
+      localStorage.setItem("nrc-closing-member", $("perfMember").value);
       localStorage.setItem("nrc-performance-major-target", String(majorTarget));
       localStorage.setItem("nrc-performance-minor-target", String(minorTarget));
 
@@ -76,7 +81,7 @@ export async function performancePage(root) {
         : "";
       const recommendation = result.achieved
         ? `<section class="recommend-card"><span>계산 결과</span><h2>목표 달성</h2><p>입력한 대실적·소실적 목표의 부족 NV가 없습니다.</p><small>※ 목표값을 바꾸면 즉시 다시 계산할 수 있습니다.</small></section>`
-        : `<section class="recommend-card"><span>최적 배치 제안</span><h2>${result.candidate?.userName ? safe(result.candidate.userName) : `${result.priority + 1}번 서브 신규 위치`}</h2><p>${result.priority + 1}번 서브 라인에 <b>${fmt(result.deficits[result.priority])} NV</b>가 부족합니다.</p><small>※ 현재 JSON의 본인·대·소실적 합산 초안입니다. 실제 매출 이동 전 손계산 결과와 반드시 비교하세요.</small></section>`;
+        : `<section class="recommend-card"><span>최적 배치 제안</span><h2>${result.candidate?.userName ? `계보도 ${safe(result.candidate.userName)}에게` : `계보도 ${result.priority + 1}번 서브 신규 위치에`}</h2><p>매출 <b>${fmt(result.deficits[result.priority])} NV</b>가 부족합니다.</p><small>※ 실제 매출을 이동하기 전에 손계산 결과와 한 번 더 비교하세요.</small></section>`;
 
       $("perfError").textContent = "";
       $("perfResult").innerHTML =
