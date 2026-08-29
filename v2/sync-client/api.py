@@ -230,7 +230,8 @@ def collect_start_form():
     """브라우저 CORS를 거치지 않는 로컬 전용 수집 시작 폼"""
     origin = request.headers.get("Origin", "")
     supplied = request.form.get("syncToken", "")
-    if origin != "https://prepaid1215.github.io" or not SYNC_TOKEN or not hmac.compare_digest(supplied, SYNC_TOKEN):
+    allowed_origins = {"", "null", "https://prepaid1215.github.io"}
+    if origin not in allowed_origins or not SYNC_TOKEN or not hmac.compare_digest(supplied, SYNC_TOKEN):
         return Response("연결 코드가 맞지 않습니다.", status=401, content_type="text/plain; charset=utf-8")
     ok, message = start_combined_collection(request.form)
     color = "#173b8f" if ok else "#c43d3d"
