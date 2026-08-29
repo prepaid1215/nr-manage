@@ -884,6 +884,11 @@ async function runCollection(e) {
     }
     if (!result)
       throw Error("수집 시간이 오래 걸립니다. 잠시 후 다시 확인하세요.");
+    const collectedAccount = String(result.data?.sourceAccountId || "").trim();
+    if (collectedAccount && collectedAccount !== loginId)
+      throw Error(
+        `요청 계정(${loginId})과 수집 계정(${collectedAccount})이 달라 저장을 중단했습니다.`,
+      );
     const { error: saveError } = await supabase
       .from("nrc_sync_snapshots")
       .insert({

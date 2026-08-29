@@ -713,6 +713,7 @@ def scrape_combined_json(page):
 
     combined = {
         'createdAt': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        'sourceAccountId': USER_ID,
         'rstLst': rstLst,
         'members': members,
         'mainStats': main_stats,
