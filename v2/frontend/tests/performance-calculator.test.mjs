@@ -774,3 +774,89 @@ const topChangeCompletions = {
 assert.deepEqual(pruneInvalidCompletions(topChangeCompletions, sigTopB), {});
 
 console.log("completion invalidation regression tests passed");
+
+// ──── 하위 마감 목표 직접 입력(override) ────
+// 기본(자동): TC15 모델에서 b-closer 자동 목표 200,000/200,000
+const overrideModel = buildPerformanceModel(tc05Payload);
+const autoAlloc = allocateClosingTargets(overrideModel, "gd-a", 400000, [
+  "gd-a",
+  "b-closer",
+]);
+const autoChild = autoAlloc.lines[0].childAllocation;
+assert.equal(autoChild.majorTarget, 200000);
+assert.equal(autoChild.minorTarget, 200000);
+assert.equal(autoChild.autoMajorTarget, 200000);
+assert.equal(autoChild.autoMinorTarget, 200000);
+assert.equal(autoChild.overridden, false);
+assert.equal(autoAlloc.overridden, false); // 최상위는 항상 직접 입력값
+
+// 직접 입력 250,000/150,000 → 자동값은 그대로 보존, 실제 목표만 교체
+const overriddenAlloc = allocateClosingTargets(
+  overrideModel,
+  "gd-a",
+  400000,
+  ["gd-a", "b-closer"],
+  { "b-closer": { majorTarget: 250000, minorTarget: 150000 } },
+);
+const overriddenChild = overriddenAlloc.lines[0].childAllocation;
+assert.equal(overriddenChild.majorTarget, 250000);
+assert.equal(overriddenChild.minorTarget, 150000);
+assert.equal(overriddenChild.autoMajorTarget, 200000);
+assert.equal(overriddenChild.autoMinorTarget, 200000);
+assert.equal(overriddenChild.overridden, true);
+
+// 직접 입력 목표가 실제 계산·매출 추천까지 반영되는지
+const overriddenPlan = planClosing(
+  buildPerformanceModel(tc05Payload),
+  "gd-a",
+  400000,
+  ["gd-a", "b-closer"],
+  { "b-closer": { majorTarget: 250000, minorTarget: 150000 } },
+);
+const overriddenStep = overriddenPlan.steps.find(
+  (step) => step.memberId === "b-closer",
+);
+// b-closer 라인 [100000,100000] · 대 250,000 / 소 150,000 목표
+// 부족 150,000 → 186,000원(150,660) · 부족 50,000 → 62,000원(50,220)
+assert.deepEqual(
+  overriddenStep.projection.topUps.map((topUp) => topUp.salesWon),
+  [186000, 62000],
+);
+assert.equal(overriddenStep.projection.majorNv, 250660);
+assert.equal(overriddenStep.projection.minorNv, 150220);
+assert.equal(overriddenStep.projection.completedNv, 400880);
+
+// 자동값으로 되돌리면 원래 배분과 동일
+assert.deepEqual(
+  allocateClosingTargets(
+    buildPerformanceModel(tc05Payload),
+    "gd-a",
+    400000,
+    ["gd-a", "b-closer"],
+    {},
+  ).lines[0].childAllocation.majorTarget,
+  200000,
+);
+
+// 목표를 직접 바꾸면 서명이 달라져 기존 완료가 무효화된다
+const sigAuto = planSignature("gd-a", 400000, ["gd-a", "b-closer"], {});
+const sigOverridden = planSignature("gd-a", 400000, ["gd-a", "b-closer"], {
+  "b-closer": { majorTarget: 250000, minorTarget: 150000 },
+});
+assert.notEqual(sigAuto, sigOverridden);
+assert.deepEqual(
+  pruneInvalidCompletions(
+    { "b-closer": { completedNv: 400880, signature: sigAuto } },
+    sigOverridden,
+  ),
+  {},
+);
+// 같은 override면 서명 유지 (키 순서 무관)
+assert.equal(
+  sigOverridden,
+  planSignature("gd-a", 400000, ["b-closer", "gd-a"], {
+    "b-closer": { majorTarget: 250000, minorTarget: 150000 },
+  }),
+);
+
+console.log("sub-closer target override tests passed");

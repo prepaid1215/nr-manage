@@ -9,7 +9,7 @@ import {
   projectClosingCompletion,
   pruneInvalidCompletions,
   sortMembersDeepestFirst,
-} from "./performance-calculator.js?v=20260829-50";
+} from "./performance-calculator.js?v=20260829-51";
 
 const PLAN_TABLE = "nrc_closing_plans";
 const LOCAL_PLAN_KEY = "nrc-closing-plan-backup";
@@ -111,6 +111,7 @@ export async function performancePage(root) {
       topMajorTarget,
       topMinorTarget,
       closingMemberIds: selected,
+      targetOverrides: {},
       completions: Object.fromEntries(
         Object.entries(completions)
           .filter(([id]) => model.byId.has(String(id)))
@@ -124,6 +125,7 @@ export async function performancePage(root) {
     topMajorTarget: 400000,
     topMinorTarget: 400000,
     closingMemberIds: [String(model.rows[0].userId)],
+    targetOverrides: {},
     completions: {},
   });
 
@@ -132,6 +134,7 @@ export async function performancePage(root) {
     topMajorTarget: Number(row.top_major_target),
     topMinorTarget: Number(row.top_minor_target),
     closingMemberIds: (row.closing_member_ids || []).map(String),
+    targetOverrides: row.allocation?.targetOverrides || {},
     completions: row.completions || {},
   });
 
@@ -152,7 +155,11 @@ export async function performancePage(root) {
         top_minor_target: plan.topMinorTarget,
         closing_member_ids: plan.closingMemberIds,
         completions: plan.completions,
-        allocation: lastRun?.allocation || null,
+        allocation: lastRun?.allocation
+          ? { ...lastRun.allocation, targetOverrides: plan.targetOverrides }
+          : Object.keys(plan.targetOverrides || {}).length
+            ? { targetOverrides: plan.targetOverrides }
+            : null,
         placements: lastRun?.placements || null,
         top_major_nv: lastRun?.topMajorNv ?? null,
         top_minor_nv: lastRun?.topMinorNv ?? null,
@@ -222,6 +229,11 @@ export async function performancePage(root) {
   if (!plan.closingMemberIds.includes(plan.topMemberId)) {
     plan.closingMemberIds.push(plan.topMemberId);
   }
+  plan.targetOverrides = Object.fromEntries(
+    Object.entries(plan.targetOverrides || {}).filter(([id]) =>
+      model.byId.has(String(id)),
+    ),
+  );
   renderStorageNote();
 
   const descendantsOf = (topId) => {
@@ -283,9 +295,10 @@ export async function performancePage(root) {
     } else if (line.childAllocation) {
       const closer = model.byId.get(line.childAllocation.memberId);
       const childDone = Boolean(plan.completions[line.childAllocation.memberId]);
+      const targetKind = line.childAllocation.overridden ? "직접 입력" : "자동";
       role = branch.completed
         ? `하위 마감 ${safe(closer?.userName || "")} ${childDone ? "완료값" : "예상 완료값"} ${fmt(branch.total)} NV 반영`
-        : `하위 마감 ${safe(closer?.userName || "")} 진행 예정 (자동 목표 대 ${fmt(line.childAllocation.majorTarget)} / 소 ${fmt(line.childAllocation.minorTarget)})`;
+        : `하위 마감 ${safe(closer?.userName || "")} 진행 예정 (${targetKind} 목표 대 ${fmt(line.childAllocation.majorTarget)} / 소 ${fmt(line.childAllocation.minorTarget)})`;
     } else {
       role = "마감 대상 아님 · 전체 NV 그대로 반영";
     }
@@ -323,7 +336,11 @@ export async function performancePage(root) {
     const final = completion
       ? `<p><b>확정 마감</b> · 대 ${fmt(completion.majorNv)} / 소 ${fmt(completion.minorNv)} → 상위 라인에 <b>${fmt(completion.completedNv)} NV</b> 반영</p>`
       : `<p><b>예상 마감</b> · 대 ${fmt(projection.majorNv)} / 소 ${fmt(projection.minorNv)} → 상위 라인에 <b>${fmt(projection.completedNv)} NV</b> 반영 예정</p>`;
-    return `<section class="card closing-step"><div class="section-head"><h2>${title}</h2><b>${state}</b></div><p class="help">자동 배분 목표 · 대 ${fmt(node.majorTarget)} / 소 ${fmt(node.minorTarget)}</p><div class="closing-lines">${lineHtml(item, 0)}${lineHtml(item, 1)}</div>${final}${warn}${button}</section>`;
+    const targetBox =
+      node.depth === 0
+        ? `<p class="help">최상위 목표 · 대 ${fmt(node.majorTarget)} / 소 ${fmt(node.minorTarget)} (위에서 직접 입력한 값)</p>`
+        : `<div class="closing-target-edit" data-target-member="${safe(node.memberId)}"><span>이 사업자 마감 목표 ${node.overridden ? "<em>직접 입력함</em>" : "<em>자동 배분값</em>"}</span><label>대실적<input data-sub-target="major" type="number" min="0" step="1000" value="${node.majorTarget}" ${completion ? "disabled" : ""}></label><label>소실적<input data-sub-target="minor" type="number" min="0" step="1000" value="${node.minorTarget}" ${completion ? "disabled" : ""}></label><button class="secondary compact" data-reset-target="${safe(node.memberId)}" type="button" ${node.overridden && !completion ? "" : "disabled"}>자동값으로</button><small>자동 배분값 대 ${fmt(node.autoMajorTarget)} / 소 ${fmt(node.autoMinorTarget)}${completion ? " · 마감을 취소해야 수정할 수 있습니다" : ""}</small></div>`;
+    return `<section class="card closing-step"><div class="section-head"><h2>${title}</h2><b>${state}</b></div>${targetBox}<div class="closing-lines">${lineHtml(item, 0)}${lineHtml(item, 1)}</div>${final}${warn}${button}</section>`;
   };
 
   const runPlan = () => {
@@ -337,10 +354,16 @@ export async function performancePage(root) {
     if (!plan.closingMemberIds.includes(plan.topMemberId)) {
       plan.closingMemberIds.push(plan.topMemberId);
     }
+    plan.targetOverrides = Object.fromEntries(
+      Object.entries(plan.targetOverrides || {}).filter(([id]) =>
+        plan.closingMemberIds.includes(String(id)),
+      ),
+    );
     lastSignature = planSignature(
       plan.topMemberId,
       { majorTarget: plan.topMajorTarget, minorTarget: plan.topMinorTarget },
       plan.closingMemberIds,
+      plan.targetOverrides,
     );
     const validCompletions = pruneInvalidCompletions(
       plan.completions,
@@ -366,6 +389,7 @@ export async function performancePage(root) {
         plan.topMemberId,
         { majorTarget: plan.topMajorTarget, minorTarget: plan.topMinorTarget },
         plan.closingMemberIds,
+        plan.targetOverrides,
       );
       const nodes = flattenAllocation(allocation).sort(
         (left, right) => right.depth - left.depth,
@@ -480,9 +504,37 @@ export async function performancePage(root) {
     runPlan();
     await persistPlan();
   };
+  $("perfResult").onchange = async (event) => {
+    const input = event.target.closest("[data-sub-target]");
+    if (!input) return;
+    const box = input.closest("[data-target-member]");
+    const id = box.dataset.targetMember;
+    const major = Number(
+      box.querySelector('[data-sub-target="major"]').value,
+    );
+    const minor = Number(
+      box.querySelector('[data-sub-target="minor"]').value,
+    );
+    if (!Number.isFinite(major) || !Number.isFinite(minor)) return;
+    plan.targetOverrides = {
+      ...plan.targetOverrides,
+      [id]: { majorTarget: Math.max(0, major), minorTarget: Math.max(0, minor) },
+    };
+    runPlan();
+    await persistPlan();
+  };
   $("perfResult").onclick = async (event) => {
     const completeButton = event.target.closest("[data-complete-closing]");
     const cancelButton = event.target.closest("[data-cancel-closing]");
+    const resetButton = event.target.closest("[data-reset-target]");
+    if (resetButton) {
+      const { [resetButton.dataset.resetTarget]: _removed, ...rest } =
+        plan.targetOverrides || {};
+      plan.targetOverrides = rest;
+      runPlan();
+      await persistPlan();
+      return;
+    }
     if (completeButton) {
       const id = completeButton.dataset.completeClosing;
       const item = items.find((entry) => entry.node.memberId === id);

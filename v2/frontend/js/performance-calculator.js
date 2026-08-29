@@ -110,10 +110,28 @@ export function applyClosingCompletion(model, memberUserId, completion) {
   return row;
 }
 
-export function planSignature(topMemberId, requestedTargets, closingMemberIds) {
+export function planSignature(
+  topMemberId,
+  requestedTargets,
+  closingMemberIds,
+  targetOverrides,
+) {
   const { majorTarget, minorTarget } = normalizeTargets(requestedTargets);
   const ids = [...new Set((closingMemberIds || []).map(String))].sort();
-  return JSON.stringify([String(topMemberId), majorTarget, minorTarget, ids]);
+  const overrides = Object.entries(targetOverrides || {})
+    .map(([id, targets]) => [
+      String(id),
+      numeric(targets?.majorTarget),
+      numeric(targets?.minorTarget),
+    ])
+    .sort((left, right) => left[0].localeCompare(right[0]));
+  return JSON.stringify([
+    String(topMemberId),
+    majorTarget,
+    minorTarget,
+    ids,
+    overrides,
+  ]);
 }
 
 export function pruneInvalidCompletions(completions, signature) {
@@ -394,6 +412,7 @@ export function allocateClosingTargets(
   topMemberId,
   topTargets,
   closingMemberIds,
+  targetOverrides,
 ) {
   const { majorTarget, minorTarget } = normalizeTargets(topTargets);
   if (majorTarget <= 0 || minorTarget <= 0) {
@@ -402,8 +421,15 @@ export function allocateClosingTargets(
   const topMember = model.byId.get(String(topMemberId));
   if (!topMember) throw new Error("기준 사업자를 찾지 못했습니다.");
   const closingSet = new Set((closingMemberIds || []).map(String));
+  const overrides = targetOverrides || {};
 
-  const allocate = (member, memberMajorTarget, memberMinorTarget, depth) => {
+  const allocate = (
+    member,
+    memberMajorTarget,
+    memberMinorTarget,
+    depth,
+    autoTargets,
+  ) => {
     const directChildren = model.children.get(memberId(member)) || [];
     const subMembers = [directChildren[0] || null, directChildren[1] || null];
     const branches = subMembers.map(branchBreakdown);
@@ -436,13 +462,23 @@ export function allocateClosingTargets(
       const passthroughNv =
         branches[index].total - branchBreakdown(closer).total + ownHere;
       const remaining = Math.max(0, lineTargets[index] - passthroughNv);
-      const childMajor = Math.ceil(remaining / 2);
-      const childMinor = remaining - childMajor;
+      const autoMajor = Math.ceil(remaining / 2);
+      const autoMinor = remaining - autoMajor;
+      const override = overrides[memberId(closer)];
+      const childMajor = override
+        ? Math.max(0, numeric(override.majorTarget))
+        : autoMajor;
+      const childMinor = override
+        ? Math.max(0, numeric(override.minorTarget))
+        : autoMinor;
       return {
         index,
         lineTarget: lineTargets[index],
         passthroughNv,
-        childAllocation: allocate(closer, childMajor, childMinor, depth + 1),
+        childAllocation: allocate(closer, childMajor, childMinor, depth + 1, {
+          majorTarget: autoMajor,
+          minorTarget: autoMinor,
+        }),
       };
     });
 
@@ -451,6 +487,13 @@ export function allocateClosingTargets(
       depth,
       majorTarget: memberMajorTarget,
       minorTarget: memberMinorTarget,
+      autoMajorTarget: autoTargets?.majorTarget ?? memberMajorTarget,
+      autoMinorTarget: autoTargets?.minorTarget ?? memberMinorTarget,
+      overridden:
+        depth > 0 &&
+        (memberMajorTarget !== (autoTargets?.majorTarget ?? memberMajorTarget) ||
+          memberMinorTarget !==
+            (autoTargets?.minorTarget ?? memberMinorTarget)),
       sourceTopMemberId: String(topMemberId),
       lines,
       childAllocations: lines
@@ -470,13 +513,20 @@ function flattenAllocation(node, out = []) {
   return out;
 }
 
-export function planClosing(model, topMemberId, topTargets, closingMemberIds) {
+export function planClosing(
+  model,
+  topMemberId,
+  topTargets,
+  closingMemberIds,
+  targetOverrides,
+) {
   const { majorTarget, minorTarget } = normalizeTargets(topTargets);
   const allocation = allocateClosingTargets(
     model,
     topMemberId,
     topTargets,
     closingMemberIds,
+    targetOverrides,
   );
   const nodes = flattenAllocation(allocation).sort(
     (left, right) => right.depth - left.depth,
