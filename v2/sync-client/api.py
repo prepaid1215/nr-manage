@@ -24,7 +24,12 @@ import scraper as scraper_module
 from scraper import run_daily, run_sales_now, run_closings, run_combined
 
 app = Flask(__name__)
-CORS(app, origins=["https://prepaid1215.github.io"], allow_headers=["Content-Type", "X-NRC-Sync-Token"])
+CORS(
+    app,
+    origins=["https://prepaid1215.github.io"],
+    allow_headers=["Content-Type", "X-NRC-Sync-Token"],
+    allow_private_network=True,
+)
 SYNC_TOKEN = os.getenv("NRC_SYNC_TOKEN", "")
 
 
@@ -36,11 +41,6 @@ def require_sync_token():
     if not SYNC_TOKEN or not hmac.compare_digest(supplied, SYNC_TOKEN):
         return jsonify({"ok": False, "message": "내 컴퓨터 연결 코드가 맞지 않습니다."}), 401
 
-
-@app.after_request
-def allow_local_private_network(response):
-    response.headers["Access-Control-Allow-Private-Network"] = "true"
-    return response
 
 DATA_DIR = Path(__file__).parent / "data"
 sync_state = {"running": False, "completed": False, "error": None, "message": "대기 중"}
