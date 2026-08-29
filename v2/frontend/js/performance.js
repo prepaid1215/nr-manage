@@ -17,9 +17,6 @@ const safe = (value) =>
         "'": "&#39;",
       })[char],
   );
-const formula = (branch) =>
-  `본인 ${fmt(branch.own)} + 대 ${fmt(branch.major)} + 소 ${fmt(branch.minor)}`;
-
 export async function performancePage(root) {
   const savedMajorTarget = Number(
     localStorage.getItem("nrc-performance-major-target") || 200000,
@@ -74,7 +71,6 @@ export async function performancePage(root) {
       localStorage.setItem("nrc-performance-major-target", String(majorTarget));
       localStorage.setItem("nrc-performance-minor-target", String(minorTarget));
 
-      const totals = result.effectiveTotals;
       const warnings = result.warnings.length
         ? `<p class="error">${result.warnings.map(safe).join(" ")}</p>`
         : "";
@@ -84,7 +80,7 @@ export async function performancePage(root) {
 
       $("perfError").textContent = "";
       $("perfResult").innerHTML =
-        `<section class="card"><h2>${safe(result.member.userName)} · 대 ${fmt(result.majorTarget)} / 소 ${fmt(result.minorTarget)} 목표</h2><div class="perf-grid"><article><span>본인 NV</span><b>${fmt(result.member.ordPv)}</b><small>소실적 목표에서 ${fmt(result.minorOwnContribution)} 차감</small></article>${result.branches.map((branch, index) => `<article><span>서브${index + 1} · ${index === result.majorIndex ? "대실적" : "소실적"} 라인</span><b>${fmt(result.effectiveTotals[index])}</b><small>${formula(branch)}${index === result.minorIndex ? ` + 선택 회원 본인 ${fmt(result.minorOwnContribution)}` : ""} · ${index === result.minorIndex ? "소실적 필요 목표" : "대실적 목표"} ${fmt(result.branchTargets[index])}</small><em>부족 ${fmt(result.deficits[index])}</em></article>`).join("")}<article><span>대 / 소실적</span><b>${fmt(result.effectiveTotals[result.majorIndex])} / ${fmt(result.effectiveTotals[result.minorIndex])}</b><small>소실적 입력 목표 ${fmt(result.minorTarget)} − 본인 NV ${fmt(result.minorOwnContribution)} = 소실적 필요 목표 ${fmt(result.minorRequiredTarget)}</small></article></div>${warnings}</section>${recommendation}`;
+        `<section class="card"><h2>${safe(result.member.userName)} · 대실적 목표 ${fmt(result.majorTarget)} / 소실적 목표 ${fmt(result.minorTarget)}</h2><div class="perf-grid"><article><span>본인 매출 NV</span><b>${fmt(result.member.ordPv)}</b><small>소실적에 포함됩니다.</small></article>${result.branches.map((branch, index) => `<article><span>서브${index + 1} ${index === result.majorIndex ? "대실적" : "소실적"}</span><b>${fmt(result.effectiveTotals[index])}</b><small>${index === result.minorIndex ? `서브${index + 1} ${fmt(branch.total)} + 본인 ${fmt(result.minorOwnContribution)}` : `현재 실적 ${fmt(branch.total)}`}</small><em>목표까지 ${fmt(result.deficits[index])} 부족</em></article>`).join("")}<article><span>목표까지 부족한 NV</span><b>대 ${fmt(result.deficits[result.majorIndex])} / 소 ${fmt(result.deficits[result.minorIndex])}</b><small>소실적에는 본인 매출이 포함되었습니다.</small></article></div>${warnings}</section>${recommendation}`;
     } catch (calculationError) {
       $("perfError").textContent = calculationError.message;
       $("perfResult").replaceChildren();
