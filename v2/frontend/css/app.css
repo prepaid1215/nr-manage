@@ -154,3 +154,12 @@
 .box-more{margin-top:5px;font-size:10px;color:var(--muted)}
 .box-search-hits{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
 @media(max-width:700px){.box-tools{display:grid;grid-template-columns:1fr 1fr}.box-tools>button,.box-zoom{grid-column:1/-1}.box-tree{max-height:66vh}.box-node{min-width:118px}}
+/* Genealogy check inside a closing step */
+.closing-tree{margin:10px 0;border:1px solid var(--line);border-radius:11px;background:#fff;overflow:hidden}
+.closing-tree>summary{padding:11px 13px;cursor:pointer;font-size:12px;font-weight:800;color:var(--brand);background:#f5f8ff}
+.closing-tree .box-tree{max-height:none;border:0;border-radius:0;background:#fff}
+.box-tree.compact .box-node{min-width:120px;max-width:178px;padding:8px 7px;font-size:10px;white-space:normal;word-break:keep-all}
+.box-tree.compact .box-node b{font-size:11px}
+.box-note{display:block;margin-top:4px;padding-top:4px;border-top:1px dashed #cbd4e2;font-size:10px;font-weight:700;color:#3b5a8f}
+.box-badge{display:block;margin-top:4px;padding:4px 5px;border-radius:7px;background:#fdf0e2;font-size:10px;font-weight:800;color:#a8480f}
+.box-node.marked{border-color:#e2a45f;box-shadow:0 0 0 2px #f6d9b6}

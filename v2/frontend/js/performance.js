@@ -2,6 +2,7 @@ import { supabase } from "./supabase.js?v=20260829-11";
 import {
   allocateClosingTargets,
   applyClosingCompletion,
+  branchBreakdown,
   buildPerformanceModel,
   calculatePerformance,
   cancelCompletionCascade,
@@ -9,9 +10,11 @@ import {
   projectClosingCompletion,
   pruneInvalidCompletions,
   sortMembersDeepestFirst,
-} from "./performance-calculator.js?v=20260829-52";
+} from "./performance-calculator.js?v=20260829-53";
+import { boxTreeHtml } from "./box-tree.js?v=20260829-53";
 
 const PLAN_TABLE = "nrc_closing_plans";
+const MIN_TREE_ZOOM = 0.72;
 const LOCAL_PLAN_KEY = "nrc-closing-plan-backup";
 const fmt = (value) => Number(value || 0).toLocaleString("ko-KR");
 const safe = (value) =>
@@ -315,6 +318,68 @@ export async function performancePage(root) {
     return `<article class="closing-line"><b>서브${index + 1} · ${isMajor ? "대실적" : "소실적"}</b><small>${role}</small>${ownNote}<small>지금 ${fmt(result.effectiveTotals[index])} NV · 라인 목표 ${fmt(line.lineTarget)} · ${deficit > 0 ? `${fmt(deficit)} NV 부족` : "목표를 채웠습니다"}</small>${saleLine}</article>`;
   };
 
+  const treeHtml = (item) => {
+    const { node, result, projection } = item;
+    const badges = {};
+    const notes = {};
+    result.placements.forEach((placement, index) => {
+      const topUp = projection.topUps[index];
+      if (!placement.target || !topUp || topUp.salesWon <= 0) return;
+      const id = String(placement.target.userId);
+      badges[id] =
+        `매출 ${fmt(topUp.salesWon)}원 → +${fmt(topUp.addedNv)} NV${placement.kind === "self" ? " (본인 코드)" : ""}`;
+    });
+    result.subMembers.forEach((subMember, index) => {
+      if (!subMember) return;
+      const side = index === result.majorIndex ? "대실적" : "소실적";
+      const deficit = result.deficits[index];
+      notes[String(subMember.userId)] =
+        `서브${index + 1} · ${side} · 라인 ${fmt(result.effectiveTotals[index])} / 목표 ${fmt(node.lines[index].lineTarget)}${deficit > 0 ? ` · ${fmt(deficit)} 부족` : " · 채움"}`;
+    });
+    const ownIndex = result.ownContributionIndex;
+    if (result.minorOwnContribution > 0) {
+      notes[node.memberId] =
+        `본인 매출 ${fmt(result.minorOwnContribution)} NV는 서브${ownIndex + 1} 라인에 합산`;
+    }
+    return `<details class="closing-tree"${item.canComplete ? " open" : ""}><summary>계보도로 확인하기</summary><div class="box-tree compact">${boxTreeHtml(model, node.memberId, {
+      depth: 3,
+      badges,
+      notes,
+      hideDate: true,
+      clickable: false,
+      totalOf: (row) => branchBreakdown(row).total,
+    })}</div></details>`;
+  };
+
+  const fitTrees = () => {
+    const boxes = [
+      ...$("perfResult").querySelectorAll(".closing-tree[open] .box-tree"),
+    ];
+    const pass = (round) => {
+      boxes.forEach((box) => {
+        const list = box.firstElementChild;
+        if (!list || !box.clientWidth) return;
+        if (round === 0) list.style.zoom = 1;
+        const available = box.clientWidth - 10;
+        const overflow = box.scrollWidth - box.clientWidth;
+        if (round === 0) {
+          const needed = list.scrollWidth;
+          if (needed > available)
+            list.style.zoom = Math.max(MIN_TREE_ZOOM, available / needed);
+        } else if (overflow > 1) {
+          const current = Number(list.style.zoom) || 1;
+          list.style.zoom = Math.max(
+            MIN_TREE_ZOOM,
+            current * (available / (available + overflow)),
+          );
+        }
+        box.scrollLeft = Math.max(0, (box.scrollWidth - box.clientWidth) / 2);
+      });
+      if (round === 0) requestAnimationFrame(() => pass(1));
+    };
+    pass(0);
+  };
+
   const stepHtml = (item, order, total) => {
     const member = model.byId.get(item.node.memberId);
     const title = `${order}/${total} · ${safe(member?.userName || "이름 없음")} <small>(${safe(item.node.memberId)})</small>`;
@@ -340,7 +405,7 @@ export async function performancePage(root) {
       node.depth === 0
         ? `<p class="help">최상위 목표 · 대 ${fmt(node.majorTarget)} / 소 ${fmt(node.minorTarget)} (위에서 직접 입력한 값)</p>`
         : `<div class="closing-target-edit" data-target-member="${safe(node.memberId)}"><span>이 사업자 마감 목표 ${node.overridden ? "<em>직접 입력함</em>" : "<em>자동 배분값</em>"}</span><label>대실적<input data-sub-target="major" type="number" min="0" step="1000" value="${node.majorTarget}" ${completion ? "disabled" : ""}></label><label>소실적<input data-sub-target="minor" type="number" min="0" step="1000" value="${node.minorTarget}" ${completion ? "disabled" : ""}></label><button class="secondary compact" data-reset-target="${safe(node.memberId)}" type="button" ${node.overridden && !completion ? "" : "disabled"}>자동값으로</button><small>자동 배분값 대 ${fmt(node.autoMajorTarget)} / 소 ${fmt(node.autoMinorTarget)}${completion ? " · 마감을 취소해야 수정할 수 있습니다" : ""}</small></div>`;
-    return `<section class="card closing-step"><div class="section-head"><h2>${title}</h2><b>${state}</b></div>${targetBox}<div class="closing-lines">${lineHtml(item, 0)}${lineHtml(item, 1)}</div>${final}${warn}${button}</section>`;
+    return `<section class="card closing-step"><div class="section-head"><h2>${title}</h2><b>${state}</b></div>${targetBox}<div class="closing-lines">${lineHtml(item, 0)}${lineHtml(item, 1)}</div>${treeHtml(item)}${final}${warn}${button}</section>`;
   };
 
   const runPlan = () => {
@@ -469,6 +534,7 @@ export async function performancePage(root) {
       $("perfResult").innerHTML = items
         .map((item, index) => stepHtml(item, index + 1, items.length))
         .join("");
+      fitTrees();
       renderClosers();
     } catch (calculationError) {
       $("perfError").textContent = calculationError.message;
@@ -504,6 +570,8 @@ export async function performancePage(root) {
     runPlan();
     await persistPlan();
   };
+  $("perfResult").addEventListener("toggle", fitTrees, true);
+  window.addEventListener("resize", fitTrees);
   $("perfResult").onchange = async (event) => {
     const input = event.target.closest("[data-sub-target]");
     if (!input) return;
