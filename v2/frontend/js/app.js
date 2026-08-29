@@ -322,7 +322,7 @@ async function organizationTree() {
 }
 async function organizationDashboard() {
   $("content").innerHTML =
-    `<section class="card"><div class="section-head"><div><h2>조직 현황</h2><p class="help" id="orgCollected">최신 데이터를 불러오는 중...</p></div><button class="secondary compact" id="orgReload" type="button">새로고침</button></div><div class="view-tabs"><button class="active" data-view="list" type="button">하위 매출 현황</button><button data-view="tree" type="button">계보도</button></div><div class="org-summary" id="orgSummary"></div><label>회원 검색<input id="orgSearch" type="search" placeholder="이름 또는 회원번호"></label><div class="depth-filter" id="depthFilter"></div><div id="orgError" class="error"></div><div id="orgView"></div></section><section class="card member-sales-card"><h2>본인 매출 현황</h2><div id="memberDetailInline"><p class="help">회원 이름을 선택하세요.</p></div></section>`;
+    `<section class="card"><div class="section-head"><div><h2>조직 현황</h2><p class="help" id="orgCollected">최신 데이터를 불러오는 중...</p></div><button class="secondary compact" id="orgReload" type="button">새로고침</button></div><div class="view-tabs"><button data-view="list" type="button">하위 매출 현황</button><button class="active" data-view="tree" type="button">접기·펼치기 계보도</button></div><div class="org-summary" id="orgSummary"></div><label>회원 검색<input id="orgSearch" type="search" placeholder="이름 또는 회원번호"></label><div class="depth-filter" id="depthFilter" hidden></div><div id="orgError" class="error"></div><section class="card member-sales-card member-sales-inline"><h2>선택 회원 매출 현황</h2><div id="memberDetailInline"><p class="help">회원 이름을 선택하세요.</p></div></section><div id="orgView"></div></section>`;
   $("orgReload").onclick = organizationDashboard;
   try {
     const { data, error } = await supabase
@@ -361,7 +361,7 @@ async function organizationDashboard() {
       (item) => !item.ppId || !byId.has(String(item.ppId)),
     );
     const maxDepth = Math.max(0, ...rows.map((item) => Number(item.lv) || 0));
-    let currentView = "list",
+    let currentView = "tree",
       depth = "all",
       selected = rows[0] || null;
     $("orgCollected").textContent =
@@ -409,7 +409,11 @@ async function organizationDashboard() {
         );
       const sub1 = branchTotal(descendants[0]),
         sub2 = branchTotal(descendants[1]);
-      return `<li><button class="family-node" data-member="${safe(item.userId)}" type="button"><b>${safe(item.userName || "이름 없음")}</b><small>*${safe(String(item.userId || "").slice(-6))}</small><small>${safe(item.rankName || "회원")} / ${safe(item.rankMaxName || "회원")}</small><span class="family-own">본인 NV <strong>${number(item.ordPv)}</strong></span><span class="family-sales"><em>서브1 실적<strong>${number(sub1)}</strong></em><em>서브2 실적<strong>${number(sub2)}</strong></em><em>대실적<strong>${number(item.maxPv)}</strong></em><em>소실적<strong>${number(item.minPv)}</strong></em></span></button>${descendants.length ? `<ul>${descendants.map((child) => treeNode(child, next)).join("")}</ul>` : ""}</li>`;
+      const content = `<b>${safe(item.userName || "이름 없음")}</b><small>*${safe(String(item.userId || "").slice(-6))} · ${safe(item.rankName || "회원")} / ${safe(item.rankMaxName || "회원")}</small><span class="family-own">본인 NV <strong>${number(item.ordPv)}</strong></span><span class="family-sales"><em>서브1 실적<strong>${number(sub1)}</strong></em><em>서브2 실적<strong>${number(sub2)}</strong></em><em>대실적<strong>${number(item.maxPv)}</strong></em><em>소실적<strong>${number(item.minPv)}</strong></em></span>`;
+      if (!descendants.length) {
+        return `<li><button class="family-node family-leaf" data-member="${safe(item.userId)}" type="button">${content}</button></li>`;
+      }
+      return `<li><details class="family-branch"><summary class="family-node" data-member="${safe(item.userId)}">${content}</summary><ul>${descendants.map((child) => treeNode(child, next)).join("")}</ul></details></li>`;
     };
     const render = () => {
       const query = $("orgSearch").value.trim().toLowerCase();
