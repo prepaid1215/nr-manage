@@ -9,7 +9,7 @@ import {
   projectClosingCompletion,
   pruneInvalidCompletions,
   sortMembersDeepestFirst,
-} from "./performance-calculator.js?v=20260829-51";
+} from "./performance-calculator.js?v=20260829-52";
 
 const PLAN_TABLE = "nrc_closing_plans";
 const LOCAL_PLAN_KEY = "nrc-closing-plan-backup";
