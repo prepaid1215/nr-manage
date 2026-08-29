@@ -637,6 +637,16 @@ def scrape_combined_json(page):
     except Exception as exc:
         print(f"⚠️ 소비자회선 목록 수집 실패: {exc}")
 
+    consumer_by_member = {}
+    for network_key in ('KT망', 'LG망'):
+        for line in consumer_lines.get(network_key, []):
+            member_no = str(line.get('회원번호') or '').strip()
+            if not member_no:
+                continue
+            summary = consumer_by_member.setdefault(member_no, {'총회선': 0, 'KT망': 0, 'LG망': 0})
+            summary['총회선'] += 1
+            summary[network_key] += 1
+
     # NV 데이터의 실제 직급으로 rstLst 보정 (funcNameClick에 없는 루트 등)
     member_rank_map = {m['userId']: m for m in members}
     for r in rstLst:
@@ -659,6 +669,7 @@ def scrape_combined_json(page):
             'KT망': len(consumer_lines.get('KT망', [])),
             'LG망': len(consumer_lines.get('LG망', [])),
         },
+        'consumerByMember': consumer_by_member,
     }
 
     save_json("combined_latest.json", combined)
