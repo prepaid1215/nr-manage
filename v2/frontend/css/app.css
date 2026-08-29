@@ -44,3 +44,16 @@
 .daily-close-actions{display:flex;gap:8px}
 .daily-close-actions button{width:auto;margin:0}
 @media(max-width:700px){.daily-close-form{grid-template-columns:1fr}.daily-close-actions{display:grid}.daily-close-actions button{width:100%}}
+/* Collapsible checklist groups */
+.checklist-group{padding:0;overflow:hidden}
+.checklist-group>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 18px;list-style:none;cursor:pointer}
+.checklist-group>summary::-webkit-details-marker{display:none}
+.checklist-group>summary span{display:grid;gap:3px}
+.checklist-group>summary span small{color:#2462dc;font-weight:800}
+.checklist-group>summary span b{font-size:16px}
+.checklist-group>summary:after{content:"+";display:grid;place-items:center;flex:0 0 24px;width:24px;height:24px;border:1px solid var(--brand);border-radius:6px;color:var(--brand);font-weight:900}
+.checklist-group[open]>summary:after{content:"−";background:var(--brand);color:#fff}
+.check-group-progress{margin-left:auto;padding:6px 10px;border-radius:999px;background:#edf3ff;color:var(--brand);font-size:12px;white-space:nowrap}
+.checklist-items{padding:0 14px 14px;border-top:1px solid var(--line)}
+.checklist-group .checklist-items article{margin-top:10px}
+@media(max-width:500px){.checklist-group>summary{padding:14px 12px}.check-group-progress{padding:5px 7px}}

@@ -74,7 +74,7 @@ export const checklistItemCount = groups.reduce(
 );
 const key = (g, s, item) => `${g}|${s}|${item}`;
 export async function checklistPage(root, me) {
-  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>성장 체크리스트</h2><p class="help">교육과 실행 현황을 저장합니다.</p></div><b id="checkPercent">0%</b></div><div class="progress"><i id="checkBar"></i></div><p id="checkCount" class="help"></p></section><div id="checkGroups">${groups.map(([g, s, items]) => `<section class="card checklist-group"><small>${g}</small><h2>${s}</h2>${items.map((item) => `<article data-key="${key(g, s, item)}"><label class="check"><input type="checkbox"><b>${item}</b></label><input class="check-memo" placeholder="메모 / 관련 자료 / 궁금한 점"></article>`).join("")}</section>`).join("")}</div><button id="saveChecklist" class="primary">체크리스트 저장</button><div id="checkStatus" class="connection-status" hidden></div><div id="checkError" class="error"></div>`;
+  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>성장 체크리스트</h2><p class="help">카테고리를 눌러 항목과 메모를 작성하세요.</p></div><b id="checkPercent">0%</b></div><div class="progress"><i id="checkBar"></i></div><p id="checkCount" class="help"></p></section><div id="checkGroups">${groups.map(([g, s, items], index) => `<details class="card checklist-group" data-check-group="${index}"><summary><span><small>${g}</small><b>${s}</b></span><strong class="check-group-progress">0/${items.length} · 0%</strong></summary><div class="checklist-items">${items.map((item) => `<article data-key="${key(g, s, item)}"><label class="check"><input type="checkbox"><b>${item}</b></label><input class="check-memo" placeholder="메모 / 관련 자료 / 궁금한 점"></article>`).join("")}</div></details>`).join("")}</div><button id="saveChecklist" class="primary">체크리스트 저장</button><div id="checkStatus" class="connection-status" hidden></div><div id="checkError" class="error"></div>`;
   const $ = (id) => document.getElementById(id),
     articles = [...root.querySelectorAll("[data-key]")],
     progress = () => {
@@ -88,6 +88,15 @@ export async function checklistPage(root, me) {
       articles.forEach((a) =>
         a.classList.toggle("done", a.querySelector("[type=checkbox]").checked),
       );
+      root.querySelectorAll("[data-check-group]").forEach((group) => {
+        const rows = [...group.querySelectorAll("[data-key]")],
+          groupDone = rows.filter(
+            (row) => row.querySelector("[type=checkbox]").checked,
+          ).length,
+          groupPct = Math.round((groupDone / rows.length) * 100);
+        group.querySelector(".check-group-progress").textContent =
+          `${groupDone}/${rows.length} · ${groupPct}%`;
+      });
     };
   const { data, error } = await supabase
     .from("checklist_progress")
