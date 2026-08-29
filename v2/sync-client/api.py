@@ -17,7 +17,7 @@ import urllib.error
 import urllib.request
 from datetime import datetime
 from pathlib import Path
-from flask import Flask, jsonify, request
+from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 import keyring
 import scraper as scraper_module
@@ -187,13 +187,11 @@ def sync_closings():
     return jsonify({"ok": True, "message": f"{year}년 {month}월 마감차수 수집 시작"})
 
 
-@app.route("/api/sync/combined", methods=["POST"])
-def sync_combined():
-    """10단계 계보도 + 개인별 NV를 백그라운드에서 수집"""
+def start_combined_collection(body):
+    """계보·NV·소비자회선 수집을 시작"""
     if sync_state["running"]:
-        return jsonify({"ok": True, "message": "이미 수집 중입니다."})
+        return True, "이미 수집 중입니다."
 
-    body = request.json or {}
     app_user_id = str(body.get("appUserId", ""))
     login_id = str(body.get("loginId", "")).strip()
     password = str(body.get("password", ""))
@@ -203,7 +201,7 @@ def sync_combined():
         login_id = login_id or saved.get("loginId", "")
         password = password or saved.get("password", "")
     if len(login_id) < 3 or len(password) < 4:
-        return jsonify({"ok": False, "message": "NRC 홈페이지 아이디와 비밀번호를 확인하세요."}), 400
+        return False, "NRC 홈페이지 아이디와 비밀번호를 확인하세요."
     if body.get("remember") and app_user_id:
         keyring.set_password(MANUAL_KEYRING_SERVICE, app_user_id, json.dumps({"loginId": login_id, "password": password}))
 
@@ -218,7 +216,28 @@ def sync_combined():
             sync_state.update(running=False, completed=False, error=str(exc), message="수집 실패")
 
     threading.Thread(target=_run, daemon=True).start()
-    return jsonify({"ok": True, "message": "계보·NV·소비자회선 수집을 시작했습니다."})
+    return True, "계보·NV·소비자회선 수집을 시작했습니다."
+
+
+@app.route("/api/sync/combined", methods=["POST"])
+def sync_combined():
+    ok, message = start_combined_collection(request.json or {})
+    return jsonify({"ok": ok, "message": message}), 200 if ok else 400
+
+
+@app.route("/collect/start", methods=["POST"])
+def collect_start_form():
+    """브라우저 CORS를 거치지 않는 로컬 전용 수집 시작 폼"""
+    origin = request.headers.get("Origin", "")
+    supplied = request.form.get("syncToken", "")
+    if origin != "https://prepaid1215.github.io" or not SYNC_TOKEN or not hmac.compare_digest(supplied, SYNC_TOKEN):
+        return Response("연결 코드가 맞지 않습니다.", status=401, content_type="text/plain; charset=utf-8")
+    ok, message = start_combined_collection(request.form)
+    color = "#173b8f" if ok else "#c43d3d"
+    html = f'''<!doctype html><meta charset="utf-8"><title>NRC Sync</title>
+    <body style="font-family:sans-serif;padding:28px;color:{color}"><b>{message}</b>
+    <script>setTimeout(() => window.close(), 700);</script></body>'''
+    return Response(html, status=200 if ok else 400, content_type="text/html; charset=utf-8")
 
 
 @app.route("/api/manual-credentials", methods=["GET", "DELETE"])

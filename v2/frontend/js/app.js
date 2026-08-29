@@ -830,21 +830,41 @@ async function runCollection(e) {
   button.disabled = true;
   button.textContent = "Playwright 수집 중...";
   try {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    await localApi("/api/sync/combined", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        loginId,
-        password,
-        remember: $("rememberNrc").checked,
-        appUserId: user.id,
-      }),
+    const user = me;
+    const popup = window.open(
+      "about:blank",
+      "nrc-sync-collect",
+      "width=420,height=220",
+    );
+    if (!popup)
+      throw Error("수집 창이 차단되었습니다. 이 사이트의 팝업을 허용해 주세요.");
+    const form = document.createElement("form");
+    form.method = "POST";
+    form.action = `${LOCAL_SYNC}/collect/start`;
+    form.target = "nrc-sync-collect";
+    const fields = {
+      syncToken: localStorage.getItem("nrc-sync-token") || "",
+      loginId,
+      password,
+      remember: $("rememberNrc").checked ? "true" : "",
+      appUserId: user.id,
+    };
+    Object.entries(fields).forEach(([name, value]) => {
+      const input = document.createElement("input");
+      input.type = "hidden";
+      input.name = name;
+      input.value = value;
+      form.appendChild(input);
     });
+    document.body.appendChild(form);
+    form.submit();
+    form.remove();
     error.textContent = "";
     $("nrcPassword").value = "";
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    const started = await localApi("/api/status");
+    if (!started.sync?.running && !started.sync?.completed)
+      throw Error("PC 수집 시작 요청이 전달되지 않았습니다. 팝업 허용 여부를 확인하세요.");
     let result = null;
     for (let i = 0; i < 120; i++) {
       await new Promise((resolve) => setTimeout(resolve, 2000));
