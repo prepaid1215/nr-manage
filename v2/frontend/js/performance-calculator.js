@@ -18,7 +18,56 @@ export function branchBreakdown(row) {
   const own = numeric(row?.ordPv);
   const major = numeric(row?.maxPv);
   const minor = numeric(row?.minPv);
-  return { own, major, minor, total: own + major + minor };
+  const completedTotal = numeric(row?.completedClosingNv);
+  return {
+    own,
+    major,
+    minor,
+    total: completedTotal > 0 ? completedTotal : own + major + minor,
+    completed: completedTotal > 0,
+  };
+}
+
+export function salesTopUpForDeficit(deficitNv) {
+  const deficit = Math.max(0, numeric(deficitNv));
+  if (deficit === 0) return { salesWon: 0, addedNv: 0, excessNv: 0 };
+  const thousandWonUnits = Math.max(10, Math.ceil(deficit / 810));
+  const addedNv = thousandWonUnits * 810;
+  return {
+    salesWon: thousandWonUnits * 1000,
+    addedNv,
+    excessNv: addedNv - deficit,
+  };
+}
+
+export function projectClosingCompletion(result) {
+  const topUps = result.deficits.map(salesTopUpForDeficit);
+  const projectedTotals = result.effectiveTotals.map(
+    (total, index) => total + topUps[index].addedNv,
+  );
+  const majorNv = projectedTotals[result.majorIndex];
+  const minorNv = projectedTotals[result.minorIndex];
+  return {
+    topUps,
+    projectedTotals,
+    majorNv,
+    minorNv,
+    completedNv: majorNv + minorNv,
+  };
+}
+
+export function applyClosingCompletion(model, memberUserId, completion) {
+  const row = model.byId.get(String(memberUserId));
+  if (!row) throw new Error("마감 완료 사업자를 찾지 못했습니다.");
+  const majorNv = numeric(completion?.majorNv);
+  const minorNv = numeric(completion?.minorNv);
+  if (majorNv < 0 || minorNv < 0 || majorNv + minorNv <= 0) {
+    throw new Error("마감 완료 NV가 올바르지 않습니다.");
+  }
+  row.completedClosingMajorNv = majorNv;
+  row.completedClosingMinorNv = minorNv;
+  row.completedClosingNv = majorNv + minorNv;
+  return row;
 }
 
 export function buildPerformanceModel(payload) {
@@ -125,19 +174,25 @@ export function calculatePerformance(
   const directChildren = model.children.get(memberId(member)) || [];
   const subMembers = [directChildren[0] || null, directChildren[1] || null];
   const branches = subMembers.map(branchBreakdown);
-  const majorIndex = branches[0].total >= branches[1].total ? 0 : 1;
-  const minorIndex = majorIndex === 0 ? 1 : 0;
   const minorOwnContribution = Math.max(0, numeric(member.ordPv));
-  const minorRequiredTarget = Math.max(0, minorTarget - minorOwnContribution);
-  const branchTargets = [];
-  branchTargets[majorIndex] = majorTarget;
-  branchTargets[minorIndex] = minorRequiredTarget;
+  const ownContributionIndex = branches[0].total < branches[1].total ? 0 : 1;
   const effectiveTotals = branches.map(
     (branch, index) =>
-      branch.total + (index === minorIndex ? minorOwnContribution : 0),
+      branch.total +
+      (index === ownContributionIndex ? minorOwnContribution : 0),
   );
-  const deficits = branches.map((branch, index) =>
-    Math.max(0, branchTargets[index] - branch.total),
+  const majorIndex = effectiveTotals[0] >= effectiveTotals[1] ? 0 : 1;
+  const minorIndex = majorIndex === 0 ? 1 : 0;
+  const minorRequiredTarget = Math.max(
+    0,
+    minorTarget -
+      (ownContributionIndex === minorIndex ? minorOwnContribution : 0),
+  );
+  const branchTargets = [];
+  branchTargets[majorIndex] = majorTarget;
+  branchTargets[minorIndex] = minorTarget;
+  const deficits = effectiveTotals.map((total, index) =>
+    Math.max(0, branchTargets[index] - total),
   );
   const achieved = deficits.every((deficit) => deficit === 0);
   const priority = achieved ? null : deficits[0] >= deficits[1] ? 0 : 1;
@@ -145,6 +200,9 @@ export function calculatePerformance(
     priority === null
       ? null
       : deepestLeaf(subMembers[priority], model.children);
+  const branchCandidates = subMembers.map((subMember) =>
+    deepestLeaf(subMember, model.children),
+  );
   const warnings = [];
 
   if (directChildren.length > 2) {
@@ -164,6 +222,7 @@ export function calculatePerformance(
     minorTarget,
     majorIndex,
     minorIndex,
+    ownContributionIndex,
     minorOwnContribution,
     minorRequiredTarget,
     branchTargets,
@@ -174,6 +233,7 @@ export function calculatePerformance(
     achieved,
     priority,
     candidate,
+    branchCandidates,
     warnings,
   };
 }

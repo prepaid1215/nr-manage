@@ -1,9 +1,38 @@
 import assert from "node:assert/strict";
 import {
+  applyClosingCompletion,
   buildPerformanceModel,
   calculatePerformance,
+  projectClosingCompletion,
+  salesTopUpForDeficit,
   sortMembersDeepestFirst,
 } from "../js/performance-calculator.js";
+
+assert.deepEqual(salesTopUpForDeficit(0), {
+  salesWon: 0,
+  addedNv: 0,
+  excessNv: 0,
+});
+assert.deepEqual(salesTopUpForDeficit(1), {
+  salesWon: 10000,
+  addedNv: 8100,
+  excessNv: 8099,
+});
+assert.deepEqual(salesTopUpForDeficit(8100), {
+  salesWon: 10000,
+  addedNv: 8100,
+  excessNv: 0,
+});
+assert.deepEqual(salesTopUpForDeficit(8101), {
+  salesWon: 11000,
+  addedNv: 8910,
+  excessNv: 809,
+});
+assert.deepEqual(salesTopUpForDeficit(25959), {
+  salesWon: 33000,
+  addedNv: 26730,
+  excessNv: 771,
+});
 
 const payload = {
   rstLst: [
@@ -122,6 +151,52 @@ const ownNvResult = calculatePerformance(
 assert.equal(ownNvResult.minorRequiredTarget, 294700);
 assert.deepEqual(ownNvResult.effectiveTotals, [385560, 374041]);
 assert.deepEqual(ownNvResult.deficits, [14440, 25959]);
+const ownNvCompletion = projectClosingCompletion(ownNvResult);
+assert.deepEqual(ownNvCompletion.topUps, [
+  { salesWon: 18000, addedNv: 14580, excessNv: 140 },
+  { salesWon: 33000, addedNv: 26730, excessNv: 771 },
+]);
+assert.equal(ownNvCompletion.majorNv, 400140);
+assert.equal(ownNvCompletion.minorNv, 400771);
+assert.equal(ownNvCompletion.completedNv, 800911);
+
+const propagationModel = buildPerformanceModel({
+  rstLst: [
+    { userId: "parent", userName: "상위", ppId: "" },
+    { userId: "root", userName: "한수진", ppId: "parent", abPos: 1 },
+    { userId: "other", userName: "반대 라인", ppId: "parent", abPos: 2 },
+  ],
+  members: [
+    { userId: "parent", ordPv: 0 },
+    { userId: "root", ordPv: 105300, maxPv: 248265, minPv: 97200 },
+    { userId: "other", ordPv: 100000 },
+  ],
+});
+applyClosingCompletion(propagationModel, "root", ownNvCompletion);
+const propagatedResult = calculatePerformance(
+  propagationModel,
+  "parent",
+  1000000,
+);
+assert.equal(propagatedResult.branches[0].total, 800911);
+assert.equal(propagatedResult.branches[0].completed, true);
+assert.equal(propagatedResult.majorIndex, 0);
+
+const oneLineModel = buildPerformanceModel({
+  rstLst: [
+    { userId: "gd", userName: "주윤돈", ppId: "" },
+    { userId: "member", userName: "김민제", ppId: "gd", abPos: 1 },
+  ],
+  members: [
+    { userId: "gd", ordPv: 120000 },
+    { userId: "member", ordPv: 100000 },
+  ],
+});
+const oneLineResult = calculatePerformance(oneLineModel, "gd", 150000);
+assert.deepEqual(oneLineResult.effectiveTotals, [100000, 120000]);
+assert.equal(oneLineResult.majorIndex, 1);
+assert.equal(oneLineResult.minorIndex, 0);
+assert.deepEqual(oneLineResult.deficits, [50000, 30000]);
 
 const emptyLineModel = buildPerformanceModel({
   rstLst: [{ userId: "solo", userName: "단독", ppId: "" }],
