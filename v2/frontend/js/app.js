@@ -433,7 +433,7 @@ async function organizationDashboard() {
       Number(item?.ordPv || 0) +
       Number(item?.maxPv || 0) +
       Number(item?.minPv || 0);
-    const treeNode = (item, path = new Set()) => {
+    const treeNode = (item, path = new Set(), relation = "본") => {
       if (path.has(String(item.userId))) return "";
       const next = new Set(path);
       next.add(String(item.userId));
@@ -444,11 +444,11 @@ async function organizationDashboard() {
             String(a.abPos || "").localeCompare(String(b.abPos || "")) ||
             String(a.userId).localeCompare(String(b.userId)),
         );
-      const content = `<span class="sales-summary"><b>${safe(item.userName || "이름 없음")}</b><span>대실적 : <strong>${number(item.maxPv)}</strong></span><span>소실적 : <strong>${number(item.minPv)}</strong></span></span>`;
+      const content = `<span class="sales-summary"><b>${safe(item.userName || "이름 없음")} <small>(${safe(item.userId || "코드 없음")})</small></b><em>${safe(relation)}</em><span>대실적 : <strong>${number(item.maxPv)}</strong></span><span>소실적 : <strong>${number(item.minPv)}</strong></span></span>`;
       if (!descendants.length) {
         return `<li><button class="family-node family-leaf" data-member="${safe(item.userId)}" type="button">${content}</button></li>`;
       }
-      return `<li><details class="family-branch"><summary class="family-node" data-member="${safe(item.userId)}">${content}</summary><ul>${descendants.map((child) => treeNode(child, next)).join("")}</ul></details></li>`;
+      return `<li><details class="family-branch"><summary class="family-node" data-member="${safe(item.userId)}">${content}</summary><ul>${descendants.map((child, index) => treeNode(child, next, `서브${index + 1}`)).join("")}</ul></details></li>`;
     };
     const horizontalTreeNode = (item, path = new Set()) => {
       if (path.has(String(item.userId))) return "";
