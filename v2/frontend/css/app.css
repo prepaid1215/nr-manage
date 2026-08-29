@@ -25,17 +25,31 @@
 .sales-tree .family-branch>summary::-webkit-details-marker{display:none}
 .sales-tree .family-branch>summary:before{content:"+";position:absolute;left:12px;top:50%;transform:translateY(-50%);display:grid;place-items:center;width:22px;height:22px;border:1px solid var(--brand);border-radius:5px;color:var(--brand);background:#fff;font-weight:900}
 .sales-tree .family-branch[open]>summary:before{content:"−";background:var(--brand);color:#fff}
-.sales-tree .family-node{display:block;width:100%;min-width:0;text-align:left;background:#fff;border-color:var(--line);box-shadow:none}
+.sales-tree .family-node{display:flex;align-items:center;width:100%;min-width:0;text-align:left;background:#fff;border-color:var(--line);box-shadow:none}
 .sales-tree .family-node:hover{border-color:#7394dc;background:#f7faff}
 .sales-tree .family-leaf{padding-left:42px}
 .sales-tree .family-sales{max-width:440px}
+.sales-summary{display:flex;align-items:center;gap:18px;width:100%;min-width:0}
+.sales-summary>b{min-width:120px;color:var(--brand);font-size:15px}
+.sales-summary>span{color:var(--muted);font-size:12px}.sales-summary strong{display:inline;margin:0 0 0 3px;color:var(--text);font-size:13px}
 .tree-focus-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#f7f9fc}
 .tree-focus-bar div{display:flex;gap:6px}
+.pannable-tree{cursor:grab;user-select:none;touch-action:none;max-height:70vh}
+.pannable-tree.dragging{cursor:grabbing}.pannable-tree.dragging *{cursor:grabbing!important}
 @media(max-width:600px){
   .sales-tree ul ul{margin-left:10px;padding-left:12px}
   .sales-tree .family-node{min-width:0}
   .sales-tree .family-branch>summary,.sales-tree .family-leaf{padding-left:38px}
   .tree-focus-bar{align-items:flex-start;flex-direction:column}
+  .sales-summary{gap:8px;flex-wrap:wrap}.sales-summary>b{flex-basis:100%}
+}
+@media print{
+  body.printing-tree{background:#fff}
+  body.printing-tree header,body.printing-tree nav,body.printing-tree .section-head,body.printing-tree .view-tabs,body.printing-tree .org-summary,body.printing-tree #content>section>label,body.printing-tree .member-sales-inline,body.printing-tree #orgError,body.printing-tree .tree-focus-bar button,body.printing-tree .tree-focus-bar+.help{display:none!important}
+  body.printing-tree .app,body.printing-tree main{max-width:none;padding:0}
+  body.printing-tree #content>section{border:0;margin:0;padding:0}
+  body.printing-tree .tree-focus-bar{border:0;background:#fff;padding:0;margin:0 0 8px}
+  body.printing-tree .family-tree{overflow:visible;max-height:none;padding:8px;zoom:.72}
 }
 /* Daily closing report */
 .closing-tabs{margin-bottom:12px}

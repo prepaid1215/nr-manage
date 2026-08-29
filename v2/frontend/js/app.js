@@ -444,9 +444,7 @@ async function organizationDashboard() {
             String(a.abPos || "").localeCompare(String(b.abPos || "")) ||
             String(a.userId).localeCompare(String(b.userId)),
         );
-      const sub1 = branchTotal(descendants[0]),
-        sub2 = branchTotal(descendants[1]);
-      const content = `<b>${safe(item.userName || "이름 없음")}</b><small>*${safe(String(item.userId || "").slice(-6))} · ${safe(item.rankName || "회원")} / ${safe(item.rankMaxName || "회원")}</small><span class="family-own">본인 NV <strong>${number(item.ordPv)}</strong></span><span class="family-sales"><em>서브1 실적<strong>${number(sub1)}</strong></em><em>서브2 실적<strong>${number(sub2)}</strong></em><em>대실적<strong>${number(item.maxPv)}</strong></em><em>소실적<strong>${number(item.minPv)}</strong></em></span>`;
+      const content = `<span class="sales-summary"><b>${safe(item.userName || "이름 없음")}</b><span>대실적 : <strong>${number(item.maxPv)}</strong></span><span>소실적 : <strong>${number(item.minPv)}</strong></span></span>`;
       if (!descendants.length) {
         return `<li><button class="family-node family-leaf" data-member="${safe(item.userId)}" type="button">${content}</button></li>`;
       }
@@ -482,7 +480,7 @@ async function organizationDashboard() {
             ? byId.get(String(focusedRoot.ppId || ""))
             : null;
         $("orgView").innerHTML =
-          `<div class="tree-focus-bar"><span>기준: <b>${safe(focusedRoot?.userName || "전체 계보도")}</b></span><div>${focusedRoot ? '<button class="secondary compact" id="treeAll" type="button">전체 계보도</button>' : ""}${parent ? '<button class="secondary compact" id="treeUp" type="button">상위 회원으로</button>' : ""}</div></div><p class="help">회원을 클릭하면 해당 회원을 기준으로 계보도를 다시 표시합니다.</p><div class="family-tree"><ul>${displayRoots.map((root) => horizontalTreeNode(root)).join("")}</ul></div>`;
+          `<div class="tree-focus-bar"><span>기준: <b>${safe(focusedRoot?.userName || "전체 계보도")}</b></span><div>${focusedRoot ? '<button class="secondary compact" id="treeAll" type="button">전체 계보도</button>' : ""}${parent ? '<button class="secondary compact" id="treeUp" type="button">상위 회원으로</button>' : ""}<button class="secondary compact" id="treePrint" type="button">🖨 계보도 인쇄</button></div></div><p class="help">회원을 클릭하면 해당 회원을 기준으로 다시 표시합니다. 계보도의 빈 공간을 손바닥으로 잡아 이동할 수 있습니다.</p><div class="family-tree pannable-tree"><ul>${displayRoots.map((root) => horizontalTreeNode(root)).join("")}</ul></div>`;
         if ($("treeAll"))
           $("treeAll").onclick = () => {
             focusedRoot = null;
@@ -494,7 +492,16 @@ async function organizationDashboard() {
             detail(parent);
             render();
           };
+        $("treePrint").onclick = () => {
+          document.body.classList.add("printing-tree");
+          window.print();
+          setTimeout(
+            () => document.body.classList.remove("printing-tree"),
+            500,
+          );
+        };
         bind();
+        bindTreePan();
         return;
       }
       const filtered = rows.filter(
@@ -509,6 +516,51 @@ async function organizationDashboard() {
       $("orgView").innerHTML =
         `<div class="org-tree">${filtered.length ? filtered.map((item) => `<article class="org-member" style="--depth:${Math.min(Number(item.lv) || 0, 10)}"><div class="org-person"><span class="depth-badge">${Number(item.lv) || 0}</span><div><button class="member-name" data-member="${safe(item.userId)}" type="button">${safe(item.userName || "이름 없음")}</button><small>${safe(item.userId)} · ${safe(item.rankName || "회원")} / ${safe(item.rankMaxName || "회원")}</small></div></div><div class="org-nv"><span>본인 NV<b>${number(item.ordPv)}</b></span><span>대실적<b>${number(item.maxPv)}</b></span><span>소실적<b>${number(item.minPv)}</b></span></div></article>`).join("") : '<p class="help">검색 결과가 없습니다.</p>'}</div>`;
       bind();
+    };
+    const bindTreePan = () => {
+      const canvas = document.querySelector(".pannable-tree");
+      if (!canvas) return;
+      let active = false,
+        moved = false,
+        startX = 0,
+        startY = 0,
+        scrollLeft = 0,
+        scrollTop = 0;
+      canvas.onpointerdown = (event) => {
+        if (event.button !== 0) return;
+        active = true;
+        moved = false;
+        startX = event.clientX;
+        startY = event.clientY;
+        scrollLeft = canvas.scrollLeft;
+        scrollTop = canvas.scrollTop;
+        canvas.classList.add("dragging");
+        canvas.setPointerCapture(event.pointerId);
+      };
+      canvas.onpointermove = (event) => {
+        if (!active) return;
+        const dx = event.clientX - startX,
+          dy = event.clientY - startY;
+        if (Math.abs(dx) + Math.abs(dy) > 5) moved = true;
+        canvas.scrollLeft = scrollLeft - dx;
+        canvas.scrollTop = scrollTop - dy;
+      };
+      const stop = () => {
+        active = false;
+        canvas.classList.remove("dragging");
+      };
+      canvas.onpointerup = stop;
+      canvas.onpointercancel = stop;
+      canvas.addEventListener(
+        "click",
+        (event) => {
+          if (!moved) return;
+          event.preventDefault();
+          event.stopPropagation();
+          moved = false;
+        },
+        true,
+      );
     };
     $("orgSearch").oninput = render;
     $("depthFilter")
