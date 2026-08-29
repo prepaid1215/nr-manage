@@ -62,12 +62,21 @@ cd nr-manage
 
 ## 다음 작업
 
-1. Supabase 마이그레이션 001~008 실행 및 권한 오류 확인
-2. 실제 계보 JSON으로 실적 계산기 손계산 비교 검증
-3. 팀원 UUID 등록과 자료별 공유 권한 행렬 테스트
-4. 요역명·입력항목·화면 배치를 사무실에서 확인하며 수정
-5. 홈 알림 조건과 통계 집계 기준 확정
+1. **마감 실적 계산기 배분 규칙 교체** — `v2/docs/closing-calculator.md`의
+   "확정했으나 아직 구현하지 않은 규칙"부터 시작한다. 사업자 확인까지 끝난 상태다.
+2. 팀원 UUID 등록과 자료별 공유 권한 행렬 테스트
+3. 요역명·입력항목·화면 배치를 사무실에서 확인하며 수정
+4. 홈 알림 조건과 통계 집계 기준 확정
+
+## 다른 PC에서 이어서 작업하는 방법
+
+1. `git clone https://github.com/prepaid1215/nr-manage.git` (이미 있으면 `git pull origin main`)
+2. Node.js가 있어야 한다. `npm test --prefix v2/frontend`로 계산 테스트가 통과하는지 먼저 확인
+3. Supabase 마이그레이션은 이미 실행되어 있다. 새 환경이면 `v2/supabase/RUN_*.sql`을
+   SQL Editor에서 번호순으로 실행
+4. 배포는 main에 push하면 GitHub Pages가 1~2분 뒤 반영한다.
+   `v2/frontend/index.html`과 `js/app.js`의 `?v=` 캐시 버전을 함께 올릴 것
 
 ## Codex에 전달할 첫 문장
 
-`v2/docs/HANDOFF.md를 먼저 읽고, 저장소의 현재 상태와 최근 커밋을 확인한 다음 다음 작업을 이어서 진행해줘.`
+`v2/docs/HANDOFF.md와 v2/docs/closing-calculator.md를 먼저 읽고, 저장소의 현재 상태와 최근 커밋을 확인한 다음 다음 작업을 이어서 진행해줘.`
