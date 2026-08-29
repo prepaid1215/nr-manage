@@ -414,6 +414,52 @@ def _parse_genealogy_from_html(html: str) -> list:
     return rstLst
 
 
+def extract_line_metrics(data):
+    """회원별 매출 응답에 이미 포함된 회선 수를 키 이름 변형에 대응해 추출한다."""
+    numbers = {}
+
+    def walk(value, path=""):
+        if isinstance(value, dict):
+            for key, child in value.items():
+                walk(child, f"{path}.{key}" if path else str(key))
+        elif isinstance(value, (int, float)) or (isinstance(value, str) and re.fullmatch(r"[\d,]+", value.strip())):
+            try:
+                numbers[path] = int(str(value).replace(',', ''))
+            except (ValueError, TypeError):
+                pass
+
+    walk(data)
+    normalized = {re.sub(r'[^a-z0-9가-힣]', '', key.lower()): value for key, value in numbers.items()}
+
+    def pick(aliases, required=(), preferred=()):
+        for alias in aliases:
+            alias_key = re.sub(r'[^a-z0-9가-힣]', '', alias.lower())
+            for key, value in normalized.items():
+                if key.endswith(alias_key):
+                    return value
+        matches = [(key, value) for key, value in normalized.items() if all(token in key for token in required)]
+        if preferred:
+            preferred_matches = [(key, value) for key, value in matches if any(token in key for token in preferred)]
+            matches = preferred_matches
+        return matches[0][1] if matches else None
+
+    total = pick(
+        ['consumerTotalLineCnt', 'consumerLineCnt', 'custTotalLineCnt', 'custLineCnt', 'cnsmrLineCnt', 'totalLineCnt', 'totLineCnt', 'consumerCnt'],
+        required=('line',), preferred=('consumer', 'cust', 'cnsmr', 'total', 'tot')
+    )
+    real = pick(['realLineCnt', 'actualLineCnt', 'realCnt', '실회선'], required=('line',), preferred=('real', 'actual', '실'))
+    own = pick(['ownSalesLineCnt', 'ownLineCnt', 'myLineCnt', 'ordLineCnt', '본인매출회선'], required=('line',), preferred=('own', 'my', 'ord', '본인'))
+    delivery = pick(['regularDeliveryLineCnt', 'deliveryLineCnt', 'regularLineCnt', 'autoshipLineCnt', '정기배송회선'], required=('line',), preferred=('delivery', 'regular', 'autoship', '배송'))
+    found = any(value is not None for value in (total, real, own, delivery))
+    return {
+        'lineMetricsFound': found,
+        'consumerTotalLines': int(total or 0),
+        'realLines': int(real or 0),
+        'ownSalesLines': int(own or 0),
+        'regularDeliveryLines': int(delivery or 0),
+    }
+
+
 def scrape_genealogy(page, depth=10):
     """
     계보도 수집 → rstLst 형식
@@ -523,6 +569,7 @@ def scrape_member_nv(page, rstLst, pay_date=None):
                 "schRankCd2": my_rank_cd,
             })
             sm = data.get('rstSalesMap') or {}
+            line_metrics = extract_line_metrics(data)
             members.append({
                 'userId': user_id,
                 'ordPv': to_int(sm.get('ordPv')),
@@ -532,6 +579,7 @@ def scrape_member_nv(page, rstLst, pay_date=None):
                 'rankMaxName': sm.get('rankMaxName') or row.get('rankMaxName', rank_name),
                 'dormant': row.get('status') == '2',
                 'status': row.get('status', '1'),
+                **line_metrics,
             })
         except Exception as e:
             print(f"    ⚠ {user_id} NV 조회 실패: {e}")
@@ -540,6 +588,8 @@ def scrape_member_nv(page, rstLst, pay_date=None):
                 'rankNewName': rank_name,
                 'rankMaxName': row.get('rankMaxName', rank_name),
                 'dormant': False, 'status': row.get('status', '1'),
+                'lineMetricsFound': False, 'consumerTotalLines': 0,
+                'realLines': 0, 'ownSalesLines': 0, 'regularDeliveryLines': 0,
             })
 
     nv_found = sum(1 for m in members if m['maxPv'] > 0 or m['ordPv'] > 0)
