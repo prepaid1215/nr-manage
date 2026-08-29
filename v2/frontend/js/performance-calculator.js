@@ -5,6 +5,15 @@ const numeric = (value) => {
 
 const memberId = (row) => String(row?.userId ?? "");
 
+const normalizeTargets = (requestedTargets) => {
+  const sameTarget =
+    typeof requestedTargets === "object" ? null : numeric(requestedTargets);
+  return {
+    majorTarget: numeric(requestedTargets?.majorTarget ?? sameTarget),
+    minorTarget: numeric(requestedTargets?.minorTarget ?? sameTarget),
+  };
+};
+
 const comparePosition = (left, right) => {
   const leftPosition = numeric(left?.abPos) || Number.MAX_SAFE_INTEGER;
   const rightPosition = numeric(right?.abPos) || Number.MAX_SAFE_INTEGER;
@@ -45,6 +54,20 @@ export function salesTopUpForDeficit(deficitNv) {
 }
 
 export function projectClosingCompletion(result) {
+  if (result.feasible === false) {
+    return {
+      feasible: false,
+      topUps: result.deficits.map(() => ({
+        salesWon: 0,
+        addedNv: 0,
+        excessNv: 0,
+      })),
+      projectedTotals: [...result.effectiveTotals],
+      majorNv: 0,
+      minorNv: 0,
+      completedNv: 0,
+    };
+  }
   const topUps = result.deficits.map(salesTopUpForDeficit);
   const projectedTotals = result.effectiveTotals.map(
     (total, index) => total + topUps[index].addedNv,
@@ -52,6 +75,7 @@ export function projectClosingCompletion(result) {
   const majorNv = projectedTotals[result.majorIndex];
   const minorNv = projectedTotals[result.minorIndex];
   return {
+    feasible: true,
     topUps,
     projectedTotals,
     majorNv,
@@ -74,12 +98,62 @@ export function applyClosingCompletion(model, memberUserId, completion) {
   row.completedClosingMajorNv = majorNv;
   row.completedClosingMinorNv = minorNv;
   row.completedClosingNv = completedTotal;
+  row.completedClosingPreviousTotal = previousTotal;
   let parent = model.byId.get(String(row.ppId ?? ""));
   const visited = new Set([memberId(row)]);
   while (parent && !visited.has(memberId(parent))) {
     visited.add(memberId(parent));
     parent.closingDescendantDeltaNv =
       numeric(parent.closingDescendantDeltaNv) + delta;
+    parent = model.byId.get(String(parent.ppId ?? ""));
+  }
+  return row;
+}
+
+export function planSignature(topMemberId, requestedTargets, closingMemberIds) {
+  const { majorTarget, minorTarget } = normalizeTargets(requestedTargets);
+  const ids = [...new Set((closingMemberIds || []).map(String))].sort();
+  return JSON.stringify([String(topMemberId), majorTarget, minorTarget, ids]);
+}
+
+export function pruneInvalidCompletions(completions, signature) {
+  return Object.fromEntries(
+    Object.entries(completions || {}).filter(
+      ([, completion]) => completion?.signature === signature,
+    ),
+  );
+}
+
+export function cancelCompletionCascade(model, completions, memberUserId) {
+  const next = { ...(completions || {}) };
+  const visited = new Set();
+  let current = model.byId.get(String(memberUserId));
+  while (current && !visited.has(memberId(current))) {
+    visited.add(memberId(current));
+    delete next[memberId(current)];
+    current = model.byId.get(String(current.ppId ?? ""));
+  }
+  return next;
+}
+
+export function cancelClosingCompletion(model, memberUserId) {
+  const row = model.byId.get(String(memberUserId));
+  if (!row) throw new Error("마감 취소할 사업자를 찾지 못했습니다.");
+  const completedTotal = numeric(row.completedClosingNv);
+  if (completedTotal <= 0) {
+    throw new Error("취소할 마감 완료 기록이 없습니다.");
+  }
+  const delta = completedTotal - numeric(row.completedClosingPreviousTotal);
+  delete row.completedClosingMajorNv;
+  delete row.completedClosingMinorNv;
+  delete row.completedClosingNv;
+  delete row.completedClosingPreviousTotal;
+  let parent = model.byId.get(String(row.ppId ?? ""));
+  const visited = new Set([memberId(row)]);
+  while (parent && !visited.has(memberId(parent))) {
+    visited.add(memberId(parent));
+    parent.closingDescendantDeltaNv =
+      numeric(parent.closingDescendantDeltaNv) - delta;
     parent = model.byId.get(String(parent.ppId ?? ""));
   }
   return row;
@@ -170,15 +244,42 @@ function deepestLeaf(start, children) {
   );
 }
 
+function deepestPlaceableLeaf(start, children) {
+  if (!start || numeric(start.completedClosingNv) > 0) return null;
+  const leaves = [];
+  const visited = new Set();
+  let visitOrder = 0;
+  const stack = [{ row: start, depth: 0 }];
+
+  while (stack.length) {
+    const { row, depth } = stack.pop();
+    const id = memberId(row);
+    if (!id || visited.has(id)) continue;
+    visited.add(id);
+    const placeable = (children.get(id) || []).filter(
+      (descendant) => numeric(descendant.completedClosingNv) <= 0,
+    );
+    if (!placeable.length) leaves.push({ row, depth, order: visitOrder++ });
+    else {
+      for (let index = placeable.length - 1; index >= 0; index -= 1) {
+        stack.push({ row: placeable[index], depth: depth + 1 });
+      }
+    }
+  }
+
+  return (
+    leaves.sort(
+      (left, right) => right.depth - left.depth || right.order - left.order,
+    )[0]?.row || null
+  );
+}
+
 export function calculatePerformance(
   model,
   selectedMemberId,
   requestedTargets,
 ) {
-  const sameTarget =
-    typeof requestedTargets === "object" ? null : numeric(requestedTargets);
-  const majorTarget = numeric(requestedTargets?.majorTarget ?? sameTarget);
-  const minorTarget = numeric(requestedTargets?.minorTarget ?? sameTarget);
+  const { majorTarget, minorTarget } = normalizeTargets(requestedTargets);
   if (majorTarget <= 0 || minorTarget <= 0) {
     throw new Error("대실적·소실적 목표는 모두 0보다 커야 합니다.");
   }
@@ -218,7 +319,25 @@ export function calculatePerformance(
   const branchCandidates = subMembers.map((subMember) =>
     deepestLeaf(subMember, model.children),
   );
+  const placements = [0, 1].map((index) => {
+    const subMember = subMembers[index];
+    if (subMember) {
+      const target = deepestPlaceableLeaf(subMember, model.children);
+      if (target) return { kind: "line", target };
+    }
+    if (index === ownContributionIndex) return { kind: "self", target: member };
+    return { kind: "none", target: null };
+  });
+  const feasible = deficits.every(
+    (deficit, index) => deficit === 0 || placements[index].kind !== "none",
+  );
   const warnings = [];
+
+  if (!feasible) {
+    warnings.push(
+      "부족한 라인에 배치 가능한 코드가 없어 마감할 수 없습니다. 신규 하위 배치가 필요합니다.",
+    );
+  }
 
   if (directChildren.length > 2) {
     warnings.push(
@@ -249,6 +368,164 @@ export function calculatePerformance(
     priority,
     candidate,
     branchCandidates,
+    placements,
+    feasible,
     warnings,
+  };
+}
+
+function shallowestClosingDescendant(start, children, closingSet) {
+  if (!start) return null;
+  const queue = [start];
+  const visited = new Set();
+  while (queue.length) {
+    const row = queue.shift();
+    const id = memberId(row);
+    if (!id || visited.has(id)) continue;
+    visited.add(id);
+    if (closingSet.has(id)) return row;
+    (children.get(id) || []).forEach((descendant) => queue.push(descendant));
+  }
+  return null;
+}
+
+export function allocateClosingTargets(
+  model,
+  topMemberId,
+  topTargets,
+  closingMemberIds,
+) {
+  const { majorTarget, minorTarget } = normalizeTargets(topTargets);
+  if (majorTarget <= 0 || minorTarget <= 0) {
+    throw new Error("대실적·소실적 목표는 모두 0보다 커야 합니다.");
+  }
+  const topMember = model.byId.get(String(topMemberId));
+  if (!topMember) throw new Error("기준 사업자를 찾지 못했습니다.");
+  const closingSet = new Set((closingMemberIds || []).map(String));
+
+  const allocate = (member, memberMajorTarget, memberMinorTarget, depth) => {
+    const directChildren = model.children.get(memberId(member)) || [];
+    const subMembers = [directChildren[0] || null, directChildren[1] || null];
+    const branches = subMembers.map(branchBreakdown);
+    const own = Math.max(0, numeric(member.ordPv));
+    const ownContributionIndex =
+      branches[0].total < branches[1].total ? 0 : 1;
+    const effectiveTotals = branches.map(
+      (branch, index) =>
+        branch.total + (index === ownContributionIndex ? own : 0),
+    );
+    const majorIndex = effectiveTotals[0] >= effectiveTotals[1] ? 0 : 1;
+    const lineTargets = [];
+    lineTargets[majorIndex] = memberMajorTarget;
+    lineTargets[majorIndex === 0 ? 1 : 0] = memberMinorTarget;
+
+    const lines = [0, 1].map((index) => {
+      const subMember = subMembers[index];
+      const ownHere = index === ownContributionIndex ? own : 0;
+      const closer = subMember
+        ? shallowestClosingDescendant(subMember, model.children, closingSet)
+        : null;
+      if (!closer) {
+        return {
+          index,
+          lineTarget: lineTargets[index],
+          passthroughNv: branches[index].total + ownHere,
+          childAllocation: null,
+        };
+      }
+      const passthroughNv =
+        branches[index].total - branchBreakdown(closer).total + ownHere;
+      const remaining = Math.max(0, lineTargets[index] - passthroughNv);
+      const childMajor = Math.ceil(remaining / 2);
+      const childMinor = remaining - childMajor;
+      return {
+        index,
+        lineTarget: lineTargets[index],
+        passthroughNv,
+        childAllocation: allocate(closer, childMajor, childMinor, depth + 1),
+      };
+    });
+
+    return {
+      memberId: memberId(member),
+      depth,
+      majorTarget: memberMajorTarget,
+      minorTarget: memberMinorTarget,
+      sourceTopMemberId: String(topMemberId),
+      lines,
+      childAllocations: lines
+        .map((line) => line.childAllocation)
+        .filter(Boolean),
+    };
+  };
+
+  return allocate(topMember, majorTarget, minorTarget, 0);
+}
+
+function flattenAllocation(node, out = []) {
+  out.push(node);
+  node.lines.forEach((line) => {
+    if (line.childAllocation) flattenAllocation(line.childAllocation, out);
+  });
+  return out;
+}
+
+export function planClosing(model, topMemberId, topTargets, closingMemberIds) {
+  const { majorTarget, minorTarget } = normalizeTargets(topTargets);
+  const allocation = allocateClosingTargets(
+    model,
+    topMemberId,
+    topTargets,
+    closingMemberIds,
+  );
+  const nodes = flattenAllocation(allocation).sort(
+    (left, right) => right.depth - left.depth,
+  );
+  const steps = nodes.map((node) => {
+    if (node.majorTarget + node.minorTarget <= 0) {
+      return { memberId: node.memberId, allocation: node, skipped: true };
+    }
+    const result = calculatePerformance(model, node.memberId, {
+      majorTarget: node.majorTarget,
+      minorTarget: node.minorTarget,
+    });
+    const projection = projectClosingCompletion(result);
+    const applied = projection.feasible !== false;
+    if (applied) applyClosingCompletion(model, node.memberId, projection);
+    return { memberId: node.memberId, allocation: node, result, projection, applied };
+  });
+  const placements = steps.flatMap((step) => {
+    if (!step.projection) return [];
+    return step.projection.topUps
+      .map((topUp, index) => ({
+        closerMemberId: step.memberId,
+        side: index === step.result.majorIndex ? "major" : "minor",
+        placementKind: step.result.placements[index].kind,
+        placementMemberId: step.result.placements[index].target
+          ? memberId(step.result.placements[index].target)
+          : null,
+        salesWon: topUp.salesWon,
+        addedNv: topUp.addedNv,
+        excessNv: topUp.excessNv,
+      }))
+      .filter((placement) => placement.salesWon > 0);
+  });
+  const topStep = steps[steps.length - 1];
+  const verified =
+    topStep?.projection?.feasible !== false &&
+    numeric(topStep?.projection?.majorNv) >= majorTarget &&
+    numeric(topStep?.projection?.minorNv) >= minorTarget;
+  return {
+    allocation,
+    steps,
+    placements,
+    totalSalesWon: placements.reduce(
+      (sum, placement) => sum + placement.salesWon,
+      0,
+    ),
+    topMajorNv: numeric(topStep?.projection?.majorNv),
+    topMinorNv: numeric(topStep?.projection?.minorNv),
+    topCompletedNv: numeric(topStep?.projection?.completedNv),
+    verified,
   };
 }
