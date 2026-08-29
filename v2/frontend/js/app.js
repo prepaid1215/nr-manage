@@ -128,10 +128,11 @@ async function home() {
       minor = Number(sale.minPv ?? tree.minPv ?? 0),
       rank = sale.rankName || tree.rankName || "회원",
       certified = sale.rankMaxName || tree.rankMaxName || "회원";
+    const consumer = payload.consumerSummary || null;
     $("homeNrcUpdated").textContent =
       `최종 업데이트 ${new Date(snapshot.data.collected_at).toLocaleString("ko-KR")}`;
     $("homeNrcDashboard").innerHTML =
-      `<div class="nrc-overview"><article><h3>본인 매출 현황</h3><div><span>본인매출 NV<b>${number(own)}</b></span><span>대실적<b>${number(major)}</b></span><span>소실적<b>${number(minor)}</b></span></div></article><article><h3>직급 현황</h3><div><span>현재직급<b>${safe(rank)}</b></span><span>인증직급<b>${safe(certified)}</b></span></div></article><article><h3>조직 현황</h3><div><span>전체 회원<b>${treeRows.length.toLocaleString()}명</b></span><span>활동 회원<b>${treeRows.filter((item) => String(item.status) === "1" && !item.dormant).length.toLocaleString()}명</b></span></div></article></div><div class="nrc-gauges"><article><div class="nrc-gauge major"><span>대실적<b>${number(major)}</b></span></div></article><article><div class="nrc-gauge minor"><span>소실적<b>${number(minor)}</b></span></div></article></div>`;
+      `<div class="nrc-overview"><article><h3>본인 매출 현황</h3><div><span>본인매출 NV<b>${number(own)}</b></span><span>대실적<b>${number(major)}</b></span><span>소실적<b>${number(minor)}</b></span></div></article><article><h3>직급 현황</h3><div><span>현재직급<b>${safe(rank)}</b></span><span>인증직급<b>${safe(certified)}</b></span></div></article><article><h3>소비자회선 현황</h3><div class="consumer-kpis"><span>총회선<b>${consumer ? number(consumer["총회선"]) : "미수집"}</b></span><span>실인증회선<b>${consumer ? number(consumer["실인증회선"]) : "-"}</b></span><span>실회선<b>${consumer ? number(consumer["실회선"]) : "-"}</b></span><span>KT / LG<b>${consumer ? `${number(consumer["KT망"])} / ${number(consumer["LG망"])}` : "-"}</b></span></div></article><article><h3>조직 현황</h3><div><span>전체 회원<b>${treeRows.length.toLocaleString()}명</b></span><span>활동 회원<b>${treeRows.filter((item) => String(item.status) === "1" && !item.dormant).length.toLocaleString()}명</b></span></div></article></div><div class="nrc-gauges"><article><div class="nrc-gauge major"><span>대실적<b>${number(major)}</b></span></div></article><article><div class="nrc-gauge minor"><span>소실적<b>${number(minor)}</b></span></div></article></div>`;
   }
   $("todayActivations").textContent =
     `${cs.filter((c) => c.activation_date === today).length}건`;
@@ -795,7 +796,8 @@ async function runCollection(e) {
         collected_at: result.collected_at || new Date().toISOString(),
       });
     if (saveError) throw saveError;
-    $("nrcStatus").textContent = "10단계 JSON 수집 및 Supabase 저장 완료";
+    $("nrcStatus").textContent =
+      "계보·NV·소비자회선 수집 및 Supabase 저장 완료";
     await loadSavedNrc();
   } catch (err) {
     error.textContent = err.message;

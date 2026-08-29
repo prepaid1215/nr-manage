@@ -208,17 +208,17 @@ def sync_combined():
         keyring.set_password(MANUAL_KEYRING_SERVICE, app_user_id, json.dumps({"loginId": login_id, "password": password}))
 
     def _run():
-        sync_state.update(running=True, completed=False, error=None, message="NRC 로그인 및 10단계 수집 중...")
+        sync_state.update(running=True, completed=False, error=None, message="NRC 로그인 및 계보·NV·소비자회선 수집 중...")
         try:
             scraper_module.USER_ID = login_id
             scraper_module.USER_PW = password
             run_combined()
-            sync_state.update(running=False, completed=True, message="10단계 JSON 수집 완료", source_account_id=login_id)
+            sync_state.update(running=False, completed=True, message="계보·NV·소비자회선 수집 완료", source_account_id=login_id)
         except Exception as exc:
             sync_state.update(running=False, completed=False, error=str(exc), message="수집 실패")
 
     threading.Thread(target=_run, daemon=True).start()
-    return jsonify({"ok": True, "message": "10단계 수집을 시작했습니다."})
+    return jsonify({"ok": True, "message": "계보·NV·소비자회선 수집을 시작했습니다."})
 
 
 @app.route("/api/manual-credentials", methods=["GET", "DELETE"])

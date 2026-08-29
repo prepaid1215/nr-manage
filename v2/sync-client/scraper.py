@@ -624,6 +624,19 @@ def scrape_combined_json(page):
 
     members = scrape_member_nv(page, rstLst)
 
+    # 같은 로그인 세션에서 메인 소비자회선 총계와 KT/LG 목록도 함께 갱신한다.
+    # 상세 회선은 PC에만 저장하고 Supabase 통합 JSON에는 집계값만 넣는다.
+    main_stats = {}
+    consumer_lines = {"KT망": [], "LG망": []}
+    try:
+        main_stats = scrape_main_stats(page) or {}
+    except Exception as exc:
+        print(f"⚠️ 메인 소비자회선 총계 수집 실패: {exc}")
+    try:
+        consumer_lines = scrape_consumer_lines(page) or consumer_lines
+    except Exception as exc:
+        print(f"⚠️ 소비자회선 목록 수집 실패: {exc}")
+
     # NV 데이터의 실제 직급으로 rstLst 보정 (funcNameClick에 없는 루트 등)
     member_rank_map = {m['userId']: m for m in members}
     for r in rstLst:
@@ -638,11 +651,19 @@ def scrape_combined_json(page):
         'createdAt': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         'rstLst': rstLst,
         'members': members,
+        'mainStats': main_stats,
+        'consumerSummary': {
+            '총회선': main_stats.get('총회선', len(consumer_lines.get('KT망', [])) + len(consumer_lines.get('LG망', []))),
+            '실인증회선': main_stats.get('실인증회선', 0),
+            '실회선': main_stats.get('실회선', 0),
+            'KT망': len(consumer_lines.get('KT망', [])),
+            'LG망': len(consumer_lines.get('LG망', [])),
+        },
     }
 
     save_json("combined_latest.json", combined)
     print(f"\n✅ 통합 JSON 생성 완료")
-    print(f"   계보: {len(rstLst)}명 / NV 데이터: {len(members)}명")
+    print(f"   계보: {len(rstLst)}명 / NV 데이터: {len(members)}명 / 소비자회선: {combined['consumerSummary']['총회선']}개")
     print(f"   → NV 계보도 시뮬레이터에서 '계보+NV 통합 JSON' 버튼으로 불러오세요")
     return combined
 
