@@ -1,0 +1,8 @@
+{
+  "name": "nrc-management-v2-frontend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node tests/date.test.mjs && node tests/performance-calculator.test.mjs"
+  }
+}
