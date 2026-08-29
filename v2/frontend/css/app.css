@@ -57,3 +57,8 @@
 .checklist-items{padding:0 14px 14px;border-top:1px solid var(--line)}
 .checklist-group .checklist-items article{margin-top:10px}
 @media(max-width:500px){.checklist-group>summary{padding:14px 12px}.check-group-progress{padding:5px 7px}}
+/* Profile settings */
+.settings-tabs{margin-bottom:12px}
+.profile-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}
+.profile-form-grid .full{grid-column:1/-1}
+@media(max-width:600px){.profile-form-grid{grid-template-columns:1fr}.profile-form-grid .full{grid-column:auto}}

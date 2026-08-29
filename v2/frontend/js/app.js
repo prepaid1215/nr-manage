@@ -3,7 +3,7 @@ import {
   signUp,
   signIn,
   currentProfile,
-} from "./supabase.js?v=20260829-11";
+} from "./supabase.js?v=20260829-30";
 import { customersPage } from "./customers.js?v=20260829-21";
 import { activityPage } from "./activity.js?v=20260829-25";
 import {
@@ -481,7 +481,72 @@ async function organizationDashboard() {
 const LOCAL_SYNC = "http://127.0.0.1:5050";
 async function settings() {
   $("content").innerHTML =
-    `<section class="card"><h2>내 컴퓨터 연결</h2><p class="help">최초 한 번만 이 PC의 NRC Sync 연결 코드를 저장하세요.</p><label>내 컴퓨터 연결 코드<input id="syncToken" type="password" autocomplete="off" placeholder="NRC Sync 연결 코드"></label><button class="primary" id="saveSyncToken" type="button">연결 코드 저장</button><div id="nrcStatus" class="connection-status">내 컴퓨터 연결 확인 중...</div><div id="nrcError" class="error"></div></section><section class="card"><h2>앱 계정</h2><button class="secondary" id="logout">로그아웃</button></section>`;
+    `<div class="view-tabs settings-tabs"><button class="active" data-settings-view="profile" type="button">내 정보</button><button data-settings-view="connection" type="button">PC 연결</button><button data-settings-view="account" type="button">계정</button></div><section id="profileSettings" class="card"><div class="section-head"><div><h2>내 정보</h2><p class="help">이름을 바꾸면 화면 상단 인사말에도 바로 반영됩니다.</p></div></div><form id="profileForm"><div class="profile-form-grid"><label>이름<input id="profileName" required maxlength="40"></label><label>전화번호<input id="profilePhone" type="tel" inputmode="tel" placeholder="010-0000-0000"></label><label>이메일<input id="profileEmail" type="email" placeholder="name@example.com"></label><label>회원번호<input id="profileMemberNo" inputmode="numeric"></label><label>상호명<input id="profileBusiness" placeholder="예: 주하루"></label><label class="full">주소<input id="profileAddress"></label></div><button class="primary" id="saveProfile" type="submit">내 정보 저장</button><div id="profileStatus" class="connection-status" hidden></div><div id="profileError" class="error"></div></form></section><section id="connectionSettings" class="card" hidden><h2>내 컴퓨터 연결</h2><p class="help">최초 한 번만 이 PC의 NRC Sync 연결 코드를 저장하세요.</p><label>내 컴퓨터 연결 코드<input id="syncToken" type="password" autocomplete="off" placeholder="NRC Sync 연결 코드"></label><button class="primary" id="saveSyncToken" type="button">연결 코드 저장</button><div id="nrcStatus" class="connection-status">내 컴퓨터 연결 확인 중...</div><div id="nrcError" class="error"></div></section><section id="accountSettings" class="card" hidden><h2>앱 계정</h2><p class="help" id="profileUsername"></p><button class="secondary" id="logout">로그아웃</button></section>`;
+  const profile = await currentProfile();
+  if (profile) {
+    $("profileName").value = profile.name || "";
+    $("profilePhone").value = profile.phone || "";
+    $("profileEmail").value = profile.contact_email || "";
+    $("profileMemberNo").value = profile.member_no || "";
+    $("profileBusiness").value = profile.business_name || "";
+    $("profileAddress").value = profile.address || "";
+    $("profileUsername").textContent = profile.username
+      ? `로그인 아이디: ${profile.username}`
+      : "";
+  }
+  document.querySelectorAll("[data-settings-view]").forEach(
+    (button) =>
+      (button.onclick = () => {
+        const view = button.dataset.settingsView;
+        document
+          .querySelectorAll("[data-settings-view]")
+          .forEach((item) => item.classList.toggle("active", item === button));
+        $("profileSettings").hidden = view !== "profile";
+        $("connectionSettings").hidden = view !== "connection";
+        $("accountSettings").hidden = view !== "account";
+        if (view === "connection") loadLocalStatus();
+      }),
+  );
+  $("profileForm").onsubmit = async (event) => {
+    event.preventDefault();
+    const name = $("profileName").value.trim();
+    $("profileError").textContent = "";
+    $("profileStatus").hidden = true;
+    if (name.length < 2) {
+      $("profileError").textContent = "이름은 두 글자 이상 입력하세요.";
+      return;
+    }
+    const value = {
+        name,
+        phone: $("profilePhone").value.trim() || null,
+        contact_email: $("profileEmail").value.trim() || null,
+        member_no: $("profileMemberNo").value.trim() || null,
+        business_name: $("profileBusiness").value.trim() || null,
+        address: $("profileAddress").value.trim() || null,
+        updated_at: new Date().toISOString(),
+      },
+      { data, error } = await supabase
+        .from("profiles")
+        .update(value)
+        .eq("id", me.id)
+        .select(
+          "id,username,member_no,name,phone,contact_email,business_name,address,status",
+        )
+        .single();
+    if (error) {
+      $("profileError").textContent =
+        /column|schema cache|phone|contact_email|business_name/i.test(
+          error.message,
+        )
+          ? "Supabase에서 RUN_009_PROFILE_INFO.sql을 먼저 실행하세요."
+          : error.message;
+      return;
+    }
+    me = data;
+    $("userName").textContent = `${data.name}님`;
+    $("profileStatus").hidden = false;
+    $("profileStatus").textContent = "내 정보를 저장했습니다.";
+  };
   $("logout").onclick = async () => {
     await supabase.auth.signOut({ scope: "local" });
     location.reload();
@@ -491,7 +556,6 @@ async function settings() {
     localStorage.setItem("nrc-sync-token", $("syncToken").value.trim());
     loadLocalStatus();
   };
-  await loadLocalStatus();
 }
 async function collection() {
   $("content").innerHTML =
