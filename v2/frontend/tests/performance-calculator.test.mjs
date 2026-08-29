@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   buildPerformanceModel,
   calculatePerformance,
+  sortMembersDeepestFirst,
 } from "../js/performance-calculator.js";
 
 const payload = {
@@ -39,7 +40,12 @@ const deepestModel = buildPerformanceModel({
     { userId: "other", userName: "반대 라인", ppId: "root", abPos: 2 },
     { userId: "middle", userName: "중간 회원", ppId: "short", abPos: 2 },
     { userId: "deep", userName: "가장 아래 회원", ppId: "middle", abPos: 1 },
-    { userId: "shallow", userName: "NV가 작은 얕은 회원", ppId: "short", abPos: 1 },
+    {
+      userId: "shallow",
+      userName: "NV가 작은 얕은 회원",
+      ppId: "short",
+      abPos: 1,
+    },
   ],
   members: [
     { userId: "root", ordPv: 0 },
@@ -53,6 +59,12 @@ const deepestModel = buildPerformanceModel({
 const deepestResult = calculatePerformance(deepestModel, "root", 100000);
 assert.equal(deepestResult.priority, 0);
 assert.equal(deepestResult.candidate.userId, "deep");
+assert.deepEqual(
+  sortMembersDeepestFirst(deepestModel, ["root", "short", "deep"]).map(
+    (row) => row.userId,
+  ),
+  ["deep", "short", "root"],
+);
 
 const unequalTargetModel = buildPerformanceModel({
   rstLst: [

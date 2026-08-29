@@ -54,6 +54,30 @@ export function buildPerformanceModel(payload) {
   };
 }
 
+function genealogyDepth(model, row) {
+  let depth = 0;
+  let current = row;
+  const visited = new Set();
+  while (current?.ppId && !visited.has(String(current.ppId))) {
+    visited.add(String(current.ppId));
+    current = model.byId.get(String(current.ppId));
+    if (!current) break;
+    depth += 1;
+  }
+  return depth;
+}
+
+export function sortMembersDeepestFirst(model, memberIds) {
+  return memberIds
+    .map((id) => model.byId.get(String(id)))
+    .filter(Boolean)
+    .sort(
+      (left, right) =>
+        genealogyDepth(model, right) - genealogyDepth(model, left) ||
+        model.rows.indexOf(right) - model.rows.indexOf(left),
+    );
+}
+
 function deepestLeaf(start, children) {
   if (!start) return null;
   const leaves = [];
@@ -77,8 +101,7 @@ function deepestLeaf(start, children) {
 
   return (
     leaves.sort(
-      (left, right) =>
-        right.depth - left.depth || right.order - left.order,
+      (left, right) => right.depth - left.depth || right.order - left.order,
     )[0]?.row || start
   );
 }
@@ -119,7 +142,9 @@ export function calculatePerformance(
   const achieved = deficits.every((deficit) => deficit === 0);
   const priority = achieved ? null : deficits[0] >= deficits[1] ? 0 : 1;
   const candidate =
-    priority === null ? null : deepestLeaf(subMembers[priority], model.children);
+    priority === null
+      ? null
+      : deepestLeaf(subMembers[priority], model.children);
   const warnings = [];
 
   if (directChildren.length > 2) {
