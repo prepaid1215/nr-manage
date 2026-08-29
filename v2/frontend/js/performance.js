@@ -6,11 +6,15 @@ import {
   buildPerformanceModel,
   calculatePerformance,
   cancelCompletionCascade,
+  minorIncentiveTier,
+  nodeHasTarget,
+  nodeTargets,
   planSignature,
   projectClosingCompletion,
   pruneInvalidCompletions,
+  salesTopUpForDeficit,
   sortMembersDeepestFirst,
-} from "./performance-calculator.js?v=20260829-53";
+} from "./performance-calculator.js?v=20260829-54";
 import { boxTreeHtml } from "./box-tree.js?v=20260829-53";
 
 const PLAN_TABLE = "nrc_closing_plans";
@@ -47,7 +51,7 @@ const flattenAllocation = (node, out = []) => {
 };
 
 export async function performancePage(root) {
-  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>마감 실적 계산기</h2><p class="help">기준이 되는 최상위 마감 사업자와 목표만 정하면, 아래 사업자들의 목표는 자동으로 나눠서 계산합니다.</p></div></div><p id="perfSource" class="help"></p><p id="perfStorage" class="help"></p><div class="closing-target-row"><label>최상위 마감 사업자<select id="topMemberSelect"></select></label><label>대실적 목표 (NV)<input id="topMajor" type="number" min="1" step="1000"></label><label>소실적 목표 (NV)<input id="topMinor" type="number" min="1" step="1000"></label></div><details class="closing-member-picker" open><summary>마감할 하위 사업자 선택 <b id="closingCount">0명</b></summary><p class="help">체크한 사업자에게만 목표가 자동으로 내려갑니다. 체크하지 않은 회원의 라인은 지금 실적을 그대로 위로 올립니다.</p><div id="closingOptions" class="closing-member-options"></div></details><button id="perfRun" class="primary">자동 배분 계산</button><p id="perfNotice" class="help"></p><div id="perfError" class="error"></div></section><section id="perfSummary"></section><section id="perfResult"></section>`;
+  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>마감 실적 계산기</h2><p class="help">기준이 되는 최상위 마감 사업자와 목표만 정하면, 아래 사업자에게는 &quot;라인 합계&quot; 목표로 내려갑니다. 대·소를 각각 채우지 않으므로 매출이 덜 들어갑니다.</p></div></div><p id="perfSource" class="help"></p><p id="perfStorage" class="help"></p><div class="closing-target-row"><label>최상위 마감 사업자<select id="topMemberSelect"></select></label><label>대실적 목표 (NV)<input id="topMajor" type="number" min="1" step="1000"></label><label>소실적 목표 (NV)<input id="topMinor" type="number" min="1" step="1000"></label></div><details class="closing-member-picker" open><summary>마감할 하위 사업자 선택 <b id="closingCount">0명</b></summary><p class="help">체크하지 않은 회원의 라인은 라인 합계만 맞으면 그대로 통과합니다. 체크한 사업자는 라인 합계를 맞추면서 소실적이 인증직급 지급 기준선(DT 3만 · GD 이상 6만 NV) 이상이 되게 채웁니다.</p><div id="closingOptions" class="closing-member-options"></div></details><button id="perfRun" class="primary">자동 배분 계산</button><p id="perfNotice" class="help"></p><div id="perfError" class="error"></div></section><section id="perfSummary"></section><section id="perfResult"></section>`;
   const $ = (id) => document.getElementById(id);
   const { data, error } = await supabase
     .from("nrc_sync_snapshots")
@@ -95,6 +99,7 @@ export async function performancePage(root) {
     const ordered = sortMembersDeepestFirst(model, selected);
     const top = ordered[ordered.length - 1];
     const targets = readJson("nrc-closing-member-targets", {});
+    // 옛 대·소 목표는 최상위 목표로만 쓰고, 하위 목표는 라인 합계 규칙으로 다시 배분한다
     const completions = readJson("nrc-closing-completions", {});
     const topMajorTarget =
       Number(targets[top.userId]?.major) ||
@@ -129,6 +134,7 @@ export async function performancePage(root) {
     topMinorTarget: 400000,
     closingMemberIds: [String(model.rows[0].userId)],
     targetOverrides: {},
+    acknowledged: {},
     completions: {},
   });
 
@@ -138,6 +144,7 @@ export async function performancePage(root) {
     topMinorTarget: Number(row.top_minor_target),
     closingMemberIds: (row.closing_member_ids || []).map(String),
     targetOverrides: row.allocation?.targetOverrides || {},
+    acknowledged: row.allocation?.acknowledged || {},
     completions: row.completions || {},
   });
 
@@ -159,9 +166,17 @@ export async function performancePage(root) {
         closing_member_ids: plan.closingMemberIds,
         completions: plan.completions,
         allocation: lastRun?.allocation
-          ? { ...lastRun.allocation, targetOverrides: plan.targetOverrides }
-          : Object.keys(plan.targetOverrides || {}).length
-            ? { targetOverrides: plan.targetOverrides }
+          ? {
+              ...lastRun.allocation,
+              targetOverrides: plan.targetOverrides,
+              acknowledged: plan.acknowledged,
+            }
+          : Object.keys(plan.targetOverrides || {}).length ||
+              Object.keys(plan.acknowledged || {}).length
+            ? {
+                targetOverrides: plan.targetOverrides,
+                acknowledged: plan.acknowledged,
+              }
             : null,
         placements: lastRun?.placements || null,
         top_major_nv: lastRun?.topMajorNv ?? null,
@@ -232,8 +247,16 @@ export async function performancePage(root) {
   if (!plan.closingMemberIds.includes(plan.topMemberId)) {
     plan.closingMemberIds.push(plan.topMemberId);
   }
+  // 옛 형식({majorTarget,minorTarget})은 라인 합계 규칙에서 쓰지 않으므로 버린다
   plan.targetOverrides = Object.fromEntries(
-    Object.entries(plan.targetOverrides || {}).filter(([id]) =>
+    Object.entries(plan.targetOverrides || {}).filter(
+      ([id, override]) =>
+        model.byId.has(String(id)) &&
+        (override?.lineTarget != null || override?.minorFloor != null),
+    ),
+  );
+  plan.acknowledged = Object.fromEntries(
+    Object.entries(plan.acknowledged || {}).filter(([id]) =>
       model.byId.has(String(id)),
     ),
   );
@@ -283,11 +306,12 @@ export async function performancePage(root) {
   const lineHtml = (item, index) => {
     const { node, result, projection } = item;
     const line = node.lines[index];
-    const isMajor = index === result.majorIndex;
+    // 대·소는 매출을 넣은 뒤 기준으로 표시한다 (작은 줄부터 채우면 뒤집힐 수 있다)
+    const majorIndex = projection.projectedMajorIndex ?? result.majorIndex;
+    const isMajor = index === majorIndex;
     const branch = result.branches[index];
     const subMember = result.subMembers[index];
     const topUp = projection.topUps[index];
-    const placement = result.placements[index];
     const deficit = result.deficits[index];
     let role;
     if (!subMember) {
@@ -296,12 +320,13 @@ export async function performancePage(root) {
           ? "하위 회원이 없어 본인 매출로 채우는 라인"
           : "하위 회원이 없는 라인";
     } else if (line.childAllocation) {
-      const closer = model.byId.get(line.childAllocation.memberId);
-      const childDone = Boolean(plan.completions[line.childAllocation.memberId]);
-      const targetKind = line.childAllocation.overridden ? "직접 입력" : "자동";
+      const child = line.childAllocation;
+      const closer = model.byId.get(child.memberId);
+      const childDone = Boolean(plan.completions[child.memberId]);
+      const targetKind = child.overridden ? "직접 입력" : "자동";
       role = branch.completed
         ? `하위 마감 ${safe(closer?.userName || "")} ${childDone ? "완료값" : "예상 완료값"} ${fmt(branch.total)} NV 반영`
-        : `하위 마감 ${safe(closer?.userName || "")} 진행 예정 (${targetKind} 목표 대 ${fmt(line.childAllocation.majorTarget)} / 소 ${fmt(line.childAllocation.minorTarget)})`;
+        : `하위 마감 ${safe(closer?.userName || "")} 진행 예정 (${targetKind} 라인 합계 ${fmt(child.lineTarget)}${child.minorFloor > 0 ? ` · 소실적 기준선 ${fmt(child.minorFloor)}` : ""})`;
     } else {
       role = "마감 대상 아님 · 전체 NV 그대로 반영";
     }
@@ -309,29 +334,42 @@ export async function performancePage(root) {
       index === result.ownContributionIndex && result.minorOwnContribution > 0
         ? `<small>본인 매출 ${fmt(result.minorOwnContribution)} NV가 이 라인에 합산됩니다.</small>`
         : "";
-    const saleLine =
-      topUp.salesWon > 0
-        ? `<span class="sale-hint">매출 넣을 곳: ${safe(placement.target?.userName || "-")} (${safe(placement.target?.userId || "-")}) · ${fmt(topUp.salesWon)}원 → +${fmt(topUp.addedNv)} NV</span>`
-        : deficit > 0
-          ? `<span class="sale-hint">부족하지만 매출을 넣을 코드가 없습니다.</span>`
-          : `<span>추가 매출이 필요 없습니다.</span>`;
-    return `<article class="closing-line"><b>서브${index + 1} · ${isMajor ? "대실적" : "소실적"}</b><small>${role}</small>${ownNote}<small>지금 ${fmt(result.effectiveTotals[index])} NV · 라인 목표 ${fmt(line.lineTarget)} · ${deficit > 0 ? `${fmt(deficit)} NV 부족` : "목표를 채웠습니다"}</small>${saleLine}</article>`;
+    const lineSales = (projection.sales || []).filter(
+      (sale) => sale.lineIndex === index,
+    );
+    const saleLine = lineSales.length
+      ? lineSales
+          .map(
+            (sale) =>
+              `<span class="sale-hint">매출 넣을 곳: ${safe(sale.target?.userName || "-")} (${safe(sale.memberId || "-")}) · ${fmt(sale.salesWon)}원 → +${fmt(sale.addedNv)} NV</span>`,
+          )
+          .join("")
+      : deficit > 0
+        ? `<span class="sale-hint">부족하지만 매출을 넣을 코드가 없습니다.</span>`
+        : `<span>추가 매출이 필요 없습니다.</span>`;
+    const splitNote =
+      lineSales.length > 1
+        ? `<small>한 코드에 몰지 않도록 ${lineSales.length}곳으로 나눴습니다. 합계 ${fmt(topUp.salesWon)}원은 한 번에 넣을 때와 같습니다.</small>`
+        : "";
+    return `<article class="closing-line"><b>서브${index + 1} · ${isMajor ? "대실적" : "소실적"}</b><small>${role}</small>${ownNote}<small>지금 ${fmt(result.effectiveTotals[index])} NV · 라인 목표 ${fmt(line.lineTarget)} · ${deficit > 0 ? `${fmt(deficit)} NV 부족` : "목표를 채웠습니다"}</small>${saleLine}${splitNote}</article>`;
   };
 
   const treeHtml = (item) => {
     const { node, result, projection } = item;
     const badges = {};
     const notes = {};
-    result.placements.forEach((placement, index) => {
-      const topUp = projection.topUps[index];
-      if (!placement.target || !topUp || topUp.salesWon <= 0) return;
-      const id = String(placement.target.userId);
-      badges[id] =
-        `매출 ${fmt(topUp.salesWon)}원 → +${fmt(topUp.addedNv)} NV${placement.kind === "self" ? " (본인 코드)" : ""}`;
+    const majorIndex = projection.projectedMajorIndex ?? result.majorIndex;
+    (projection.sales || []).forEach((sale) => {
+      if (!sale.memberId || sale.salesWon <= 0) return;
+      const isSelf =
+        result.placements[sale.lineIndex]?.kind === "self" ||
+        sale.memberId === node.memberId;
+      badges[sale.memberId] =
+        `매출 ${fmt(sale.salesWon)}원 → +${fmt(sale.addedNv)} NV${isSelf ? " (본인 코드)" : ""}`;
     });
     result.subMembers.forEach((subMember, index) => {
       if (!subMember) return;
-      const side = index === result.majorIndex ? "대실적" : "소실적";
+      const side = index === majorIndex ? "대실적" : "소실적";
       const deficit = result.deficits[index];
       notes[String(subMember.userId)] =
         `서브${index + 1} · ${side} · 라인 ${fmt(result.effectiveTotals[index])} / 목표 ${fmt(node.lines[index].lineTarget)}${deficit > 0 ? ` · ${fmt(deficit)} 부족` : " · 채움"}`;
@@ -380,6 +418,30 @@ export async function performancePage(root) {
     pass(0);
   };
 
+  // 소실적 지급 구간 안내. 기준선을 넘긴 뒤 더 채울지는 사용자가 정한다.
+  const payoutHtml = (item, minorNv, locked) => {
+    const member = model.byId.get(item.node.memberId);
+    const tier = minorIncentiveTier(member, minorNv);
+    const id = item.node.memberId;
+    if (tier.level === 0) {
+      return `<p class="closing-payout help">인증직급 ${safe(member?.rankMaxName || "회원")} · 매출장려금 지급 대상이 아니라 소실적 기준선을 적용하지 않았습니다.</p>`;
+    }
+    const rateText =
+      tier.rate != null
+        ? `${tier.rate}% 구간`
+        : tier.amountWon != null
+          ? `${fmt(tier.amountWon)}원 구간`
+          : `지급 기준선 ${fmt(tier.floor)} NV 미만`;
+    const nextText = tier.nextMin
+      ? ` · 다음 구간 ${fmt(tier.nextMin)} NV까지 ${fmt(tier.nextShortfallNv)} NV 부족 (약 ${fmt(salesTopUpForDeficit(tier.nextShortfallNv).salesWon)}원)`
+      : "";
+    const kept = Boolean(plan.acknowledged?.[id]);
+    const button = locked
+      ? ""
+      : `<button class="secondary compact" data-keep-target="${safe(id)}" type="button">${kept ? "다시 검토" : "이대로 둔다"}</button>`;
+    return `<p class="closing-payout"><span>소실적 ${fmt(minorNv)} NV · 인증직급 ${safe(member?.rankMaxName || "회원")} 기준선 ${fmt(tier.floor)} NV · ${rateText}${nextText}</span>${kept ? "<em>이대로 두기로 했습니다</em>" : ""}${button}</p>`;
+  };
+
   const stepHtml = (item, order, total) => {
     const member = model.byId.get(item.node.memberId);
     const title = `${order}/${total} · ${safe(member?.userName || "이름 없음")} <small>(${safe(item.node.memberId)})</small>`;
@@ -398,14 +460,15 @@ export async function performancePage(root) {
     const button = completion
       ? `<button class="secondary" data-cancel-closing="${safe(node.memberId)}" type="button">마감 취소</button>`
       : `<button class="primary" data-complete-closing="${safe(node.memberId)}" type="button" ${item.canComplete && projection.feasible !== false ? "" : "disabled"}>${projection.feasible === false ? "마감 불가" : item.canComplete ? "마감 완료로 표시" : "앞 순서부터 완료하세요"}</button>`;
+    const finalMinorNv = completion ? completion.minorNv : projection.minorNv;
     const final = completion
       ? `<p><b>확정 마감</b> · 대 ${fmt(completion.majorNv)} / 소 ${fmt(completion.minorNv)} → 상위 라인에 <b>${fmt(completion.completedNv)} NV</b> 반영</p>`
       : `<p><b>예상 마감</b> · 대 ${fmt(projection.majorNv)} / 소 ${fmt(projection.minorNv)} → 상위 라인에 <b>${fmt(projection.completedNv)} NV</b> 반영 예정</p>`;
     const targetBox =
       node.depth === 0
         ? `<p class="help">최상위 목표 · 대 ${fmt(node.majorTarget)} / 소 ${fmt(node.minorTarget)} (위에서 직접 입력한 값)</p>`
-        : `<div class="closing-target-edit" data-target-member="${safe(node.memberId)}"><span>이 사업자 마감 목표 ${node.overridden ? "<em>직접 입력함</em>" : "<em>자동 배분값</em>"}</span><label>대실적<input data-sub-target="major" type="number" min="0" step="1000" value="${node.majorTarget}" ${completion ? "disabled" : ""}></label><label>소실적<input data-sub-target="minor" type="number" min="0" step="1000" value="${node.minorTarget}" ${completion ? "disabled" : ""}></label><button class="secondary compact" data-reset-target="${safe(node.memberId)}" type="button" ${node.overridden && !completion ? "" : "disabled"}>자동값으로</button><small>자동 배분값 대 ${fmt(node.autoMajorTarget)} / 소 ${fmt(node.autoMinorTarget)}${completion ? " · 마감을 취소해야 수정할 수 있습니다" : ""}</small></div>`;
-    return `<section class="card closing-step"><div class="section-head"><h2>${title}</h2><b>${state}</b></div>${targetBox}<div class="closing-lines">${lineHtml(item, 0)}${lineHtml(item, 1)}</div>${treeHtml(item)}${final}${warn}${button}</section>`;
+        : `<div class="closing-target-edit" data-target-member="${safe(node.memberId)}"><span>이 사업자 마감 목표 ${node.overridden ? "<em>직접 입력함</em>" : "<em>자동 배분값</em>"}</span><label>라인 합계<input data-sub-target="line" type="number" min="0" step="1000" value="${node.lineTarget}" ${completion ? "disabled" : ""}></label><label>소실적 최소<input data-sub-target="floor" type="number" min="0" step="1000" value="${node.minorFloor}" ${completion ? "disabled" : ""}></label><button class="secondary compact" data-reset-target="${safe(node.memberId)}" type="button" ${node.overridden && !completion ? "" : "disabled"}>자동값으로</button><small>자동 배분값 라인 합계 ${fmt(node.autoLineTarget)} · 소실적 기준선 ${fmt(node.autoMinorFloor)}${node.autoMinorFloor > 0 ? " (인증직급 기준)" : " (인증직급이 없어 기준선 없음)"}${completion ? " · 마감을 취소해야 수정할 수 있습니다" : ""}</small></div>`;
+    return `<section class="card closing-step"><div class="section-head"><h2>${title}</h2><b>${state}</b></div>${targetBox}<div class="closing-lines">${lineHtml(item, 0)}${lineHtml(item, 1)}</div>${treeHtml(item)}${final}${payoutHtml(item, finalMinorNv, Boolean(completion))}${warn}${button}</section>`;
   };
 
   const runPlan = () => {
@@ -460,13 +523,14 @@ export async function performancePage(root) {
         (left, right) => right.depth - left.depth,
       );
       items = nodes.map((node) => {
-        if (node.majorTarget + node.minorTarget <= 0) {
+        if (!nodeHasTarget(node)) {
           return { node, skipped: true, completion: null };
         }
-        const result = calculatePerformance(model, node.memberId, {
-          majorTarget: node.majorTarget,
-          minorTarget: node.minorTarget,
-        });
+        const result = calculatePerformance(
+          model,
+          node.memberId,
+          nodeTargets(node),
+        );
         const projection = projectClosingCompletion(result);
         const completion = plan.completions[node.memberId] || null;
         if (completion) {
@@ -492,18 +556,14 @@ export async function performancePage(root) {
       const placements = items.flatMap((item) =>
         item.skipped
           ? []
-          : item.projection.topUps
-              .map((topUp, index) => ({
-                closerMemberId: item.node.memberId,
-                placementMemberId: item.result.placements[index].target
-                  ? String(item.result.placements[index].target.userId)
-                  : null,
-                side: index === item.result.majorIndex ? "major" : "minor",
-                salesWon: topUp.salesWon,
-                addedNv: topUp.addedNv,
-                excessNv: topUp.excessNv,
-              }))
-              .filter((placement) => placement.salesWon > 0),
+          : (item.projection.sales || []).map((sale) => ({
+              closerMemberId: item.node.memberId,
+              placementMemberId: sale.memberId || null,
+              side: sale.side,
+              salesWon: sale.salesWon,
+              addedNv: sale.addedNv,
+              excessNv: sale.excessNv,
+            })),
       );
       const totalSalesWon = placements.reduce(
         (sum, placement) => sum + placement.salesWon,
@@ -577,17 +637,20 @@ export async function performancePage(root) {
     if (!input) return;
     const box = input.closest("[data-target-member]");
     const id = box.dataset.targetMember;
-    const major = Number(
-      box.querySelector('[data-sub-target="major"]').value,
+    const lineTarget = Number(box.querySelector('[data-sub-target="line"]').value);
+    const minorFloor = Number(
+      box.querySelector('[data-sub-target="floor"]').value,
     );
-    const minor = Number(
-      box.querySelector('[data-sub-target="minor"]').value,
-    );
-    if (!Number.isFinite(major) || !Number.isFinite(minor)) return;
+    if (!Number.isFinite(lineTarget) || !Number.isFinite(minorFloor)) return;
     plan.targetOverrides = {
       ...plan.targetOverrides,
-      [id]: { majorTarget: Math.max(0, major), minorTarget: Math.max(0, minor) },
+      [id]: {
+        lineTarget: Math.max(0, lineTarget),
+        minorFloor: Math.max(0, minorFloor),
+      },
     };
+    const { [id]: _kept, ...restAcknowledged } = plan.acknowledged || {};
+    plan.acknowledged = restAcknowledged;
     runPlan();
     await persistPlan();
   };
@@ -595,10 +658,21 @@ export async function performancePage(root) {
     const completeButton = event.target.closest("[data-complete-closing]");
     const cancelButton = event.target.closest("[data-cancel-closing]");
     const resetButton = event.target.closest("[data-reset-target]");
+    const keepButton = event.target.closest("[data-keep-target]");
     if (resetButton) {
       const { [resetButton.dataset.resetTarget]: _removed, ...rest } =
         plan.targetOverrides || {};
       plan.targetOverrides = rest;
+      runPlan();
+      await persistPlan();
+      return;
+    }
+    if (keepButton) {
+      const id = keepButton.dataset.keepTarget;
+      const acknowledged = { ...(plan.acknowledged || {}) };
+      if (acknowledged[id]) delete acknowledged[id];
+      else acknowledged[id] = new Date().toISOString();
+      plan.acknowledged = acknowledged;
       runPlan();
       await persistPlan();
       return;

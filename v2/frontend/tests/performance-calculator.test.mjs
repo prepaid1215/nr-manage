@@ -6,6 +6,11 @@ import {
   calculatePerformance,
   cancelClosingCompletion,
   cancelCompletionCascade,
+  certifiedRankLevel,
+  distributeLineDeficit,
+  minorIncentiveTier,
+  minorPayoutFloor,
+  placeableCodes,
   planClosing,
   planSignature,
   projectClosingCompletion,
@@ -162,8 +167,9 @@ assert.deepEqual(ownNvCompletion.topUps, [
   { salesWon: 18000, addedNv: 14580, excessNv: 140 },
   { salesWon: 33000, addedNv: 26730, excessNv: 771 },
 ]);
-assert.equal(ownNvCompletion.majorNv, 400140);
-assert.equal(ownNvCompletion.minorNv, 400771);
+// 대·소실적은 매출을 넣은 뒤의 두 라인 중 큰 쪽/작은 쪽이다.
+assert.equal(ownNvCompletion.majorNv, 400771);
+assert.equal(ownNvCompletion.minorNv, 400140);
 assert.equal(ownNvCompletion.completedNv, 800911);
 
 const propagationModel = buildPerformanceModel({
@@ -549,12 +555,14 @@ const tc14Plan = planClosing(tc14Model, "gd-a", 400000, [
 ]);
 const tc14BAlloc = tc14Plan.allocation.lines[0].childAllocation;
 const tc14CAlloc = tc14Plan.allocation.lines[1].childAllocation;
+// 하위 사업자는 대·소 목표가 아니라 "라인 합계" 목표를 받는다
 assert.equal(tc14BAlloc.memberId, "b-closer");
-assert.equal(tc14BAlloc.majorTarget, 200000);
-assert.equal(tc14BAlloc.minorTarget, 200000);
+assert.equal(tc14BAlloc.mode, "total");
+assert.equal(tc14BAlloc.lineTarget, 400000);
+assert.deepEqual(tc14BAlloc.lineGoals, [200000, 200000]);
 assert.equal(tc14CAlloc.memberId, "c-closer");
-assert.equal(tc14CAlloc.majorTarget, 195000);
-assert.equal(tc14CAlloc.minorTarget, 195000);
+assert.equal(tc14CAlloc.lineTarget, 390000); // 400,000 − 상위 본인 10,000
+assert.deepEqual(tc14CAlloc.lineGoals, [195000, 195000]);
 assert.equal(tc14Plan.allocation.lines[1].passthroughNv, 10000);
 assert.deepEqual(
   tc14Plan.placements.map((p) => [p.placementMemberId, p.salesWon]),
@@ -576,16 +584,18 @@ const tc15Model = buildPerformanceModel(tc05Payload);
 const tc15Plan = planClosing(tc15Model, "gd-a", 400000, ["gd-a", "b-closer"]);
 const tc15BAlloc = tc15Plan.allocation.lines[0].childAllocation;
 assert.equal(tc15BAlloc.memberId, "b-closer");
-assert.equal(tc15BAlloc.majorTarget, 200000);
-assert.equal(tc15BAlloc.minorTarget, 200000);
+assert.equal(tc15BAlloc.lineTarget, 400000);
+assert.deepEqual(tc15BAlloc.lineGoals, [200000, 200000]);
 assert.equal(tc15Plan.allocation.lines[1].childAllocation, null);
 assert.equal(tc15Plan.allocation.lines[1].passthroughNv, 130000);
+// C일반 라인 334,000원은 한 코드에 몰지 않고 F·C일반 두 코드로 나눈다(총액 동일)
 assert.deepEqual(
   tc15Plan.placements.map((p) => [p.placementMemberId, p.salesWon]),
   [
     ["d", 124000],
     ["e", 124000],
-    ["f", 334000],
+    ["f", 167000],
+    ["c-regular", 167000],
   ],
 );
 assert.equal(tc15Plan.totalSalesWon, 582000);
@@ -621,12 +631,12 @@ const tc16Plan = planClosing(tc16Model, "top-gd", 800000, [
 ]);
 const tc16MidAlloc = tc16Plan.allocation.lines[0].childAllocation;
 assert.equal(tc16MidAlloc.memberId, "mid-closer");
-assert.equal(tc16MidAlloc.majorTarget, 400000); // N2 = N1/2
-assert.equal(tc16MidAlloc.minorTarget, 400000);
+assert.equal(tc16MidAlloc.lineTarget, 800000); // 상위 서브라인의 라인 합계 목표
+assert.deepEqual(tc16MidAlloc.lineGoals, [400000, 400000]);
 const tc16DAlloc = tc16MidAlloc.lines[0].childAllocation;
 assert.equal(tc16DAlloc.memberId, "d-closer");
-assert.equal(tc16DAlloc.majorTarget, 200000); // O12 = N2/2 (다시 ½)
-assert.equal(tc16DAlloc.minorTarget, 200000);
+assert.equal(tc16DAlloc.lineTarget, 400000); // 다시 라인 합계로 내려간다
+assert.deepEqual(tc16DAlloc.lineGoals, [200000, 200000]);
 assert.equal(tc16MidAlloc.lines[1].childAllocation, null);
 assert.equal(tc16MidAlloc.lines[1].passthroughNv, 100000);
 assert.equal(tc16Plan.allocation.lines[1].childAllocation, null);
@@ -635,19 +645,20 @@ const tc16Steps = new Map(
   tc16Plan.steps.map((step) => [step.memberId, step]),
 );
 assert.equal(tc16Steps.get("d-closer").projection.completedNv, 401040);
-assert.equal(tc16Steps.get("mid-closer").projection.completedNv, 801550);
-assert.equal(tc16Steps.get("top-gd").projection.completedNv, 1602130);
+// D마감이 목표를 1,040 NV 넘겼으므로 Mid는 그만큼 덜 채운다(옛 규칙: 801,550)
+assert.equal(tc16Steps.get("mid-closer").projection.completedNv, 800740);
+assert.equal(tc16Steps.get("top-gd").projection.completedNv, 1601320);
 assert.deepEqual(
   tc16Plan.placements.map((p) => [p.placementMemberId, p.salesWon, p.addedNv]),
   [
     ["g", 186000, 150660],
     ["h", 198000, 160380],
-    ["e-regular", 371000, 300510],
+    ["e-regular", 370000, 299700],
     ["c-regular", 618000, 500580],
   ],
 );
-assert.equal(tc16Plan.totalSalesWon, 1373000);
-assert.equal(tc16Plan.topMajorNv, 801550);
+assert.equal(tc16Plan.totalSalesWon, 1372000); // 옛 규칙 1,373,000원보다 1,000원 절약
+assert.equal(tc16Plan.topMajorNv, 800740);
 assert.equal(tc16Plan.topMinorNv, 800580);
 assert.equal(tc16Plan.verified, true); // 대·소 모두 800,000 이상
 
@@ -671,8 +682,8 @@ const tc18Model = buildPerformanceModel({
 const tc18Plan = planClosing(tc18Model, "gd-a", 400000, ["gd-a", "b-closer"]);
 const tc18BAlloc = tc18Plan.allocation.lines[0].childAllocation;
 assert.equal(tc18BAlloc.memberId, "b-closer");
-assert.equal(tc18BAlloc.majorTarget, 190000); // (400000 − 본인 20000) / 2
-assert.equal(tc18BAlloc.minorTarget, 190000);
+assert.equal(tc18BAlloc.lineTarget, 380000); // 400,000 − 상위 본인 20,000
+assert.deepEqual(tc18BAlloc.lineGoals, [190000, 190000]);
 assert.equal(tc18Plan.allocation.lines[0].passthroughNv, 20000);
 assert.equal(tc18Plan.allocation.lines[1].childAllocation, null);
 assert.equal(tc18Plan.allocation.lines[1].passthroughNv, 450000);
@@ -775,34 +786,35 @@ assert.deepEqual(pruneInvalidCompletions(topChangeCompletions, sigTopB), {});
 
 console.log("completion invalidation regression tests passed");
 
+
 // ──── 하위 마감 목표 직접 입력(override) ────
-// 기본(자동): TC15 모델에서 b-closer 자동 목표 200,000/200,000
+// 기본(자동): TC15 모델에서 b-closer 자동 라인 합계 목표 400,000 · 기준선 0(인증직급 없음)
 const overrideModel = buildPerformanceModel(tc05Payload);
 const autoAlloc = allocateClosingTargets(overrideModel, "gd-a", 400000, [
   "gd-a",
   "b-closer",
 ]);
 const autoChild = autoAlloc.lines[0].childAllocation;
-assert.equal(autoChild.majorTarget, 200000);
-assert.equal(autoChild.minorTarget, 200000);
-assert.equal(autoChild.autoMajorTarget, 200000);
-assert.equal(autoChild.autoMinorTarget, 200000);
+assert.equal(autoChild.lineTarget, 400000);
+assert.equal(autoChild.minorFloor, 0);
+assert.equal(autoChild.autoLineTarget, 400000);
+assert.equal(autoChild.autoMinorFloor, 0);
 assert.equal(autoChild.overridden, false);
 assert.equal(autoAlloc.overridden, false); // 최상위는 항상 직접 입력값
 
-// 직접 입력 250,000/150,000 → 자동값은 그대로 보존, 실제 목표만 교체
+// 직접 입력 라인 합계 500,000 · 소실적 기준선 60,000 → 자동값은 그대로 보존
 const overriddenAlloc = allocateClosingTargets(
   overrideModel,
   "gd-a",
   400000,
   ["gd-a", "b-closer"],
-  { "b-closer": { majorTarget: 250000, minorTarget: 150000 } },
+  { "b-closer": { lineTarget: 500000, minorFloor: 60000 } },
 );
 const overriddenChild = overriddenAlloc.lines[0].childAllocation;
-assert.equal(overriddenChild.majorTarget, 250000);
-assert.equal(overriddenChild.minorTarget, 150000);
-assert.equal(overriddenChild.autoMajorTarget, 200000);
-assert.equal(overriddenChild.autoMinorTarget, 200000);
+assert.equal(overriddenChild.lineTarget, 500000);
+assert.equal(overriddenChild.minorFloor, 60000);
+assert.equal(overriddenChild.autoLineTarget, 400000);
+assert.equal(overriddenChild.autoMinorFloor, 0);
 assert.equal(overriddenChild.overridden, true);
 
 // 직접 입력 목표가 실제 계산·매출 추천까지 반영되는지
@@ -811,37 +823,37 @@ const overriddenPlan = planClosing(
   "gd-a",
   400000,
   ["gd-a", "b-closer"],
-  { "b-closer": { majorTarget: 250000, minorTarget: 150000 } },
+  { "b-closer": { lineTarget: 500000, minorFloor: 60000 } },
 );
 const overriddenStep = overriddenPlan.steps.find(
   (step) => step.memberId === "b-closer",
 );
-// b-closer 라인 [100000,100000] · 대 250,000 / 소 150,000 목표
-// 부족 150,000 → 186,000원(150,660) · 부족 50,000 → 62,000원(50,220)
+// b-closer 라인 [100000,100000] · 라인 합계 500,000 → 부족 300,000을 반씩
 assert.deepEqual(
   overriddenStep.projection.topUps.map((topUp) => topUp.salesWon),
-  [186000, 62000],
+  [186000, 186000],
 );
 assert.equal(overriddenStep.projection.majorNv, 250660);
-assert.equal(overriddenStep.projection.minorNv, 150220);
-assert.equal(overriddenStep.projection.completedNv, 400880);
+assert.equal(overriddenStep.projection.minorNv, 250660);
+assert.equal(overriddenStep.projection.completedNv, 501320);
+assert.equal(overriddenPlan.totalSalesWon, 706000);
 
 // 자동값으로 되돌리면 원래 배분과 동일
-assert.deepEqual(
+assert.equal(
   allocateClosingTargets(
     buildPerformanceModel(tc05Payload),
     "gd-a",
     400000,
     ["gd-a", "b-closer"],
     {},
-  ).lines[0].childAllocation.majorTarget,
-  200000,
+  ).lines[0].childAllocation.lineTarget,
+  400000,
 );
 
 // 목표를 직접 바꾸면 서명이 달라져 기존 완료가 무효화된다
 const sigAuto = planSignature("gd-a", 400000, ["gd-a", "b-closer"], {});
 const sigOverridden = planSignature("gd-a", 400000, ["gd-a", "b-closer"], {
-  "b-closer": { majorTarget: 250000, minorTarget: 150000 },
+  "b-closer": { lineTarget: 500000, minorFloor: 60000 },
 });
 assert.notEqual(sigAuto, sigOverridden);
 assert.deepEqual(
@@ -855,8 +867,250 @@ assert.deepEqual(
 assert.equal(
   sigOverridden,
   planSignature("gd-a", 400000, ["b-closer", "gd-a"], {
-    "b-closer": { majorTarget: 250000, minorTarget: 150000 },
+    "b-closer": { lineTarget: 500000, minorFloor: 60000 },
   }),
 );
 
 console.log("sub-closer target override tests passed");
+
+// ═══════════════ 라인 합계 + 소실적 기준선 규칙 (2026-08-29 확정) ═══════════════
+
+// ──── TC19 — 인증직급별 소실적 지급 기준선 ────
+assert.equal(certifiedRankLevel({ rankMaxName: "회원" }), 0);
+assert.equal(certifiedRankLevel({ rankMaxName: "DT" }), 1);
+assert.equal(certifiedRankLevel({ rankMaxName: "GD" }), 2);
+assert.equal(certifiedRankLevel({ rankMaxName: "CDD" }), 6);
+assert.equal(certifiedRankLevel({ rankMaxName: "DD" }), 5);
+assert.equal(certifiedRankLevel({}), 0);
+assert.equal(minorPayoutFloor({ rankMaxName: "DT" }), 30000);
+assert.equal(minorPayoutFloor({ rankMaxName: "GD" }), 60000);
+assert.equal(minorPayoutFloor({ rankMaxName: "RD" }), 60000);
+assert.equal(minorPayoutFloor({ rankMaxName: "회원" }), 0);
+assert.equal(minorPayoutFloor({}), 0); // 인증직급을 모르면 기준선을 강제하지 않는다
+
+// 매출장려금 구간 안내 (표는 v2/docs/closing-calculator.md)
+const dtTier = minorIncentiveTier({ rankMaxName: "DT" }, 100000);
+assert.equal(dtTier.rate, 5);
+assert.equal(dtTier.nextMin, 400000);
+assert.equal(dtTier.nextShortfallNv, 300000);
+const gdTier = minorIncentiveTier({ rankMaxName: "GD" }, 450000);
+assert.equal(gdTier.rate, 8); // GD 이상은 40만~80만 구간에서 8%
+assert.equal(gdTier.nextMin, 800000);
+const memberTier = minorIncentiveTier({ rankMaxName: "회원" }, 100000);
+assert.equal(memberTier.rate, null);
+assert.equal(memberTier.nextMin, null);
+
+// ──── TC20 — 부족분을 두 줄에 균형 있게 나누고, 자투리는 합친다 ────
+// 두 줄이 이미 비슷하면 반씩
+assert.deepEqual(distributeLineDeficit([100000, 100000], 400000, 0), [
+  100000, 100000,
+]);
+// 부족분이 두 줄 차이보다 작으면 전부 작은 줄로
+assert.deepEqual(distributeLineDeficit([50000, 100000], 180000, 0), [30000, 0]);
+// 차이를 메우고 남은 몫만 반씩 나눈다
+assert.deepEqual(distributeLineDeficit([50000, 100000], 250000, 0), [
+  75000, 25000,
+]);
+// 라인 합계를 이미 채웠으면 추가 매출이 없다
+assert.deepEqual(distributeLineDeficit([50000, 100000], 130000, 0), [0, 0]);
+// 자투리(10,000원 = 8,100 NV 미만)는 반대쪽에 합쳐 최소매출 낭비를 막는다
+assert.deepEqual(distributeLineDeficit([92745, 98010], 200000, 0), [9245, 0]);
+// 소실적 기준선은 두 줄 모두에 걸린다 (소실적 = 두 줄 중 작은 쪽)
+assert.deepEqual(distributeLineDeficit([8100, 89910], 98010, 30000), [
+  21900, 0,
+]);
+// 라인 합계를 이미 채웠어도 기준선 미달이면 채운다
+assert.deepEqual(distributeLineDeficit([10000, 500000], 100000, 30000), [
+  20000, 0,
+]);
+
+// ──── TC21 — 신주영 918875 계보: 라인 합계만 맞추면 12,000원 ────
+// 신주영 918875 (본인 10,530)
+// ├─ 918876 (본인 42,120) ─ 진순정 920633 (40,095)  → 라인 82,215
+// └─ 918877 (본인 89,910) ─ 이충언 928694 (8,100)   → 라인 98,010
+// 상위 주영돈이 요구하는 918875 라인 합계 200,000, 지금 190,755 → 부족 9,245
+const shinPayload = {
+  rstLst: [
+    { userId: "2893497", userName: "주영돈", ppId: "", abPos: 0 },
+    { userId: "918875", userName: "신주영", ppId: "2893497", abPos: 1 },
+    { userId: "other", userName: "반대라인", ppId: "2893497", abPos: 2 },
+    { userId: "918876", userName: "신주영2", ppId: "918875", abPos: 1 },
+    { userId: "918877", userName: "신주영3", ppId: "918875", abPos: 2 },
+    { userId: "920633", userName: "진순정", ppId: "918876", abPos: 1 },
+    { userId: "928694", userName: "이충언", ppId: "918877", abPos: 1 },
+  ],
+  members: [
+    {
+      userId: "2893497",
+      ordPv: 0,
+      maxPv: 500000,
+      minPv: 190755,
+      rankMaxName: "GD",
+    },
+    {
+      userId: "918875",
+      ordPv: 10530,
+      maxPv: 98010,
+      minPv: 82215,
+      rankMaxName: "DT",
+    },
+    { userId: "other", ordPv: 500000, rankMaxName: "DT" },
+    {
+      userId: "918876",
+      ordPv: 42120,
+      maxPv: 40095,
+      minPv: 0,
+      rankMaxName: "DT",
+    },
+    {
+      userId: "918877",
+      ordPv: 89910,
+      maxPv: 8100,
+      minPv: 0,
+      rankMaxName: "DT",
+    },
+    { userId: "920633", ordPv: 40095, rankMaxName: "회원" },
+    { userId: "928694", ordPv: 8100, rankMaxName: "회원" },
+  ],
+};
+const shinTargets = { majorTarget: 500000, minorTarget: 200000 };
+const shinPlan = planClosing(
+  buildPerformanceModel(shinPayload),
+  "2893497",
+  shinTargets,
+  ["2893497", "918875"],
+);
+const shinAlloc = shinPlan.allocation.lines[0].childAllocation;
+assert.equal(shinAlloc.memberId, "918875");
+assert.equal(shinAlloc.lineTarget, 200000);
+assert.equal(shinAlloc.minorFloor, 30000); // 인증직급 DT
+assert.deepEqual(shinAlloc.lineGoals, [101990, 98010]);
+const shinStep = shinPlan.steps.find((step) => step.memberId === "918875");
+assert.deepEqual(shinStep.result.effectiveTotals, [92745, 98010]);
+assert.deepEqual(shinStep.result.deficits, [9245, 0]);
+assert.equal(shinStep.projection.completedNv, 200475); // 사업자 확인값
+assert.deepEqual(
+  shinPlan.placements.map((p) => [p.placementMemberId, p.salesWon]),
+  [["920633", 12000]],
+);
+assert.equal(shinPlan.totalSalesWon, 12000); // 옛 규칙 72,000원 → 12,000원
+assert.equal(shinPlan.verified, true);
+
+// ──── TC22 — 같은 계보에서 하위 둘까지 마감 체크: 기준선만 추가로 채운다 ────
+// 918877 소실적이 8,100뿐이라 DT 기준선 30,000까지만 올린다 (옛 규칙 72,000원)
+const shinAllPlan = planClosing(
+  buildPerformanceModel(shinPayload),
+  "2893497",
+  shinTargets,
+  ["2893497", "918875", "918876", "918877"],
+);
+assert.deepEqual(
+  shinAllPlan.placements.map((p) => [p.placementMemberId, p.salesWon]),
+  [
+    ["920633", 12000],
+    ["928694", 28000],
+  ],
+);
+assert.equal(shinAllPlan.totalSalesWon, 40000);
+const shin877 = shinAllPlan.steps.find((step) => step.memberId === "918877");
+assert.equal(shin877.allocation.minorFloor, 30000);
+assert.deepEqual(shin877.result.effectiveTotals, [8100, 89910]);
+assert.deepEqual(shin877.result.deficits, [21900, 0]);
+assert.equal(shin877.projection.minorNv, 30780); // 기준선 30,000 이상
+assert.ok(shin877.projection.minorNv >= 30000);
+assert.equal(shinAllPlan.verified, true);
+
+// ──── TC23 — 체크하지 않은 사업자는 라인 합계만 통과시킨다 ────
+// 918876·918877을 체크하지 않으면 그 라인은 지금 실적 그대로 올라간다
+const shinNoneAlloc = allocateClosingTargets(
+  buildPerformanceModel(shinPayload),
+  "2893497",
+  shinTargets,
+  ["2893497"],
+);
+assert.equal(shinNoneAlloc.lines[0].childAllocation, null);
+assert.equal(shinNoneAlloc.lines[0].passthroughNv, 190755);
+assert.equal(shinNoneAlloc.lines[1].passthroughNv, 500000);
+
+// ──── TC24 — 매출 배치 코드 나누기 ────
+const splitModel = buildPerformanceModel({
+  rstLst: [
+    { userId: "top", userName: "Top", ppId: "" },
+    { userId: "left", userName: "왼쪽", ppId: "top", abPos: 1 },
+    { userId: "right", userName: "오른쪽", ppId: "top", abPos: 2 },
+    { userId: "left-1", userName: "왼쪽하위", ppId: "left", abPos: 1 },
+  ],
+  members: [
+    { userId: "top", ordPv: 0 },
+    { userId: "left", ordPv: 10000 },
+    { userId: "right", ordPv: 10000 },
+    { userId: "left-1", ordPv: 0 },
+  ],
+});
+assert.deepEqual(
+  placeableCodes(splitModel.byId.get("left"), splitModel.children).map(
+    (row) => row.userId,
+  ),
+  ["left-1", "left"], // 깊은 코드부터
+);
+const splitResult = calculatePerformance(splitModel, "top", {
+  lineTarget: 400000,
+  minorFloor: 0,
+});
+const splitProjection = projectClosingCompletion(splitResult);
+// 두 라인 각각 190,000 NV 부족 → 235,000원씩
+assert.deepEqual(
+  splitProjection.topUps.map((topUp) => topUp.salesWon),
+  [235000, 235000],
+);
+// 코드가 둘인 왼쪽 라인만 118,000 + 117,000으로 나뉜다 (총액 동일)
+assert.deepEqual(
+  splitProjection.sales.map((sale) => [sale.memberId, sale.salesWon]),
+  [
+    ["left-1", 118000],
+    ["left", 117000],
+    ["right", 235000],
+  ],
+);
+assert.equal(
+  splitProjection.sales
+    .filter((sale) => sale.lineIndex === 0)
+    .reduce((sum, sale) => sum + sale.salesWon, 0),
+  splitProjection.topUps[0].salesWon,
+);
+assert.equal(
+  splitProjection.sales
+    .filter((sale) => sale.lineIndex === 0)
+    .reduce((sum, sale) => sum + sale.addedNv, 0),
+  splitProjection.topUps[0].addedNv,
+);
+// 10만원 미만이면 나누지 않는다
+const smallProjection = projectClosingCompletion(
+  calculatePerformance(splitModel, "top", { lineTarget: 60000, minorFloor: 0 }),
+);
+assert.deepEqual(
+  smallProjection.sales.map((sale) => [sale.memberId, sale.salesWon]),
+  [
+    ["left-1", 25000],
+    ["right", 25000],
+  ],
+);
+
+// ──── TC25 — 라인 합계 목표 모드에서도 마감 불가 판정은 유지된다 ────
+const soloTotalModel = buildPerformanceModel({
+  rstLst: [{ userId: "solo", userName: "단독", ppId: "" }],
+  members: [{ userId: "solo", ordPv: 1000 }],
+});
+const soloTotal = calculatePerformance(soloTotalModel, "solo", {
+  lineTarget: 200000,
+  minorFloor: 30000,
+});
+assert.equal(soloTotal.mode, "total");
+assert.equal(soloTotal.feasible, false);
+assert.equal(projectClosingCompletion(soloTotal).completedNv, 0);
+assert.throws(
+  () => calculatePerformance(soloTotalModel, "solo", { lineTarget: 0 }),
+  /0보다 커야/,
+);
+
+console.log("line-total + payout floor tests (TC19-TC25) passed");

@@ -5,10 +5,110 @@ const numeric = (value) => {
 
 const memberId = (row) => String(row?.userId ?? "");
 
+// 매출 단위 — 1,000원 = 810 NV, 최소 10,000원부터 1,000원 단위
+export const NV_PER_WON = 0.81;
+export const SALE_UNIT_WON = 1000;
+export const MIN_SALE_WON = 10000;
+export const MIN_SALE_NV = MIN_SALE_WON * NV_PER_WON; // 8,100 NV
+// 부족분 분산 배치 — 기본 2곳(라인당 1곳), 한 라인 금액이 크면 4곳(라인당 2곳)까지 내려간다
+export const SPLIT_SALE_WON = 100000;
+export const MAX_CODES_PER_LINE = 2;
+
+// 인증직급(rankMaxName) 등급. 표기가 없으면 0(매출장려금 지급 대상 아님)
+const RANK_LEVELS = [
+  ["CDD", 6],
+  ["DD", 5],
+  ["ED", 4],
+  ["RD", 3],
+  ["GD", 2],
+  ["DT", 1],
+];
+
+export function certifiedRankLevel(row) {
+  const rank = String(row?.rankMaxName ?? "")
+    .toUpperCase()
+    .replace(/\s/g, "");
+  const hit = RANK_LEVELS.find(([code]) => rank.includes(code));
+  return hit ? hit[1] : 0;
+}
+
+// 매출장려금 지급 기준선 — 인증직급 DT 3만 NV, GD 이상 6만 NV
+export function minorPayoutFloor(row) {
+  const level = certifiedRankLevel(row);
+  if (level >= 2) return 60000;
+  if (level === 1) return 30000;
+  return 0;
+}
+
+// 매출장려금 표 (v2/docs/closing-calculator.md)
+export const INCENTIVE_TABLE = [
+  { level: 1, min: 30000, max: 400000, rate: 5 },
+  { level: 1, min: 400000, max: 800000, rate: 6 },
+  { level: 2, min: 400000, max: 800000, rate: 8 },
+  { level: 2, min: 800000, max: 1500000, rate: 10 },
+  { level: 3, min: 1500000, max: 4000000, rate: 10 },
+  { level: 4, min: 5000000, max: 12000000, rate: 9 },
+  { level: 5, min: 20000000, max: 30000000, rate: 7 },
+  { level: 5, min: 40000000, max: 50000000, rate: 6 },
+  { level: 5, min: 75000000, max: 150000000, amountWon: 3500000 },
+  { level: 5, min: 150000000, max: 200000000, amountWon: 5000000 },
+  { level: 5, min: 200000000, max: 400000000, amountWon: 7000000 },
+  { level: 6, min: 400000000, max: Infinity, amountWon: 10000000 },
+];
+
+// 지금 소실적이 어느 지급 구간인지와 다음 구간까지 얼마나 남았는지
+export function minorIncentiveTier(row, minorNv) {
+  const level = certifiedRankLevel(row);
+  const nv = Math.max(0, numeric(minorNv));
+  const usable = INCENTIVE_TABLE.filter((tier) => tier.level <= level);
+  const current =
+    usable
+      .filter((tier) => nv >= tier.min && nv <= tier.max)
+      .sort(
+        (left, right) =>
+          (right.rate ?? 0) - (left.rate ?? 0) ||
+          (right.amountWon ?? 0) - (left.amountWon ?? 0) ||
+          right.min - left.min,
+      )[0] || null;
+  const next =
+    usable
+      .filter((tier) => tier.min > nv)
+      .sort((left, right) => left.min - right.min)[0] || null;
+  return {
+    level,
+    floor: minorPayoutFloor(row),
+    rate: current?.rate ?? null,
+    amountWon: current?.amountWon ?? null,
+    min: current?.min ?? null,
+    max: current?.max ?? null,
+    nextMin: next?.min ?? null,
+    nextShortfallNv: next ? next.min - nv : 0,
+  };
+}
+
+// 목표는 두 가지 모양이다.
+// - sides: 최상위 사업자가 직접 입력한 대실적·소실적 목표
+// - total: 상위에서 내려온 "라인 합계" 목표 + 소실적 지급 기준선
 const normalizeTargets = (requestedTargets) => {
+  const isTotalMode =
+    requestedTargets &&
+    typeof requestedTargets === "object" &&
+    (requestedTargets.lineTarget != null || requestedTargets.minorFloor != null);
+  if (isTotalMode) {
+    return {
+      mode: "total",
+      lineTarget: Math.max(0, numeric(requestedTargets.lineTarget)),
+      minorFloor: Math.max(0, numeric(requestedTargets.minorFloor)),
+      majorTarget: 0,
+      minorTarget: 0,
+    };
+  }
   const sameTarget =
     typeof requestedTargets === "object" ? null : numeric(requestedTargets);
   return {
+    mode: "sides",
+    lineTarget: 0,
+    minorFloor: 0,
     majorTarget: numeric(requestedTargets?.majorTarget ?? sameTarget),
     minorTarget: numeric(requestedTargets?.minorTarget ?? sameTarget),
   };
@@ -53,6 +153,91 @@ export function salesTopUpForDeficit(deficitNv) {
   };
 }
 
+// 라인 합계 목표(lineTarget)와 소실적 기준선(minorFloor)을 두 서브라인의 부족분으로 나눈다.
+// 1) 두 라인 모두 기준선 이상이 되게 한다 (소실적 = 두 라인 중 작은 쪽).
+// 2) 남은 부족분은 작은 줄부터 채워 두 줄이 비슷해지도록 나눈다.
+// 3) 최소 매출 10,000원(8,100 NV)에 못 미치는 자투리는 반대쪽에 합쳐 매출 낭비를 막는다.
+export function distributeLineDeficit(
+  totals,
+  lineTarget,
+  minorFloor,
+  options = {},
+) {
+  const current = [
+    Math.max(0, numeric(totals?.[0])),
+    Math.max(0, numeric(totals?.[1])),
+  ];
+  const floor = Math.max(0, numeric(minorFloor));
+  const placeable = options.placeable || [true, true];
+  const floorNeed = current.map((total) => Math.max(0, floor - total));
+  const need = [...floorNeed];
+  const filled = current.map((total, index) => total + need[index]);
+  const remaining = Math.max(0, numeric(lineTarget) - (filled[0] + filled[1]));
+
+  if (remaining > 0) {
+    const small = filled[0] <= filled[1] ? 0 : 1;
+    const large = small === 0 ? 1 : 0;
+    const gap = filled[large] - filled[small];
+    if (remaining <= gap) {
+      need[small] += remaining;
+    } else {
+      const rest = remaining - gap;
+      const half = Math.ceil(rest / 2);
+      need[small] += gap + half;
+      need[large] += rest - half;
+    }
+  }
+
+  const [lower, higher] = need[0] <= need[1] ? [0, 1] : [1, 0];
+  if (
+    need[lower] > 0 &&
+    need[lower] < MIN_SALE_NV &&
+    floorNeed[lower] === 0 &&
+    need[higher] > 0 &&
+    placeable[higher]
+  ) {
+    need[higher] += need[lower];
+    need[lower] = 0;
+  }
+
+  return need;
+}
+
+// 한 라인에 들어갈 매출을 코드에 나눈다. 1,000원 단위 금액 자체를 반으로 쪼개므로
+// 총 매출과 총 NV는 한 곳에 넣을 때와 정확히 같다. (144,000원 = 72,000원 두 번)
+const splitLineSales = (topUp, codes) => {
+  if (!topUp || topUp.salesWon <= 0 || !codes.length) return [];
+  const units = topUp.salesWon / SALE_UNIT_WON;
+  if (topUp.salesWon >= SPLIT_SALE_WON && codes.length >= 2) {
+    const firstUnits = Math.ceil(units / 2);
+    const secondUnits = units - firstUnits;
+    if (secondUnits * SALE_UNIT_WON >= MIN_SALE_WON) {
+      return [
+        {
+          target: codes[0],
+          salesWon: firstUnits * SALE_UNIT_WON,
+          addedNv: firstUnits * 810,
+          excessNv: 0,
+        },
+        {
+          target: codes[1],
+          salesWon: secondUnits * SALE_UNIT_WON,
+          addedNv: secondUnits * 810,
+          excessNv: topUp.excessNv,
+        },
+      ];
+    }
+  }
+  return [
+    {
+      target: codes[0],
+      salesWon: topUp.salesWon,
+      addedNv: topUp.addedNv,
+      excessNv: topUp.excessNv,
+    },
+  ];
+};
+
 export function projectClosingCompletion(result) {
   if (result.feasible === false) {
     return {
@@ -62,6 +247,7 @@ export function projectClosingCompletion(result) {
         addedNv: 0,
         excessNv: 0,
       })),
+      sales: [],
       projectedTotals: [...result.effectiveTotals],
       majorNv: 0,
       minorNv: 0,
@@ -72,12 +258,30 @@ export function projectClosingCompletion(result) {
   const projectedTotals = result.effectiveTotals.map(
     (total, index) => total + topUps[index].addedNv,
   );
-  const majorNv = projectedTotals[result.majorIndex];
-  const minorNv = projectedTotals[result.minorIndex];
+  const sales = topUps.flatMap((topUp, index) =>
+    splitLineSales(topUp, result.placementCodes?.[index] || []).map((entry) => ({
+      lineIndex: index,
+      side: index === result.majorIndex ? "major" : "minor",
+      memberId: memberId(entry.target),
+      target: entry.target,
+      salesWon: entry.salesWon,
+      addedNv: entry.addedNv,
+      excessNv: entry.excessNv,
+    })),
+  );
+  // 대·소실적은 매출을 넣은 뒤의 두 라인 중 큰 쪽/작은 쪽이다.
+  // 작은 줄부터 채우는 분산 배치 때문에 계산 전후로 대·소가 뒤집힐 수 있다.
+  const projectedMajorIndex = projectedTotals[0] >= projectedTotals[1] ? 0 : 1;
+  const projectedMinorIndex = projectedMajorIndex === 0 ? 1 : 0;
+  const majorNv = projectedTotals[projectedMajorIndex];
+  const minorNv = projectedTotals[projectedMinorIndex];
   return {
     feasible: true,
     topUps,
+    sales,
     projectedTotals,
+    projectedMajorIndex,
+    projectedMinorIndex,
     majorNv,
     minorNv,
     completedNv: majorNv + minorNv,
@@ -121,6 +325,8 @@ export function planSignature(
   const overrides = Object.entries(targetOverrides || {})
     .map(([id, targets]) => [
       String(id),
+      numeric(targets?.lineTarget),
+      numeric(targets?.minorFloor),
       numeric(targets?.majorTarget),
       numeric(targets?.minorTarget),
     ])
@@ -262,9 +468,11 @@ function deepestLeaf(start, children) {
   );
 }
 
-function deepestPlaceableLeaf(start, children) {
-  if (!start || numeric(start.completedClosingNv) > 0) return null;
-  const leaves = [];
+// 매출을 넣을 수 있는 코드를 깊은 곳부터 최대 limit개.
+// 완료된 마감 사업자와 그 하위에는 중복 배치하지 않는다.
+export function placeableCodes(start, children, limit = MAX_CODES_PER_LINE) {
+  if (!start || numeric(start.completedClosingNv) > 0) return [];
+  const found = [];
   const visited = new Set();
   let visitOrder = 0;
   const stack = [{ row: start, depth: 0 }];
@@ -274,22 +482,19 @@ function deepestPlaceableLeaf(start, children) {
     const id = memberId(row);
     if (!id || visited.has(id)) continue;
     visited.add(id);
+    found.push({ row, depth, order: visitOrder++ });
     const placeable = (children.get(id) || []).filter(
       (descendant) => numeric(descendant.completedClosingNv) <= 0,
     );
-    if (!placeable.length) leaves.push({ row, depth, order: visitOrder++ });
-    else {
-      for (let index = placeable.length - 1; index >= 0; index -= 1) {
-        stack.push({ row: placeable[index], depth: depth + 1 });
-      }
+    for (let index = placeable.length - 1; index >= 0; index -= 1) {
+      stack.push({ row: placeable[index], depth: depth + 1 });
     }
   }
 
-  return (
-    leaves.sort(
-      (left, right) => right.depth - left.depth || right.order - left.order,
-    )[0]?.row || null
-  );
+  return found
+    .sort((left, right) => right.depth - left.depth || right.order - left.order)
+    .slice(0, Math.max(1, limit))
+    .map((entry) => entry.row);
 }
 
 export function calculatePerformance(
@@ -297,9 +502,19 @@ export function calculatePerformance(
   selectedMemberId,
   requestedTargets,
 ) {
-  const { majorTarget, minorTarget } = normalizeTargets(requestedTargets);
-  if (majorTarget <= 0 || minorTarget <= 0) {
+  const targets = normalizeTargets(requestedTargets);
+  if (
+    targets.mode === "sides" &&
+    (targets.majorTarget <= 0 || targets.minorTarget <= 0)
+  ) {
     throw new Error("대실적·소실적 목표는 모두 0보다 커야 합니다.");
+  }
+  if (
+    targets.mode === "total" &&
+    targets.lineTarget <= 0 &&
+    targets.minorFloor <= 0
+  ) {
+    throw new Error("라인 합계 목표는 0보다 커야 합니다.");
   }
 
   const member = model.byId.get(String(selectedMemberId));
@@ -319,15 +534,42 @@ export function calculatePerformance(
   const minorIndex = majorIndex === 0 ? 1 : 0;
   const minorRequiredTarget = Math.max(
     0,
-    minorTarget -
+    targets.minorTarget -
       (ownContributionIndex === minorIndex ? minorOwnContribution : 0),
   );
+
+  const placements = [0, 1].map((index) => {
+    const subMember = subMembers[index];
+    if (subMember) {
+      const codes = placeableCodes(subMember, model.children);
+      if (codes.length) return { kind: "line", target: codes[0], codes };
+    }
+    if (index === ownContributionIndex) {
+      return { kind: "self", target: member, codes: [member] };
+    }
+    return { kind: "none", target: null, codes: [] };
+  });
+  const placementCodes = placements.map((placement) => placement.codes);
+
   const branchTargets = [];
-  branchTargets[majorIndex] = majorTarget;
-  branchTargets[minorIndex] = minorTarget;
-  const deficits = effectiveTotals.map((total, index) =>
-    Math.max(0, branchTargets[index] - total),
-  );
+  let deficits;
+  if (targets.mode === "sides") {
+    branchTargets[majorIndex] = targets.majorTarget;
+    branchTargets[minorIndex] = targets.minorTarget;
+    deficits = effectiveTotals.map((total, index) =>
+      Math.max(0, branchTargets[index] - total),
+    );
+  } else {
+    deficits = distributeLineDeficit(
+      effectiveTotals,
+      targets.lineTarget,
+      targets.minorFloor,
+      { placeable: placements.map((placement) => placement.kind !== "none") },
+    );
+    branchTargets[0] = effectiveTotals[0] + deficits[0];
+    branchTargets[1] = effectiveTotals[1] + deficits[1];
+  }
+
   const achieved = deficits.every((deficit) => deficit === 0);
   const priority = achieved ? null : deficits[0] >= deficits[1] ? 0 : 1;
   const candidate =
@@ -337,15 +579,6 @@ export function calculatePerformance(
   const branchCandidates = subMembers.map((subMember) =>
     deepestLeaf(subMember, model.children),
   );
-  const placements = [0, 1].map((index) => {
-    const subMember = subMembers[index];
-    if (subMember) {
-      const target = deepestPlaceableLeaf(subMember, model.children);
-      if (target) return { kind: "line", target };
-    }
-    if (index === ownContributionIndex) return { kind: "self", target: member };
-    return { kind: "none", target: null };
-  });
   const feasible = deficits.every(
     (deficit, index) => deficit === 0 || placements[index].kind !== "none",
   );
@@ -370,8 +603,11 @@ export function calculatePerformance(
 
   return {
     member,
-    majorTarget,
-    minorTarget,
+    mode: targets.mode,
+    majorTarget: targets.majorTarget,
+    minorTarget: targets.minorTarget,
+    lineTarget: targets.lineTarget,
+    minorFloor: targets.minorFloor,
     majorIndex,
     minorIndex,
     ownContributionIndex,
@@ -379,6 +615,7 @@ export function calculatePerformance(
     minorRequiredTarget,
     branchTargets,
     effectiveTotals,
+    lineTotal: effectiveTotals[0] + effectiveTotals[1],
     subMembers,
     branches,
     deficits,
@@ -387,6 +624,7 @@ export function calculatePerformance(
     candidate,
     branchCandidates,
     placements,
+    placementCodes,
     feasible,
     warnings,
   };
@@ -407,6 +645,20 @@ function shallowestClosingDescendant(start, children, closingSet) {
   return null;
 }
 
+// 계획 노드가 calculatePerformance에 넘길 목표.
+// 최상위는 사용자가 직접 넣은 대·소실적, 하위는 라인 합계 목표 + 소실적 기준선.
+export function nodeTargets(node) {
+  return node.mode === "sides"
+    ? { majorTarget: node.majorTarget, minorTarget: node.minorTarget }
+    : { lineTarget: node.lineTarget, minorFloor: node.minorFloor };
+}
+
+export function nodeHasTarget(node) {
+  return node.mode === "sides"
+    ? node.majorTarget + node.minorTarget > 0
+    : node.lineTarget > 0 || node.minorFloor > 0;
+}
+
 export function allocateClosingTargets(
   model,
   topMemberId,
@@ -423,27 +675,39 @@ export function allocateClosingTargets(
   const closingSet = new Set((closingMemberIds || []).map(String));
   const overrides = targetOverrides || {};
 
-  const allocate = (
-    member,
-    memberMajorTarget,
-    memberMinorTarget,
-    depth,
-    autoTargets,
-  ) => {
+  const allocate = (member, targets, depth, autoTargets) => {
     const directChildren = model.children.get(memberId(member)) || [];
     const subMembers = [directChildren[0] || null, directChildren[1] || null];
     const branches = subMembers.map(branchBreakdown);
     const own = Math.max(0, numeric(member.ordPv));
-    const ownContributionIndex =
-      branches[0].total < branches[1].total ? 0 : 1;
+    const ownContributionIndex = branches[0].total < branches[1].total ? 0 : 1;
     const effectiveTotals = branches.map(
       (branch, index) =>
         branch.total + (index === ownContributionIndex ? own : 0),
     );
     const majorIndex = effectiveTotals[0] >= effectiveTotals[1] ? 0 : 1;
-    const lineTargets = [];
-    lineTargets[majorIndex] = memberMajorTarget;
-    lineTargets[majorIndex === 0 ? 1 : 0] = memberMinorTarget;
+    const minorIndex = majorIndex === 0 ? 1 : 0;
+
+    // 각 서브라인이 도달해야 하는 "라인 합계" 목표
+    const lineGoals = [];
+    if (depth === 0) {
+      lineGoals[majorIndex] = Math.max(targets.majorTarget, targets.minorFloor);
+      lineGoals[minorIndex] = Math.max(targets.minorTarget, targets.minorFloor);
+    } else {
+      const need = distributeLineDeficit(
+        effectiveTotals,
+        targets.lineTarget,
+        targets.minorFloor,
+        {
+          placeable: subMembers.map(
+            (subMember, index) =>
+              Boolean(subMember) || index === ownContributionIndex,
+          ),
+        },
+      );
+      lineGoals[0] = effectiveTotals[0] + need[0];
+      lineGoals[1] = effectiveTotals[1] + need[1];
+    }
 
     const lines = [0, 1].map((index) => {
       const subMember = subMembers[index];
@@ -454,46 +718,54 @@ export function allocateClosingTargets(
       if (!closer) {
         return {
           index,
-          lineTarget: lineTargets[index],
+          lineTarget: lineGoals[index],
           passthroughNv: branches[index].total + ownHere,
           childAllocation: null,
         };
       }
       const passthroughNv =
         branches[index].total - branchBreakdown(closer).total + ownHere;
-      const remaining = Math.max(0, lineTargets[index] - passthroughNv);
-      const autoMajor = Math.ceil(remaining / 2);
-      const autoMinor = remaining - autoMajor;
+      const autoLineTarget = Math.max(0, lineGoals[index] - passthroughNv);
+      const autoMinorFloor = minorPayoutFloor(closer);
       const override = overrides[memberId(closer)];
-      const childMajor = override
-        ? Math.max(0, numeric(override.majorTarget))
-        : autoMajor;
-      const childMinor = override
-        ? Math.max(0, numeric(override.minorTarget))
-        : autoMinor;
+      const childLineTarget =
+        override && override.lineTarget != null
+          ? Math.max(0, numeric(override.lineTarget))
+          : autoLineTarget;
+      const childMinorFloor =
+        override && override.minorFloor != null
+          ? Math.max(0, numeric(override.minorFloor))
+          : autoMinorFloor;
       return {
         index,
-        lineTarget: lineTargets[index],
+        lineTarget: lineGoals[index],
         passthroughNv,
-        childAllocation: allocate(closer, childMajor, childMinor, depth + 1, {
-          majorTarget: autoMajor,
-          minorTarget: autoMinor,
-        }),
+        childAllocation: allocate(
+          closer,
+          { lineTarget: childLineTarget, minorFloor: childMinorFloor },
+          depth + 1,
+          { lineTarget: autoLineTarget, minorFloor: autoMinorFloor },
+        ),
       };
     });
 
+    const autoLineTarget = autoTargets?.lineTarget ?? targets.lineTarget ?? 0;
+    const autoMinorFloor = autoTargets?.minorFloor ?? targets.minorFloor ?? 0;
     return {
       memberId: memberId(member),
       depth,
-      majorTarget: memberMajorTarget,
-      minorTarget: memberMinorTarget,
-      autoMajorTarget: autoTargets?.majorTarget ?? memberMajorTarget,
-      autoMinorTarget: autoTargets?.minorTarget ?? memberMinorTarget,
+      mode: depth === 0 ? "sides" : "total",
+      majorTarget: targets.majorTarget ?? 0,
+      minorTarget: targets.minorTarget ?? 0,
+      lineTarget: targets.lineTarget ?? 0,
+      minorFloor: targets.minorFloor ?? 0,
+      autoLineTarget,
+      autoMinorFloor,
       overridden:
         depth > 0 &&
-        (memberMajorTarget !== (autoTargets?.majorTarget ?? memberMajorTarget) ||
-          memberMinorTarget !==
-            (autoTargets?.minorTarget ?? memberMinorTarget)),
+        (targets.lineTarget !== autoLineTarget ||
+          targets.minorFloor !== autoMinorFloor),
+      lineGoals,
       sourceTopMemberId: String(topMemberId),
       lines,
       childAllocations: lines
@@ -502,7 +774,16 @@ export function allocateClosingTargets(
     };
   };
 
-  return allocate(topMember, majorTarget, minorTarget, 0);
+  return allocate(
+    topMember,
+    {
+      majorTarget,
+      minorTarget,
+      lineTarget: 0,
+      minorFloor: minorPayoutFloor(topMember),
+    },
+    0,
+  );
 }
 
 function flattenAllocation(node, out = []) {
@@ -532,33 +813,36 @@ export function planClosing(
     (left, right) => right.depth - left.depth,
   );
   const steps = nodes.map((node) => {
-    if (node.majorTarget + node.minorTarget <= 0) {
+    if (!nodeHasTarget(node)) {
       return { memberId: node.memberId, allocation: node, skipped: true };
     }
-    const result = calculatePerformance(model, node.memberId, {
-      majorTarget: node.majorTarget,
-      minorTarget: node.minorTarget,
-    });
+    const result = calculatePerformance(
+      model,
+      node.memberId,
+      nodeTargets(node),
+    );
     const projection = projectClosingCompletion(result);
     const applied = projection.feasible !== false;
     if (applied) applyClosingCompletion(model, node.memberId, projection);
-    return { memberId: node.memberId, allocation: node, result, projection, applied };
+    return {
+      memberId: node.memberId,
+      allocation: node,
+      result,
+      projection,
+      applied,
+    };
   });
   const placements = steps.flatMap((step) => {
     if (!step.projection) return [];
-    return step.projection.topUps
-      .map((topUp, index) => ({
-        closerMemberId: step.memberId,
-        side: index === step.result.majorIndex ? "major" : "minor",
-        placementKind: step.result.placements[index].kind,
-        placementMemberId: step.result.placements[index].target
-          ? memberId(step.result.placements[index].target)
-          : null,
-        salesWon: topUp.salesWon,
-        addedNv: topUp.addedNv,
-        excessNv: topUp.excessNv,
-      }))
-      .filter((placement) => placement.salesWon > 0);
+    return step.projection.sales.map((sale) => ({
+      closerMemberId: step.memberId,
+      side: sale.side,
+      placementKind: step.result.placements[sale.lineIndex].kind,
+      placementMemberId: sale.memberId || null,
+      salesWon: sale.salesWon,
+      addedNv: sale.addedNv,
+      excessNv: sale.excessNv,
+    }));
   });
   const topStep = steps[steps.length - 1];
   const verified =

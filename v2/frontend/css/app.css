@@ -120,6 +120,11 @@
 .closing-target-edit input{margin-top:4px;padding:9px}
 .closing-target-edit button{width:auto;margin:0;white-space:nowrap}
 .closing-target-edit>small{grid-column:1/-1;color:var(--muted)}
+.closing-payout{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0;padding:10px 11px;border:1px solid var(--line);border-radius:11px;background:#f8faff;font-size:12px;color:var(--muted)}
+.closing-payout>span{flex:1 1 260px}
+.closing-payout>em{font-style:normal;font-weight:800;color:#2462dc}
+.closing-payout button{width:auto;margin:0;white-space:nowrap}
+.closing-payout.help{display:block}
 @media(max-width:700px){.closing-target-edit{grid-template-columns:1fr 1fr}.closing-target-edit>span,.closing-target-edit button{grid-column:1/-1}}
 /* Box genealogy tab */
 .box-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:end;margin:10px 0}
