@@ -35,8 +35,10 @@
 .sales-summary>span{color:var(--muted);font-size:12px}.sales-summary strong{display:inline;margin:0 0 0 3px;color:var(--text);font-size:13px}
 .tree-focus-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#f7f9fc}
 .tree-focus-bar div{display:flex;gap:6px}
+.tree-zoom-controls{display:flex;gap:3px}.tree-zoom-controls button{min-width:38px}.tree-zoom-controls #treeZoomReset{min-width:62px}
 .pannable-tree{cursor:grab;user-select:none;touch-action:none;max-height:70vh}
 .pannable-tree.dragging{cursor:grabbing}.pannable-tree.dragging *{cursor:grabbing!important}
+.tree-stage{width:max-content;min-width:100%;transform-origin:top center}
 @media(max-width:600px){
   .sales-tree ul ul{margin-left:10px;padding-left:12px}
   .sales-tree .family-node{min-width:0}
@@ -50,7 +52,8 @@
   body.printing-tree .app,body.printing-tree main{max-width:none;padding:0}
   body.printing-tree #content>section{border:0;margin:0;padding:0}
   body.printing-tree .tree-focus-bar{border:0;background:#fff;padding:0;margin:0 0 8px}
-  body.printing-tree .family-tree{overflow:visible;max-height:none;padding:8px;zoom:.72}
+  body.printing-tree .family-tree{overflow:visible;max-height:none;padding:8px}
+  body.printing-tree .tree-stage{zoom:.72!important}
 }
 /* Daily closing report */
 .closing-tabs{margin-bottom:12px}

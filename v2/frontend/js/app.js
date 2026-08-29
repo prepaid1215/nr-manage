@@ -393,7 +393,8 @@ async function organizationDashboard() {
     let currentView = "list",
       depth = "all",
       selected = rows[0] || null,
-      focusedRoot = null;
+      focusedRoot = null,
+      treeZoom = 1;
     $("orgCollected").textContent =
       `수집 ${new Date(data.collected_at).toLocaleString("ko-KR")} · NRC ${data.source_account_id || "-"}`;
     $("orgSummary").innerHTML =
@@ -480,7 +481,7 @@ async function organizationDashboard() {
             ? byId.get(String(focusedRoot.ppId || ""))
             : null;
         $("orgView").innerHTML =
-          `<div class="tree-focus-bar"><span>기준: <b>${safe(focusedRoot?.userName || "전체 계보도")}</b></span><div>${focusedRoot ? '<button class="secondary compact" id="treeAll" type="button">전체 계보도</button>' : ""}${parent ? '<button class="secondary compact" id="treeUp" type="button">상위 회원으로</button>' : ""}<button class="secondary compact" id="treePrint" type="button">🖨 계보도 인쇄</button></div></div><p class="help">회원을 클릭하면 해당 회원을 기준으로 다시 표시합니다. 계보도의 빈 공간을 손바닥으로 잡아 이동할 수 있습니다.</p><div class="family-tree pannable-tree"><ul>${displayRoots.map((root) => horizontalTreeNode(root)).join("")}</ul></div>`;
+          `<div class="tree-focus-bar"><span>기준: <b>${safe(focusedRoot?.userName || "전체 계보도")}</b></span><div>${focusedRoot ? '<button class="secondary compact" id="treeAll" type="button">전체 계보도</button>' : ""}${parent ? '<button class="secondary compact" id="treeUp" type="button">상위 회원으로</button>' : ""}<span class="tree-zoom-controls"><button class="secondary compact" id="treeZoomOut" type="button" aria-label="축소">−</button><button class="secondary compact" id="treeZoomReset" type="button">${Math.round(treeZoom * 100)}%</button><button class="secondary compact" id="treeZoomIn" type="button" aria-label="확대">＋</button></span><button class="secondary compact" id="treePrint" type="button">🖨 계보도 인쇄</button></div></div><p class="help">회원은 짧게 클릭하면 해당 회원 기준으로 바뀝니다. 빈 공간을 끌면 계보도가 이동합니다.</p><div class="family-tree pannable-tree"><div class="tree-stage" style="zoom:${treeZoom}"><ul>${displayRoots.map((root) => horizontalTreeNode(root)).join("")}</ul></div></div>`;
         if ($("treeAll"))
           $("treeAll").onclick = () => {
             focusedRoot = null;
@@ -500,6 +501,15 @@ async function organizationDashboard() {
             500,
           );
         };
+        const setZoom = (value) => {
+          treeZoom = Math.min(1.8, Math.max(0.5, value));
+          const stage = document.querySelector(".tree-stage");
+          if (stage) stage.style.zoom = treeZoom;
+          $("treeZoomReset").textContent = `${Math.round(treeZoom * 100)}%`;
+        };
+        $("treeZoomOut").onclick = () => setZoom(treeZoom - 0.1);
+        $("treeZoomIn").onclick = () => setZoom(treeZoom + 0.1);
+        $("treeZoomReset").onclick = () => setZoom(1);
         bind();
         bindTreePan();
         return;
@@ -522,6 +532,7 @@ async function organizationDashboard() {
       if (!canvas) return;
       let active = false,
         moved = false,
+        captured = false,
         startX = 0,
         startY = 0,
         scrollLeft = 0,
@@ -534,20 +545,27 @@ async function organizationDashboard() {
         startY = event.clientY;
         scrollLeft = canvas.scrollLeft;
         scrollTop = canvas.scrollTop;
-        canvas.classList.add("dragging");
-        canvas.setPointerCapture(event.pointerId);
       };
       canvas.onpointermove = (event) => {
         if (!active) return;
         const dx = event.clientX - startX,
           dy = event.clientY - startY;
-        if (Math.abs(dx) + Math.abs(dy) > 5) moved = true;
+        if (Math.abs(dx) + Math.abs(dy) > 6 && !moved) {
+          moved = true;
+          captured = true;
+          canvas.classList.add("dragging");
+          canvas.setPointerCapture(event.pointerId);
+        }
+        if (!moved) return;
         canvas.scrollLeft = scrollLeft - dx;
         canvas.scrollTop = scrollTop - dy;
       };
-      const stop = () => {
+      const stop = (event) => {
         active = false;
         canvas.classList.remove("dragging");
+        if (captured && canvas.hasPointerCapture(event.pointerId))
+          canvas.releasePointerCapture(event.pointerId);
+        captured = false;
       };
       canvas.onpointerup = stop;
       canvas.onpointercancel = stop;
