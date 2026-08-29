@@ -126,6 +126,61 @@
 .closing-payout button{width:auto;margin:0;white-space:nowrap}
 .closing-payout.help{display:block}
 @media(max-width:700px){.closing-target-edit{grid-template-columns:1fr 1fr}.closing-target-edit>span,.closing-target-edit button{grid-column:1/-1}}
+
+/* 2026 visual refresh */
+:root{
+  --brand:#163d91;
+  --brand2:#2454b7;
+  --brand-soft:#eaf1ff;
+  --accent:#2f72f4;
+  --bg:#f3f6fb;
+  --card:#ffffff;
+  --text:#13213a;
+  --muted:#71809d;
+  --line:#dbe3f0;
+  --danger:#d04455;
+  --success:#178564;
+  --shadow:0 12px 34px rgba(25,55,110,.08);
+}
+html{scroll-behavior:smooth}
+body{background:radial-gradient(circle at 10% -10%,#e7efff 0,transparent 28%),var(--bg);letter-spacing:-.012em}
+.app{max-width:1180px;padding:18px 18px 96px}
+header{min-height:100px;padding:24px 28px 18px;border-radius:22px 22px 0 0;background:linear-gradient(135deg,#12357f 0%,#204ba8 68%,#2f67d1 100%);box-shadow:0 14px 36px rgba(22,61,145,.18)}
+header small{color:#dbe7ff;font-weight:600}header h1{margin-top:6px;font-size:25px;letter-spacing:-.035em}
+#topNav{gap:4px;padding:0 18px 15px;background:linear-gradient(90deg,#12357f,#204ba8 72%,#2f67d1);color:#dce7ff;border-radius:0 0 22px 22px;box-shadow:0 16px 36px rgba(22,61,145,.13)}
+#topNav button{position:relative;color:#dce7ff;border-radius:10px;font-weight:650;transition:.18s ease}
+#topNav button:hover{background:rgba(255,255,255,.1);color:#fff}
+#topNav button.active{color:var(--brand);box-shadow:0 6px 18px rgba(10,35,90,.18)}
+main{padding:22px 8px}
+.card,.kpis article{border-color:#e0e7f2;border-radius:20px;box-shadow:var(--shadow)}
+.card{margin-top:16px;padding:20px}.card h2{font-size:17px;letter-spacing:-.025em}
+.hero,.activity-hero,.finance-total,.recommend-card{border-radius:20px;background:linear-gradient(135deg,#173f96,#2d66d5);box-shadow:0 14px 30px rgba(28,73,166,.18)}
+input,select,textarea{border-color:#d6dfed;border-radius:13px;padding:13px 14px;outline:0;transition:border-color .16s,box-shadow .16s,background .16s}
+input:hover,select:hover,textarea:hover{border-color:#b7c7df}
+input:focus,select:focus,textarea:focus{border-color:#4d7de1;box-shadow:0 0 0 4px rgba(47,114,244,.11);background:#fff}
+button{cursor:pointer;transition:transform .15s,box-shadow .15s,background .15s,border-color .15s}
+button:active{transform:translateY(1px)}button:disabled{cursor:not-allowed;opacity:.58}
+.primary{background:linear-gradient(135deg,#173f96,#2b63cf);box-shadow:0 8px 18px rgba(30,76,171,.17)}
+.primary:hover{box-shadow:0 11px 23px rgba(30,76,171,.25)}
+.secondary{border-color:#cad6e8;background:#fbfdff}.secondary:hover{border-color:#7fa0df;background:#f3f7ff}
+.view-tabs{gap:8px;margin:16px 0}.view-tabs button{border-radius:12px;padding:10px 17px;background:rgba(255,255,255,.9);box-shadow:0 4px 12px rgba(28,55,105,.04)}
+.view-tabs button.active{background:linear-gradient(135deg,#173f96,#2a60c9);box-shadow:0 8px 18px rgba(30,76,171,.17)}
+.connection-status{border:1px solid #d7e4ff;background:linear-gradient(90deg,#edf4ff,#f5f8ff);color:#16469f}
+.error:not(:empty){min-height:0;padding:10px 12px;border:1px solid #ffd5db;border-radius:10px;background:#fff3f5}
+.section-head{align-items:center}.help{line-height:1.65}
+.org-summary article,.stats-kpis article,.perf-grid article{border:1px solid #e4eaf3;background:linear-gradient(145deg,#f9fbff,#f3f7fd)}
+.customer-item,.org-member,.schedule-item,.finance-rounds article{box-shadow:0 5px 16px rgba(31,57,104,.045);transition:transform .16s,border-color .16s,box-shadow .16s}
+.customer-item:hover,.org-member:hover,.schedule-item:hover{transform:translateY(-1px);border-color:#a9bfe3;box-shadow:0 9px 22px rgba(31,57,104,.08)}
+.member-dialog,.customer-dialog{border:1px solid rgba(255,255,255,.5);border-radius:22px;box-shadow:0 28px 90px rgba(7,25,64,.3)}
+.dialog-head{background:linear-gradient(135deg,#12357f,#285dc4)}
+#bottomNav{padding:7px 8px max(7px,env(safe-area-inset-bottom));background:rgba(255,255,255,.94);backdrop-filter:blur(16px);box-shadow:0 -8px 28px rgba(25,55,110,.08)}
+#bottomNav button{border-radius:12px;font-size:12px}#bottomNav button.active{background:var(--brand-soft)}
+@media(max-width:720px){
+  .app{padding:0 0 88px}.app>header{border-radius:0;padding:20px 20px 16px}.app>#topNav{border-radius:0}
+  main{padding:14px}.card{padding:16px;border-radius:17px}.view-tabs{overflow:auto;padding:1px 0 4px}.view-tabs button{flex:0 0 auto}
+  .hero,.activity-hero{border-radius:17px}.kpis{gap:8px}.kpis article{padding:14px;border-radius:16px}
+}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
 /* Box genealogy tab */
 .box-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:end;margin:10px 0}
 .box-tools label{display:block;margin:0;font-size:11px;color:var(--muted)}
