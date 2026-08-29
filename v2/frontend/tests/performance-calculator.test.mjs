@@ -182,6 +182,36 @@ assert.equal(propagatedResult.branches[0].total, 800911);
 assert.equal(propagatedResult.branches[0].completed, true);
 assert.equal(propagatedResult.majorIndex, 0);
 
+const deepPropagationModel = buildPerformanceModel({
+  rstLst: [
+    { userId: "top", userName: "한수진", ppId: "" },
+    { userId: "line", userName: "중간 라인", ppId: "top", abPos: 1 },
+    { userId: "other", userName: "반대 라인", ppId: "top", abPos: 2 },
+    { userId: "closer", userName: "주영돈", ppId: "line", abPos: 1 },
+  ],
+  members: [
+    { userId: "top", ordPv: 0 },
+    { userId: "line", ordPv: 100000, maxPv: 200000, minPv: 100000 },
+    { userId: "other", ordPv: 300000 },
+    { userId: "closer", ordPv: 100000, maxPv: 100000, minPv: 100000 },
+  ],
+});
+applyClosingCompletion(deepPropagationModel, "closer", {
+  majorNv: 400545,
+  minorNv: 400140,
+});
+assert.equal(
+  deepPropagationModel.byId.get("line").closingDescendantDeltaNv,
+  500685,
+);
+const deepPropagatedResult = calculatePerformance(
+  deepPropagationModel,
+  "top",
+  1000000,
+);
+assert.equal(deepPropagatedResult.branches[0].total, 900685);
+assert.equal(deepPropagatedResult.effectiveTotals[0], 900685);
+
 const oneLineModel = buildPerformanceModel({
   rstLst: [
     { userId: "gd", userName: "주윤돈", ppId: "" },

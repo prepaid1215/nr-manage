@@ -19,11 +19,15 @@ export function branchBreakdown(row) {
   const major = numeric(row?.maxPv);
   const minor = numeric(row?.minPv);
   const completedTotal = numeric(row?.completedClosingNv);
+  const descendantDelta = numeric(row?.closingDescendantDeltaNv);
   return {
     own,
     major,
     minor,
-    total: completedTotal > 0 ? completedTotal : own + major + minor,
+    total:
+      completedTotal > 0
+        ? completedTotal
+        : own + major + minor + descendantDelta,
     completed: completedTotal > 0,
   };
 }
@@ -64,9 +68,20 @@ export function applyClosingCompletion(model, memberUserId, completion) {
   if (majorNv < 0 || minorNv < 0 || majorNv + minorNv <= 0) {
     throw new Error("마감 완료 NV가 올바르지 않습니다.");
   }
+  const previousTotal = branchBreakdown(row).total;
+  const completedTotal = majorNv + minorNv;
+  const delta = completedTotal - previousTotal;
   row.completedClosingMajorNv = majorNv;
   row.completedClosingMinorNv = minorNv;
-  row.completedClosingNv = majorNv + minorNv;
+  row.completedClosingNv = completedTotal;
+  let parent = model.byId.get(String(row.ppId ?? ""));
+  const visited = new Set([memberId(row)]);
+  while (parent && !visited.has(memberId(parent))) {
+    visited.add(memberId(parent));
+    parent.closingDescendantDeltaNv =
+      numeric(parent.closingDescendantDeltaNv) + delta;
+    parent = model.byId.get(String(parent.ppId ?? ""));
+  }
   return row;
 }
 

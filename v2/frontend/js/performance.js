@@ -5,7 +5,7 @@ import {
   calculatePerformance,
   projectClosingCompletion,
   sortMembersDeepestFirst,
-} from "./performance-calculator.js?v=20260829-48";
+} from "./performance-calculator.js?v=20260829-49";
 
 const fmt = (value) => Number(value || 0).toLocaleString("ko-KR");
 const safe = (value) =>
@@ -137,6 +137,7 @@ export async function performancePage(root) {
         delete row.completedClosingMajorNv;
         delete row.completedClosingMinorNv;
         delete row.completedClosingNv;
+        delete row.closingDescendantDeltaNv;
       });
       calculatedItems = ordered.map((row) => {
         const targetRow = root.querySelector(
