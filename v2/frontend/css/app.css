@@ -95,3 +95,8 @@
 .nrc-gauge.major:before{border-left-color:#8c7cf4;border-top-color:#8c7cf4}.nrc-gauge.minor:before{border-left-color:#51a7f5;border-top-color:#51a7f5}
 .nrc-gauge span{z-index:1;margin-top:38px;text-align:center;font-weight:700}.nrc-gauge b{display:block;margin-top:4px;color:#7869ed;font-size:25px}.nrc-gauge.minor b{color:#438fe0}
 @media(max-width:760px){.nrc-overview{grid-template-columns:1fr}.nrc-gauges{grid-template-columns:1fr}.nrc-overview article>div{padding:11px}.nrc-gauge{width:170px}}
+/* Partner appointment */
+.partner-search{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end;margin-top:12px}.partner-search label{margin:0}.partner-search button{width:auto;margin:0}
+.partner-result article{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;padding:12px;border:1px solid #b9d2ff;border-radius:12px;background:#f2f6ff}.partner-result small{display:block;margin-top:4px;color:var(--muted)}.partner-result button{margin:0}.partner-appointed{color:#187454;font-size:12px}
+.team-member-title{margin:16px 0 8px;font-size:13px}.team-members span b{margin-right:3px}
+@media(max-width:600px){.partner-search{grid-template-columns:1fr}.partner-search button{width:100%}.partner-result article{align-items:flex-start;flex-direction:column}}
