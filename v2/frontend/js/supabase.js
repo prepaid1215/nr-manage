@@ -5,7 +5,7 @@ export const supabase = key ? createClient(url, key) : null;
 const normalizeUsername = (value) => String(value).trim().toLowerCase();
 export const accountEmail = (value) =>
   `app-${normalizeUsername(value)}@nrc-members.com`;
-export async function signUp({ username, password }) {
+export async function signUp({ username, password, name, memberNo }) {
   if (!supabase) throw Error("Supabase publishable key가 설정되지 않았습니다.");
   const normalized = normalizeUsername(username);
   if (!/^[a-z0-9._-]{4,30}$/.test(normalized))
@@ -13,7 +13,13 @@ export async function signUp({ username, password }) {
   const { data, error } = await supabase.auth.signUp({
     email: accountEmail(normalized),
     password,
-    options: { data: { username: normalized } },
+    options: {
+      data: {
+        username: normalized,
+        name: String(name || "").trim(),
+        member_no: String(memberNo || "").trim(),
+      },
+    },
   });
   if (error) throw error;
   return data;
@@ -43,7 +49,7 @@ export async function currentProfile() {
   return {
     id: user.id,
     member_no: null,
-    name: user.user_metadata?.username || "사용자",
+    name: user.user_metadata?.name || user.user_metadata?.username || "사용자",
     status: "ACTIVE",
   };
 }

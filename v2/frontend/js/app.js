@@ -3,7 +3,7 @@ import {
   signUp,
   signIn,
   currentProfile,
-} from "./supabase.js?v=20260829-30";
+} from "./supabase.js?v=20260829-32";
 import { customersPage } from "./customers.js?v=20260829-21";
 import { activityPage } from "./activity.js?v=20260829-25";
 import {
@@ -19,7 +19,6 @@ let me = null,
   authMode = "login";
 const menus = [
   ["home", "홈"],
-  ["collect", "수집"],
   ["customers", "고객"],
   ["activity", "활동"],
   ["checklist", "체크"],
@@ -48,9 +47,14 @@ async function home() {
   const frag = $("homeTemplate").content.cloneNode(true);
   $("content").replaceChildren(frag);
   $("content").insertAdjacentHTML(
+    "afterbegin",
+    `<section class="card home-nrc"><div class="section-head"><div><h2>NRC 매출 대시보드</h2><p class="help" id="homeNrcUpdated">최근 수집 데이터를 불러오는 중...</p></div><button class="primary compact" id="homeCollect" type="button">매출받기</button></div><div id="homeNrcDashboard"><p class="help">수집된 매출 데이터가 없습니다.</p></div></section>`,
+  );
+  $("content").insertAdjacentHTML(
     "beforeend",
     `<section class="card"><h2>알림</h2><div id="homeAlerts" class="home-alerts"><p class="help">알림을 불러오는 중...</p></div></section>`,
   );
+  $("homeCollect").onclick = () => settings("collection");
   const date = new Date(),
     today = localDate(date),
     month = today.slice(0, 7),
@@ -80,7 +84,7 @@ async function home() {
           .eq("month", date.getMonth() + 1),
         supabase
           .from("nrc_sync_snapshots")
-          .select("collected_at")
+          .select("source_account_id,payload,collected_at")
           .eq("snapshot_type", "combined")
           .order("collected_at", { ascending: false })
           .limit(1)
@@ -103,6 +107,32 @@ async function home() {
     newMoney = acts.reduce((s, r) => s + Number(r.new_transfer || 0), 0),
     repurchase = acts.reduce((s, r) => s + Number(r.repurchase || 0), 0),
     balance = acts.at(-1)?.balance || 0;
+  if (snapshot.data) {
+    const payload =
+        typeof snapshot.data.payload === "string"
+          ? JSON.parse(snapshot.data.payload)
+          : snapshot.data.payload || {},
+      salesRows = payload.members || [],
+      treeRows = payload.rstLst || [],
+      memberNo = String(me.member_no || snapshot.data.source_account_id || ""),
+      sale =
+        salesRows.find((item) => String(item.userId) === memberNo) ||
+        salesRows[0] ||
+        {},
+      tree =
+        treeRows.find((item) => String(item.userId) === memberNo) ||
+        treeRows[0] ||
+        {},
+      own = Number(sale.ordPv ?? tree.ordPv ?? 0),
+      major = Number(sale.maxPv ?? tree.maxPv ?? 0),
+      minor = Number(sale.minPv ?? tree.minPv ?? 0),
+      rank = sale.rankName || tree.rankName || "회원",
+      certified = sale.rankMaxName || tree.rankMaxName || "회원";
+    $("homeNrcUpdated").textContent =
+      `최종 업데이트 ${new Date(snapshot.data.collected_at).toLocaleString("ko-KR")}`;
+    $("homeNrcDashboard").innerHTML =
+      `<div class="nrc-overview"><article><h3>본인 매출 현황</h3><div><span>본인매출 NV<b>${number(own)}</b></span><span>대실적<b>${number(major)}</b></span><span>소실적<b>${number(minor)}</b></span></div></article><article><h3>직급 현황</h3><div><span>현재직급<b>${safe(rank)}</b></span><span>인증직급<b>${safe(certified)}</b></span></div></article><article><h3>조직 현황</h3><div><span>전체 회원<b>${treeRows.length.toLocaleString()}명</b></span><span>활동 회원<b>${treeRows.filter((item) => String(item.status) === "1" && !item.dormant).length.toLocaleString()}명</b></span></div></article></div><div class="nrc-gauges"><article><div class="nrc-gauge major"><span>대실적<b>${number(major)}</b></span></div></article><article><div class="nrc-gauge minor"><span>소실적<b>${number(minor)}</b></span></div></article></div>`;
+  }
   $("todayActivations").textContent =
     `${cs.filter((c) => c.activation_date === today).length}건`;
   $("newTransfer").textContent = `${newMoney.toLocaleString()}원`;
@@ -137,7 +167,6 @@ async function show(page) {
     .querySelectorAll("[data-page]")
     .forEach((b) => b.classList.toggle("active", b.dataset.page === page));
   if (page === "home") return home();
-  if (page === "collect") return collection();
   if (page === "customers") return customersPage($("content"), me);
   if (page === "activity") return activityPage($("content"), me);
   if (page === "checklist") return checklistPage($("content"), me);
@@ -322,7 +351,7 @@ async function organizationTree() {
 }
 async function organizationDashboard() {
   $("content").innerHTML =
-    `<section class="card"><div class="section-head"><div><h2>조직 현황</h2><p class="help" id="orgCollected">최신 데이터를 불러오는 중...</p></div><button class="secondary compact" id="orgReload" type="button">새로고침</button></div><div class="view-tabs"><button data-view="list" type="button">하위 매출 현황</button><button class="active" data-view="tree" type="button">접기·펼치기 계보도</button></div><div class="org-summary" id="orgSummary"></div><label>회원 검색<input id="orgSearch" type="search" placeholder="이름 또는 회원번호"></label><div class="depth-filter" id="depthFilter" hidden></div><div id="orgError" class="error"></div><section class="card member-sales-card member-sales-inline"><h2>선택 회원 매출 현황</h2><div id="memberDetailInline"><p class="help">회원 이름을 선택하세요.</p></div></section><div id="orgView"></div></section>`;
+    `<section class="card"><div class="section-head"><div><h2>조직 현황</h2><p class="help" id="orgCollected">최신 데이터를 불러오는 중...</p></div><button class="secondary compact" id="orgReload" type="button">새로고침</button></div><div class="view-tabs"><button class="active" data-view="list" type="button">하위 매출 현황</button><button data-view="tree" type="button">계보도</button></div><div class="org-summary" id="orgSummary"></div><label>회원 검색<input id="orgSearch" type="search" placeholder="이름 또는 회원번호"></label><div class="depth-filter" id="depthFilter" hidden></div><div id="orgError" class="error"></div><section class="card member-sales-card member-sales-inline"><h2>선택 회원 매출 현황</h2><div id="memberDetailInline"><p class="help">회원 이름을 선택하세요.</p></div></section><div id="orgView"></div></section>`;
   $("orgReload").onclick = organizationDashboard;
   try {
     const { data, error } = await supabase
@@ -361,9 +390,10 @@ async function organizationDashboard() {
       (item) => !item.ppId || !byId.has(String(item.ppId)),
     );
     const maxDepth = Math.max(0, ...rows.map((item) => Number(item.lv) || 0));
-    let currentView = "tree",
+    let currentView = "list",
       depth = "all",
-      selected = rows[0] || null;
+      selected = rows[0] || null,
+      focusedRoot = null;
     $("orgCollected").textContent =
       `수집 ${new Date(data.collected_at).toLocaleString("ko-KR")} · NRC ${data.source_account_id || "-"}`;
     $("orgSummary").innerHTML =
@@ -381,13 +411,20 @@ async function organizationDashboard() {
       document.querySelectorAll("[data-member]").forEach(
         (button) =>
           (button.onclick = () => {
-            detail(byId.get(button.dataset.member));
+            const item = byId.get(button.dataset.member);
+            detail(item);
+            if (button.hasAttribute("data-tree-focus")) {
+              focusedRoot = item;
+              $("orgSearch").value = "";
+              render();
+              return;
+            }
             document
               .querySelectorAll("[data-member]")
-              .forEach((item) =>
-                item.classList.toggle(
+              .forEach((node) =>
+                node.classList.toggle(
                   "selected",
-                  item.dataset.member === button.dataset.member,
+                  node.dataset.member === button.dataset.member,
                 ),
               );
           }),
@@ -415,11 +452,48 @@ async function organizationDashboard() {
       }
       return `<li><details class="family-branch"><summary class="family-node" data-member="${safe(item.userId)}">${content}</summary><ul>${descendants.map((child) => treeNode(child, next)).join("")}</ul></details></li>`;
     };
+    const horizontalTreeNode = (item, path = new Set()) => {
+      if (path.has(String(item.userId))) return "";
+      const next = new Set(path);
+      next.add(String(item.userId));
+      const descendants = (children.get(String(item.userId)) || [])
+          .filter((child) => (Number(child.lv) || 0) <= 10)
+          .sort(
+            (a, b) =>
+              String(a.abPos || "").localeCompare(String(b.abPos || "")) ||
+              String(a.userId).localeCompare(String(b.userId)),
+          ),
+        sub1 = branchTotal(descendants[0]),
+        sub2 = branchTotal(descendants[1]),
+        content = `<b>${safe(item.userName || "이름 없음")}</b><small>*${safe(String(item.userId || "").slice(-6))} · ${safe(item.rankName || "회원")} / ${safe(item.rankMaxName || "회원")}</small><span class="family-own">본인 NV <strong>${number(item.ordPv)}</strong></span><span class="family-sales"><em>서브1 실적<strong>${number(sub1)}</strong></em><em>서브2 실적<strong>${number(sub2)}</strong></em><em>대실적<strong>${number(item.maxPv)}</strong></em><em>소실적<strong>${number(item.minPv)}</strong></em></span>`;
+      return `<li><button class="family-node" data-member="${safe(item.userId)}" data-tree-focus type="button">${content}</button>${descendants.length ? `<ul>${descendants.map((child) => horizontalTreeNode(child, next)).join("")}</ul>` : ""}</li>`;
+    };
     const render = () => {
       const query = $("orgSearch").value.trim().toLowerCase();
-      if (currentView === "tree" && !query && depth === "all") {
+      if (currentView === "list" && !query) {
         $("orgView").innerHTML =
-          `<div class="family-tree"><ul>${roots.map((root) => treeNode(root)).join("")}</ul></div>`;
+          `<div class="sales-tree"><ul>${roots.map((root) => treeNode(root)).join("")}</ul></div>`;
+        bind();
+        return;
+      }
+      if (currentView === "tree" && !query) {
+        const displayRoots = focusedRoot ? [focusedRoot] : roots,
+          parent = focusedRoot
+            ? byId.get(String(focusedRoot.ppId || ""))
+            : null;
+        $("orgView").innerHTML =
+          `<div class="tree-focus-bar"><span>기준: <b>${safe(focusedRoot?.userName || "전체 계보도")}</b></span><div>${focusedRoot ? '<button class="secondary compact" id="treeAll" type="button">전체 계보도</button>' : ""}${parent ? '<button class="secondary compact" id="treeUp" type="button">상위 회원으로</button>' : ""}</div></div><p class="help">회원을 클릭하면 해당 회원을 기준으로 계보도를 다시 표시합니다.</p><div class="family-tree"><ul>${displayRoots.map((root) => horizontalTreeNode(root)).join("")}</ul></div>`;
+        if ($("treeAll"))
+          $("treeAll").onclick = () => {
+            focusedRoot = null;
+            render();
+          };
+        if ($("treeUp"))
+          $("treeUp").onclick = () => {
+            focusedRoot = parent;
+            detail(parent);
+            render();
+          };
         bind();
         return;
       }
@@ -460,7 +534,7 @@ async function organizationDashboard() {
             .forEach((item) =>
               item.classList.toggle("active", item === button),
             );
-          $("depthFilter").hidden = currentView === "tree";
+          $("depthFilter").hidden = true;
           $("orgSearch").value = "";
           depth = "all";
           $("depthFilter")
@@ -479,9 +553,9 @@ async function organizationDashboard() {
   }
 }
 const LOCAL_SYNC = "http://127.0.0.1:5050";
-async function settings() {
+async function settings(initialView = "profile") {
   $("content").innerHTML =
-    `<div class="view-tabs settings-tabs"><button class="active" data-settings-view="profile" type="button">내 정보</button><button data-settings-view="connection" type="button">PC 연결</button><button data-settings-view="account" type="button">계정</button></div><section id="profileSettings" class="card"><div class="section-head"><div><h2>내 정보</h2><p class="help">이름을 바꾸면 화면 상단 인사말에도 바로 반영됩니다.</p></div></div><form id="profileForm"><div class="profile-form-grid"><label>이름<input id="profileName" required maxlength="40"></label><label>전화번호<input id="profilePhone" type="tel" inputmode="tel" placeholder="010-0000-0000"></label><label>이메일<input id="profileEmail" type="email" placeholder="name@example.com"></label><label>회원번호<input id="profileMemberNo" inputmode="numeric"></label><label>상호명<input id="profileBusiness" placeholder="예: 주하루"></label><label class="full">주소<input id="profileAddress"></label></div><button class="primary" id="saveProfile" type="submit">내 정보 저장</button><div id="profileStatus" class="connection-status" hidden></div><div id="profileError" class="error"></div></form></section><section id="connectionSettings" class="card" hidden><h2>내 컴퓨터 연결</h2><p class="help">최초 한 번만 이 PC의 NRC Sync 연결 코드를 저장하세요.</p><label>내 컴퓨터 연결 코드<input id="syncToken" type="password" autocomplete="off" placeholder="NRC Sync 연결 코드"></label><button class="primary" id="saveSyncToken" type="button">연결 코드 저장</button><div id="nrcStatus" class="connection-status">내 컴퓨터 연결 확인 중...</div><div id="nrcError" class="error"></div></section><section id="accountSettings" class="card" hidden><h2>앱 계정</h2><p class="help" id="profileUsername"></p><button class="secondary" id="logout">로그아웃</button></section>`;
+    `<div class="view-tabs settings-tabs"><button class="active" data-settings-view="profile" type="button">내 정보</button><button data-settings-view="connection" type="button">PC 연결</button><button data-settings-view="collection" type="button">수집</button><button data-settings-view="account" type="button">계정</button></div><section id="profileSettings" class="card"><div class="section-head"><div><h2>내 정보</h2><p class="help">이름을 바꾸면 화면 상단 인사말에도 바로 반영됩니다.</p></div></div><form id="profileForm"><div class="profile-form-grid"><label>이름<input id="profileName" required maxlength="40"></label><label>전화번호<input id="profilePhone" type="tel" inputmode="tel" placeholder="010-0000-0000"></label><label>이메일<input id="profileEmail" type="email" placeholder="name@example.com"></label><label>회원번호<input id="profileMemberNo" inputmode="numeric"></label><label>상호명<input id="profileBusiness" placeholder="예: 주하루"></label><label class="full">주소<input id="profileAddress"></label></div><button class="primary" id="saveProfile" type="submit">내 정보 저장</button><div id="profileStatus" class="connection-status" hidden></div><div id="profileError" class="error"></div></form></section><section id="connectionSettings" class="card" hidden><h2>내 컴퓨터 연결</h2><p class="help">최초 한 번만 이 PC의 NRC Sync 연결 코드를 저장하세요.</p><label>내 컴퓨터 연결 코드<input id="syncToken" type="password" autocomplete="off" placeholder="NRC Sync 연결 코드"></label><button class="primary" id="saveSyncToken" type="button">연결 코드 저장</button><div id="nrcStatus" class="connection-status">내 컴퓨터 연결 확인 중...</div><div id="nrcError" class="error"></div></section><section id="accountSettings" class="card" hidden><h2>앱 계정</h2><p class="help" id="profileUsername"></p><button class="secondary" id="logout">로그아웃</button></section>`;
   const profile = await currentProfile();
   if (profile) {
     $("profileName").value = profile.name || "";
@@ -498,6 +572,10 @@ async function settings() {
     (button) =>
       (button.onclick = () => {
         const view = button.dataset.settingsView;
+        if (view === "collection") {
+          collection();
+          return;
+        }
         document
           .querySelectorAll("[data-settings-view]")
           .forEach((item) => item.classList.toggle("active", item === button));
@@ -556,13 +634,21 @@ async function settings() {
     localStorage.setItem("nrc-sync-token", $("syncToken").value.trim());
     loadLocalStatus();
   };
+  if (initialView !== "profile")
+    document.querySelector(`[data-settings-view="${initialView}"]`)?.click();
 }
 async function collection() {
   $("content").innerHTML =
-    `<section class="card"><h2>NRC 홈페이지 JSON 수집</h2><p class="help">저장을 선택하면 NRC 로그인 정보는 이 PC의 Windows 자격 증명 저장소에만 보관됩니다.</p><form id="collectForm"><label>NRC 홈페이지 아이디<input id="nrcLoginId" autocomplete="username" required></label><label>NRC 홈페이지 비밀번호<input id="nrcPassword" type="password" autocomplete="current-password" placeholder="저장된 경우 비워도 됩니다"></label><label class="check"><input id="rememberNrc" type="checkbox"> NRC 아이디·비밀번호 이 PC에 저장</label><button class="primary" id="nrcRun" type="submit">RUN · 10단계 JSON 받기</button></form><button class="secondary" id="clearNrcCredentials" type="button" hidden>저장된 NRC 로그인 정보 삭제</button><div id="nrcStatus" class="connection-status">수집 준비</div><div id="nrcError" class="error"></div></section><section class="card"><h2>PC 자동수집 예약</h2><p class="help">PC가 켜져 있고 NRC Sync가 실행 중이면 매일 지정 시간에 자동 수집하고 Supabase에 저장합니다.</p><form id="scheduleForm"><label>예약 이름<input id="scheduleLabel" placeholder="예: 임영은 오전 수집" required></label><label>NRC 홈페이지 아이디<input id="scheduleLoginId" autocomplete="username" required></label><label>NRC 홈페이지 비밀번호<input id="schedulePassword" type="password" autocomplete="current-password" required></label><label>매일 실행 시간<input id="scheduleTime" type="time" required></label><button class="primary" type="submit">자동수집 예약 저장</button></form><div id="scheduleList" class="schedule-list"></div><div id="scheduleError" class="error"></div></section>`;
+    `<div class="view-tabs settings-tabs"><button data-settings-jump="profile" type="button">내 정보</button><button data-settings-jump="connection" type="button">PC 연결</button><button class="active" type="button">수집</button><button data-settings-jump="account" type="button">계정</button></div><section class="card"><h2>NRC 홈페이지 JSON 수집</h2><p class="help">저장을 선택하면 NRC 로그인 정보는 이 PC의 Windows 자격 증명 저장소에만 보관됩니다.</p><form id="collectForm"><label>NRC 홈페이지 아이디<input id="nrcLoginId" autocomplete="username" required></label><label>NRC 홈페이지 비밀번호<input id="nrcPassword" type="password" autocomplete="current-password" placeholder="저장된 경우 비워도 됩니다"></label><label class="check"><input id="rememberNrc" type="checkbox"> NRC 아이디·비밀번호 이 PC에 저장</label><button class="primary" id="nrcRun" type="submit">매출 데이터 받기</button></form><button class="secondary" id="clearNrcCredentials" type="button" hidden>저장된 NRC 로그인 정보 삭제</button><div id="nrcStatus" class="connection-status">수집 준비</div><div id="nrcError" class="error"></div></section><section class="card"><h2>PC 자동수집 예약</h2><p class="help">PC가 켜져 있고 NRC Sync가 실행 중이면 매일 지정 시간에 자동 수집하고 Supabase에 저장합니다.</p><form id="scheduleForm"><label>예약 이름<input id="scheduleLabel" placeholder="예: 임영은 오전 수집" required></label><label>NRC 홈페이지 아이디<input id="scheduleLoginId" autocomplete="username" required></label><label>NRC 홈페이지 비밀번호<input id="schedulePassword" type="password" autocomplete="current-password" required></label><label>매일 실행 시간<input id="scheduleTime" type="time" required></label><button class="primary" type="submit">자동수집 예약 저장</button></form><div id="scheduleList" class="schedule-list"></div><div id="scheduleError" class="error"></div></section>`;
   $("collectForm").onsubmit = runCollection;
   $("clearNrcCredentials").onclick = clearSavedNrc;
   $("scheduleForm").onsubmit = addSchedule;
+  document
+    .querySelectorAll("[data-settings-jump]")
+    .forEach(
+      (button) =>
+        (button.onclick = () => settings(button.dataset.settingsJump)),
+    );
   await Promise.all([loadLocalStatus(), loadSavedNrc(), loadSchedules()]);
 }
 async function localApi(path, options = {}) {
@@ -645,7 +731,7 @@ async function runCollection(e) {
     error.textContent = err.message;
   } finally {
     button.disabled = false;
-    button.textContent = "RUN · 10단계 JSON 받기";
+    button.textContent = "매출 데이터 받기";
   }
 }
 async function loadSavedNrc() {
@@ -765,30 +851,24 @@ function setAuthMode(mode) {
   $("loginPassword").autocomplete = signup
     ? "new-password"
     : "current-password";
+  document.querySelectorAll(".signup-only").forEach((label) => {
+    label.hidden = !signup;
+    label.querySelector("input").required = signup;
+  });
 }
 async function start() {
   const {
     data: { session },
   } = await supabase.auth.getSession();
   if (!session) throw Error("로그인 세션을 만들지 못했습니다.");
-  const username =
-    session.user.user_metadata?.username ||
-    session.user.email?.replace(/^app-|@.*$/g, "") ||
-    "사용자";
-  me = { id: session.user.id, name: username, status: "ACTIVE" };
+  const username = session.user.user_metadata?.username || "사용자";
+  const profile = await currentProfile().catch(() => null);
+  me = profile || { id: session.user.id, name: username, status: "ACTIVE" };
   $("loginView").hidden = true;
   $("appView").hidden = false;
-  $("userName").textContent = `${username}님`;
+  $("userName").textContent = `${me.name || username}님`;
   nav();
   show("home");
-  currentProfile()
-    .then((profile) => {
-      if (profile?.name) {
-        me = profile;
-        $("userName").textContent = `${profile.name}님`;
-      }
-    })
-    .catch(() => {});
 }
 $("authModeBtn").onclick = () =>
   setAuthMode(authMode === "login" ? "signup" : "login");
@@ -804,7 +884,12 @@ $("loginForm").onsubmit = async (e) => {
   try {
     if (authMode === "signup") {
       try {
-        const result = await signUp({ username, password });
+        const result = await signUp({
+          username,
+          password,
+          name: $("signupName").value,
+          memberNo: $("signupMemberNo").value,
+        });
         if (!result.session) await signIn({ username, password });
       } catch (err) {
         if (/already registered/i.test(err.message))
