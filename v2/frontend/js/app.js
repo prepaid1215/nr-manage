@@ -743,7 +743,11 @@ async function collection() {
 async function localApi(path, options = {}) {
   const token = localStorage.getItem("nrc-sync-token") || "";
   const headers = { ...(options.headers || {}), "X-NRC-Sync-Token": token };
-  const response = await fetch(`${LOCAL_SYNC}${path}`, { ...options, headers });
+  const response = await fetch(`${LOCAL_SYNC}${path}`, {
+    ...options,
+    headers,
+    targetAddressSpace: "local",
+  });
   const data = await response.json();
   if (!response.ok || !data.ok)
     throw Error(data.message || "로컬 동기화 프로그램 요청에 실패했습니다.");
