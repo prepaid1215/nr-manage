@@ -2,7 +2,7 @@ import { supabase } from "./supabase.js?v=20260829-11";
 import {
   buildPerformanceModel,
   calculatePerformance,
-} from "./performance-calculator.js?v=20260829-42";
+} from "./performance-calculator.js?v=20260829-46";
 
 const fmt = (value) => Number(value || 0).toLocaleString("ko-KR");
 const safe = (value) =>

@@ -32,6 +32,28 @@ assert.equal(result.priority, 0);
 assert.equal(result.candidate.userId, "leaf-a");
 assert.deepEqual(result.warnings, []);
 
+const deepestModel = buildPerformanceModel({
+  rstLst: [
+    { userId: "root", userName: "루트", ppId: "" },
+    { userId: "short", userName: "얕은 회원", ppId: "root", abPos: 1 },
+    { userId: "other", userName: "반대 라인", ppId: "root", abPos: 2 },
+    { userId: "middle", userName: "중간 회원", ppId: "short", abPos: 2 },
+    { userId: "deep", userName: "가장 아래 회원", ppId: "middle", abPos: 1 },
+    { userId: "shallow", userName: "NV가 작은 얕은 회원", ppId: "short", abPos: 1 },
+  ],
+  members: [
+    { userId: "root", ordPv: 0 },
+    { userId: "short", ordPv: 1000 },
+    { userId: "other", ordPv: 50000 },
+    { userId: "middle", ordPv: 1000 },
+    { userId: "deep", ordPv: 9000 },
+    { userId: "shallow", ordPv: 0 },
+  ],
+});
+const deepestResult = calculatePerformance(deepestModel, "root", 100000);
+assert.equal(deepestResult.priority, 0);
+assert.equal(deepestResult.candidate.userId, "deep");
+
 const unequalTargetModel = buildPerformanceModel({
   rstLst: [
     { userId: "root", userName: "루트", ppId: "" },

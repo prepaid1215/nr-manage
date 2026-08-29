@@ -54,28 +54,32 @@ export function buildPerformanceModel(payload) {
   };
 }
 
-function lowestLeaf(start, children) {
+function deepestLeaf(start, children) {
   if (!start) return null;
   const leaves = [];
   const visited = new Set();
-  const stack = [start];
+  let visitOrder = 0;
+  const stack = [{ row: start, depth: 0 }];
 
   while (stack.length) {
-    const row = stack.pop();
+    const { row, depth } = stack.pop();
     const id = memberId(row);
     if (!id || visited.has(id)) continue;
     visited.add(id);
     const descendants = children.get(id) || [];
-    if (!descendants.length) leaves.push(row);
-    else stack.push(...descendants);
+    if (!descendants.length) leaves.push({ row, depth, order: visitOrder++ });
+    else {
+      for (let index = descendants.length - 1; index >= 0; index -= 1) {
+        stack.push({ row: descendants[index], depth: depth + 1 });
+      }
+    }
   }
 
   return (
     leaves.sort(
       (left, right) =>
-        numeric(left.ordPv) - numeric(right.ordPv) ||
-        memberId(left).localeCompare(memberId(right)),
-    )[0] || start
+        right.depth - left.depth || right.order - left.order,
+    )[0]?.row || start
   );
 }
 
@@ -115,7 +119,7 @@ export function calculatePerformance(
   const achieved = deficits.every((deficit) => deficit === 0);
   const priority = achieved ? null : deficits[0] >= deficits[1] ? 0 : 1;
   const candidate =
-    priority === null ? null : lowestLeaf(subMembers[priority], model.children);
+    priority === null ? null : deepestLeaf(subMembers[priority], model.children);
   const warnings = [];
 
   if (directChildren.length > 2) {
