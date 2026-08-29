@@ -638,11 +638,15 @@ def scrape_combined_json(page):
         print(f"⚠️ 소비자회선 목록 수집 실패: {exc}")
 
     consumer_by_member = {}
+    genealogy_ids = [str(row.get('userId') or '') for row in rstLst]
     for network_key in ('KT망', 'LG망'):
         for line in consumer_lines.get(network_key, []):
-            member_no = str(line.get('회원번호') or '').strip()
-            if not member_no:
+            masked_member_no = str(line.get('회원번호') or '').strip()
+            member_suffix = re.sub(r'\D', '', masked_member_no)
+            if not member_suffix:
                 continue
+            matches = [user_id for user_id in genealogy_ids if user_id.endswith(member_suffix)]
+            member_no = matches[0] if len(matches) == 1 else masked_member_no
             summary = consumer_by_member.setdefault(member_no, {'총회선': 0, 'KT망': 0, 'LG망': 0})
             summary['총회선'] += 1
             summary[network_key] += 1

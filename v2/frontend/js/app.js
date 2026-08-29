@@ -408,7 +408,14 @@ async function organizationDashboard() {
       if (!item) return;
       selected = item;
       const parent = byId.get(String(item.ppId || "")),
-        consumer = consumerByMember[String(item.userId)] || null;
+        userId = String(item.userId || ""),
+        consumer =
+          consumerByMember[userId] ||
+          Object.entries(consumerByMember).find(([memberCode]) => {
+            const suffix = String(memberCode).replace(/\D/g, "");
+            return suffix.length >= 4 && userId.endsWith(suffix);
+          })?.[1] ||
+          null;
       $("memberDetailInline").innerHTML =
         `<table class="detail-table inline"><tbody><tr><th>성명</th><td>${safe(item.userName || "—")}</td><th>회원번호</th><td>${safe(item.userId || "—")}</td></tr><tr><th>현재직급</th><td>${safe(item.rankName || "회원")}</td><th>인증직급</th><td>${safe(item.rankMaxName || "회원")}</td></tr><tr><th>본인매출 NV</th><td>${number(item.ordPv)}</td><th>정산 적용 NV</th><td>${number(item.ordPv)}</td></tr><tr><th>대실적(실시간)</th><td>${number(item.maxPv)}</td><th>소실적(실시간)</th><td>${number(item.minPv)}</td></tr><tr><th>소비자 총회선</th><td>${consumer ? `${number(consumer["총회선"])}회선` : "미수집"}</td><th>KT / LG 회선</th><td>${consumer ? `${number(consumer["KT망"])} / ${number(consumer["LG망"])}` : "—"}</td></tr><tr><th>상위회원</th><td>${parent ? safe(parent.userName) : "—"}</td><th>계보 단계</th><td>${Number(item.lv) || 0}단계</td></tr><tr><th>활동 상태</th><td>${item.dormant ? "휴면" : String(item.status) === "1" ? "활동" : "비활동"}</td><th>가입일</th><td>${safe(item.regDate || "—")}</td></tr></tbody></table><p class="detail-note">※ 새 매출받기에서 회원번호별 소비자회선 집계가 함께 반영됩니다.</p>`;
     };
