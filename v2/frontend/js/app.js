@@ -12,7 +12,6 @@ import {
 } from "./checklist.js?v=20260829-29";
 import { closingPage, commissionPage } from "./finance.js?v=20260829-28";
 import { performancePage } from "./performance.js?v=20260829-54";
-import { boxGenealogyPage } from "./box-genealogy.js?v=20260829-53";
 import { teamPage } from "./team.js?v=20260829-35";
 import { localDate, monthRange } from "./date.js?v=20260829-25";
 const $ = (id) => document.getElementById(id);
@@ -24,7 +23,6 @@ const menus = [
   ["activity", "활동"],
   ["checklist", "체크"],
   ["organization", "조직"],
-  ["boxtree", "계보도"],
   ["performance", "실적"],
   ["commission", "수당"],
   ["closing", "마감"],
@@ -174,7 +172,6 @@ async function show(page) {
   if (page === "activity") return activityPage($("content"), me);
   if (page === "checklist") return checklistPage($("content"), me);
   if (page === "organization") return organizationDashboard();
-  if (page === "boxtree") return boxGenealogyPage($("content"), me);
   if (page === "performance") return performancePage($("content"), me);
   if (page === "commission") return commissionPage($("content"), me);
   if (page === "closing") return closingPage($("content"), me);
