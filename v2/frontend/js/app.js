@@ -641,7 +641,7 @@ async function organizationDashboard() {
     $("orgError").textContent = err.message;
   }
 }
-const LOCAL_SYNC = "http://127.0.0.1:5050";
+const LOCAL_SYNC = "http://localhost:5050";
 async function settings(initialView = "profile") {
   $("content").innerHTML =
     `<div class="view-tabs settings-tabs"><button class="active" data-settings-view="profile" type="button">내 정보</button><button data-settings-view="connection" type="button">PC 연결</button><button data-settings-view="collection" type="button">수집</button><button data-settings-view="account" type="button">계정</button></div><section id="profileSettings" class="card"><div class="section-head"><div><h2>내 정보</h2><p class="help">이름을 바꾸면 화면 상단 인사말에도 바로 반영됩니다.</p></div></div><form id="profileForm"><div class="profile-form-grid"><label>이름<input id="profileName" required maxlength="40"></label><label>전화번호<input id="profilePhone" type="tel" inputmode="tel" placeholder="010-0000-0000"></label><label>이메일<input id="profileEmail" type="email" placeholder="name@example.com"></label><label>회원번호<input id="profileMemberNo" inputmode="numeric"></label><label>상호명<input id="profileBusiness" placeholder="예: 주하루"></label><label class="full">주소<input id="profileAddress"></label></div><button class="primary" id="saveProfile" type="submit">내 정보 저장</button><div id="profileStatus" class="connection-status" hidden></div><div id="profileError" class="error"></div></form></section><section id="connectionSettings" class="card" hidden><h2>내 컴퓨터 연결</h2><p class="help">최초 한 번만 이 PC의 NRC Sync 연결 코드를 저장하세요.</p><label>내 컴퓨터 연결 코드<input id="syncToken" type="password" autocomplete="off" placeholder="NRC Sync 연결 코드"></label><button class="primary" id="saveSyncToken" type="button">연결 코드 저장</button><div id="nrcStatus" class="connection-status">내 컴퓨터 연결 확인 중...</div><div id="nrcError" class="error"></div></section><section id="accountSettings" class="card" hidden><h2>앱 계정</h2><p class="help" id="profileUsername"></p><button class="secondary" id="logout">로그아웃</button></section>`;
@@ -826,6 +826,7 @@ async function runCollection(e) {
     loginId = $("nrcLoginId").value.trim(),
     password = $("nrcPassword").value;
   error.textContent = "";
+  $("nrcStatus").textContent = "NRC Sync에 수집을 요청하는 중...";
   button.disabled = true;
   button.textContent = "Playwright 수집 중...";
   try {
@@ -842,6 +843,7 @@ async function runCollection(e) {
         appUserId: user.id,
       }),
     });
+    error.textContent = "";
     $("nrcPassword").value = "";
     let result = null;
     for (let i = 0; i < 120; i++) {
