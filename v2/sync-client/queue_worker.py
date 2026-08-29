@@ -191,6 +191,12 @@ def claim_job():
     return rows[0] if rows else None
 
 
+def enqueue_due_schedules():
+    device = _load_device()
+    if device:
+        _rest("rpc/enqueue_due_nrc_sync_schedules", "POST", {"p_device_id": device["id"]})
+
+
 def _load_combined():
     path = DATA_DIR / "combined_latest.json"
     if not path.exists():
@@ -257,6 +263,7 @@ def worker_loop():
                 continue
             if time.time() - last_heartbeat > 15:
                 heartbeat("ONLINE", None)
+                enqueue_due_schedules()
                 last_heartbeat = time.time()
             job = claim_job()
             if not job:

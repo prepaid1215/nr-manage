@@ -725,15 +725,17 @@ async function settings(initialView = "profile") {
 }
 async function collection() {
   $("content").innerHTML =
-    `<div class="view-tabs settings-tabs"><button data-settings-jump="profile" type="button">내 정보</button><button data-settings-jump="connection" type="button">수집 PC</button><button class="active" type="button">수집</button><button data-settings-jump="account" type="button">계정</button></div><section class="card"><h2>NRC 데이터 수집</h2><p class="help">어디서든 요청하면 켜져 있는 등록 PC 중 하나가 자동으로 수집합니다.</p><form id="collectForm"><label>수집할 NRC 계정<select id="nrcSourceAccount" required><option value="">등록 PC 확인 중...</option></select></label><button class="primary" id="nrcRun" type="submit">매출 데이터 받기</button></form><div id="nrcStatus" class="connection-status">수집 준비</div><div id="nrcError" class="error"></div></section><section class="card"><h2>최근 수집 요청</h2><div id="jobList" class="schedule-list"><p class="help">요청 내역을 불러오는 중...</p></div></section>`;
+    `<div class="view-tabs settings-tabs"><button data-settings-jump="profile" type="button">내 정보</button><button data-settings-jump="connection" type="button">수집 PC</button><button class="active" type="button">수집</button><button data-settings-jump="account" type="button">계정</button></div><section class="card"><h2>NRC 데이터 수집</h2><p class="help">어디서든 요청하면 켜져 있는 등록 PC 중 하나가 자동으로 수집합니다.</p><form id="collectForm"><label>수집할 NRC 계정<select id="nrcSourceAccount" required><option value="">등록 PC 확인 중...</option></select></label><button class="primary" id="nrcRun" type="submit">매출 데이터 받기</button></form><div id="nrcStatus" class="connection-status">수집 준비</div><div id="nrcError" class="error"></div></section><section class="card"><h2>다중 PC 자동수집 예약</h2><p class="help">해당 NRC 계정으로 등록된 PC 중 한 대만 매일 지정 시간에 작업을 실행합니다.</p><form id="scheduleForm"><label>예약 이름<input id="scheduleLabel" placeholder="예: 주하루 오전 수집" required></label><label>NRC 계정<select id="scheduleSourceAccount" required><option value="">등록 PC 확인 중...</option></select></label><label>매일 실행 시간<input id="scheduleTime" type="time" required></label><button class="primary" type="submit">자동수집 예약 저장</button></form><div id="scheduleList" class="schedule-list"></div><div id="scheduleError" class="error"></div></section><section class="card"><h2>최근 수집 요청</h2><div id="jobList" class="schedule-list"><p class="help">요청 내역을 불러오는 중...</p></div></section>`;
   $("collectForm").onsubmit = runCollection;
+  $("scheduleForm").onsubmit = addSchedule;
   document
     .querySelectorAll("[data-settings-jump]")
     .forEach(
       (button) =>
         (button.onclick = () => settings(button.dataset.settingsJump)),
     );
-  await Promise.all([loadLocalStatus(), loadSavedNrc(), loadRecentJobs()]);
+  await loadSavedNrc();
+  await Promise.all([loadLocalStatus(), loadSchedules(), loadRecentJobs()]);
 }
 async function localApi(path, options = {}) {
   const token = localStorage.getItem("nrc-sync-token") || "";
@@ -924,6 +926,11 @@ async function loadSavedNrc() {
       ? accounts.map((account) => `<option value="${safe(account)}">${safe(account)}</option>`).join("")
       : '<option value="">등록된 NRC 계정 없음</option>';
     $("nrcRun").disabled = !accounts.length;
+    const scheduleSelect = $("scheduleSourceAccount");
+    if (scheduleSelect)
+      scheduleSelect.innerHTML = accounts.length
+        ? accounts.map((account) => `<option value="${safe(account)}">${safe(account)}</option>`).join("")
+        : '<option value="">등록된 NRC 계정 없음</option>';
   } catch (err) {
     $("nrcError").textContent = err.message;
   }
@@ -940,12 +947,16 @@ async function loadSchedules() {
   const list = $("scheduleList");
   if (!list) return;
   try {
-    const result = await localApi("/api/schedules");
-    list.innerHTML = result.schedules.length
-      ? result.schedules
+    const { data, error } = await supabase
+      .from("nrc_sync_schedules")
+      .select("id,label,source_account_id,run_time,enabled,last_enqueued_on")
+      .order("run_time");
+    if (error) throw error;
+    list.innerHTML = data.length
+      ? data
           .map(
             (item) =>
-              `<article class="schedule-item"><div><b>${safe(item.label)}</b><small>${safe(item.login_id_masked)} · 매일 ${safe(item.time)}</small><small>최근 결과: ${safe(item.last_status || "WAITING")}${item.last_run ? ` · ${safe(item.last_run)}` : ""}</small></div><button class="secondary schedule-delete" data-id="${safe(item.id)}" type="button">삭제</button></article>`,
+              `<article class="schedule-item"><div><b>${safe(item.label)}</b><small>${safe(item.source_account_id)} · 매일 ${safe(String(item.run_time).slice(0,5))}</small><small>${item.last_enqueued_on ? `최근 요청: ${safe(item.last_enqueued_on)}` : "아직 실행 전"}</small></div><button class="secondary schedule-delete" data-id="${safe(item.id)}" type="button">삭제</button></article>`,
           )
           .join("")
       : '<p class="help">등록된 자동수집 예약이 없습니다.</p>';
@@ -964,22 +975,16 @@ async function addSchedule(e) {
   const error = $("scheduleError");
   error.textContent = "";
   try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session) throw Error("앱 로그인이 필요합니다.");
-    await localApi("/api/schedules", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    const { error: saveError } = await supabase
+      .from("nrc_sync_schedules")
+      .insert({
+        owner_id: me.id,
         label: $("scheduleLabel").value.trim(),
-        loginId: $("scheduleLoginId").value.trim(),
-        password: $("schedulePassword").value,
-        time: $("scheduleTime").value,
-        userId: session.user.id,
-        refreshToken: session.refresh_token,
-      }),
-    });
+        source_account_id: $("scheduleSourceAccount").value,
+        run_time: $("scheduleTime").value,
+        timezone: "Asia/Seoul",
+      });
+    if (saveError) throw saveError;
     e.target.reset();
     await loadSchedules();
   } catch (err) {
@@ -989,11 +994,11 @@ async function addSchedule(e) {
 async function deleteSchedule(scheduleId) {
   if (!confirm("이 자동수집 예약을 삭제할까요?")) return;
   try {
-    await localApi("/api/schedules", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ scheduleId }),
-    });
+    const { error } = await supabase
+      .from("nrc_sync_schedules")
+      .delete()
+      .eq("id", scheduleId);
+    if (error) throw error;
     await loadSchedules();
   } catch (err) {
     $("scheduleError").textContent = err.message;

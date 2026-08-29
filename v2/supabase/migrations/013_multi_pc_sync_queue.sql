@@ -40,8 +40,26 @@ create index if not exists nrc_sync_jobs_claimable
   on public.nrc_sync_jobs(owner_id,status,requested_at)
   where status='QUEUED';
 
+create table if not exists public.nrc_sync_schedules (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references public.profiles(id) on delete cascade,
+  label text not null,
+  source_account_id text not null,
+  run_time time not null,
+  timezone text not null default 'Asia/Seoul',
+  enabled boolean not null default true,
+  last_enqueued_on date,
+  last_job_id uuid references public.nrc_sync_jobs(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists nrc_sync_schedules_owner_time
+  on public.nrc_sync_schedules(owner_id,run_time) where enabled;
+
 alter table public.nrc_sync_devices enable row level security;
 alter table public.nrc_sync_jobs enable row level security;
+alter table public.nrc_sync_schedules enable row level security;
 
 drop policy if exists nrc_sync_devices_owner_all on public.nrc_sync_devices;
 create policy nrc_sync_devices_owner_all on public.nrc_sync_devices
@@ -51,8 +69,13 @@ drop policy if exists nrc_sync_jobs_owner_all on public.nrc_sync_jobs;
 create policy nrc_sync_jobs_owner_all on public.nrc_sync_jobs
   for all using(owner_id=auth.uid()) with check(owner_id=auth.uid());
 
+drop policy if exists nrc_sync_schedules_owner_all on public.nrc_sync_schedules;
+create policy nrc_sync_schedules_owner_all on public.nrc_sync_schedules
+  for all using(owner_id=auth.uid()) with check(owner_id=auth.uid());
+
 grant select,insert,update,delete on public.nrc_sync_devices to authenticated;
 grant select,insert,update,delete on public.nrc_sync_jobs to authenticated;
+grant select,insert,update,delete on public.nrc_sync_schedules to authenticated;
 
 create or replace function public.claim_nrc_sync_job(p_device_id uuid)
 returns setof public.nrc_sync_jobs
@@ -97,5 +120,45 @@ end;
 $$;
 
 grant execute on function public.claim_nrc_sync_job(uuid) to authenticated;
+
+create or replace function public.enqueue_due_nrc_sync_schedules(p_device_id uuid)
+returns integer
+language plpgsql
+security invoker
+set search_path=public
+as $$
+declare
+  v_owner_id uuid;
+  v_source_account_id text;
+  v_schedule record;
+  v_job_id uuid;
+  v_count integer:=0;
+begin
+  select owner_id,source_account_id into v_owner_id,v_source_account_id
+  from public.nrc_sync_devices
+  where id=p_device_id and owner_id=auth.uid();
+  if v_owner_id is null then return 0; end if;
+
+  for v_schedule in
+    select * from public.nrc_sync_schedules
+    where owner_id=v_owner_id and source_account_id=v_source_account_id and enabled
+      and coalesce(last_enqueued_on,date '1900-01-01') < (now() at time zone timezone)::date
+      and run_time <= (now() at time zone timezone)::time
+    order by run_time
+    for update skip locked
+  loop
+    insert into public.nrc_sync_jobs(owner_id,source_account_id,status,message)
+    values(v_owner_id,v_schedule.source_account_id,'QUEUED',v_schedule.label || ' 자동수집 대기 중...')
+    returning id into v_job_id;
+    update public.nrc_sync_schedules
+    set last_enqueued_on=(now() at time zone timezone)::date,last_job_id=v_job_id,updated_at=now()
+    where id=v_schedule.id;
+    v_count:=v_count+1;
+  end loop;
+  return v_count;
+end;
+$$;
+
+grant execute on function public.enqueue_due_nrc_sync_schedules(uuid) to authenticated;
 
 commit;
