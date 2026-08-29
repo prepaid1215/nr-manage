@@ -2,7 +2,7 @@ import { supabase } from "./supabase.js?v=20260829-11";
 import {
   buildPerformanceModel,
   calculatePerformance,
-} from "./performance-calculator.js?v=20260829-26";
+} from "./performance-calculator.js?v=20260829-42";
 
 const fmt = (value) => Number(value || 0).toLocaleString("ko-KR");
 const safe = (value) =>
@@ -55,7 +55,7 @@ export async function performancePage(root) {
   }
 
   $("perfSource").textContent =
-    `수집 ${new Date(data.collected_at).toLocaleString("ko-KR")} · 계산식: 서브 회원의 본인 NV + 대실적 + 소실적`;
+    `수집 ${new Date(data.collected_at).toLocaleString("ko-KR")} · 소실적 필요 목표 = 입력 목표 − 선택 회원 본인 NV`;
   $("perfMember").innerHTML = model.rows
     .map(
       (row) =>
@@ -74,7 +74,7 @@ export async function performancePage(root) {
       localStorage.setItem("nrc-performance-major-target", String(majorTarget));
       localStorage.setItem("nrc-performance-minor-target", String(minorTarget));
 
-      const totals = result.branches.map((branch) => branch.total);
+      const totals = result.effectiveTotals;
       const warnings = result.warnings.length
         ? `<p class="error">${result.warnings.map(safe).join(" ")}</p>`
         : "";
@@ -84,7 +84,7 @@ export async function performancePage(root) {
 
       $("perfError").textContent = "";
       $("perfResult").innerHTML =
-        `<section class="card"><h2>${safe(result.member.userName)} · 대 ${fmt(result.majorTarget)} / 소 ${fmt(result.minorTarget)} 목표</h2><div class="perf-grid"><article><span>본인 NV</span><b>${fmt(result.member.ordPv)}</b></article>${result.branches.map((branch, index) => `<article><span>서브${index + 1} · ${index === result.majorIndex ? "대실적" : "소실적"} 라인</span><b>${fmt(branch.total)}</b><small>${formula(branch)} · 목표 ${fmt(result.branchTargets[index])}</small><em>부족 ${fmt(result.deficits[index])}</em></article>`).join("")}<article><span>대 / 소실적</span><b>${fmt(Math.max(...totals))} / ${fmt(Math.min(...totals))}</b></article></div>${warnings}</section>${recommendation}`;
+        `<section class="card"><h2>${safe(result.member.userName)} · 대 ${fmt(result.majorTarget)} / 소 ${fmt(result.minorTarget)} 목표</h2><div class="perf-grid"><article><span>본인 NV</span><b>${fmt(result.member.ordPv)}</b><small>소실적 목표에서 ${fmt(result.minorOwnContribution)} 차감</small></article>${result.branches.map((branch, index) => `<article><span>서브${index + 1} · ${index === result.majorIndex ? "대실적" : "소실적"} 라인</span><b>${fmt(result.effectiveTotals[index])}</b><small>${formula(branch)}${index === result.minorIndex ? ` + 선택 회원 본인 ${fmt(result.minorOwnContribution)}` : ""} · 필요 목표 ${fmt(result.branchTargets[index])}</small><em>부족 ${fmt(result.deficits[index])}</em></article>`).join("")}<article><span>대 / 소실적</span><b>${fmt(result.effectiveTotals[result.majorIndex])} / ${fmt(result.effectiveTotals[result.minorIndex])}</b><small>소실적 입력 목표 ${fmt(result.minorTarget)} − 본인 NV ${fmt(result.minorOwnContribution)}</small></article></div>${warnings}</section>${recommendation}`;
     } catch (calculationError) {
       $("perfError").textContent = calculationError.message;
       $("perfResult").replaceChildren();

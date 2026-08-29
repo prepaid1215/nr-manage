@@ -100,9 +100,15 @@ export function calculatePerformance(
   const branches = subMembers.map(branchBreakdown);
   const majorIndex = branches[0].total >= branches[1].total ? 0 : 1;
   const minorIndex = majorIndex === 0 ? 1 : 0;
+  const minorOwnContribution = Math.max(0, numeric(member.ordPv));
+  const minorRequiredTarget = Math.max(0, minorTarget - minorOwnContribution);
   const branchTargets = [];
   branchTargets[majorIndex] = majorTarget;
-  branchTargets[minorIndex] = minorTarget;
+  branchTargets[minorIndex] = minorRequiredTarget;
+  const effectiveTotals = branches.map(
+    (branch, index) =>
+      branch.total + (index === minorIndex ? minorOwnContribution : 0),
+  );
   const deficits = branches.map((branch, index) =>
     Math.max(0, branchTargets[index] - branch.total),
   );
@@ -129,7 +135,10 @@ export function calculatePerformance(
     minorTarget,
     majorIndex,
     minorIndex,
+    minorOwnContribution,
+    minorRequiredTarget,
     branchTargets,
+    effectiveTotals,
     subMembers,
     branches,
     deficits,

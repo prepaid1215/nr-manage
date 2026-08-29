@@ -26,7 +26,8 @@ assert.deepEqual(
   result.branches.map((branch) => branch.total),
   [17000, 30000],
 );
-assert.deepEqual(result.deficits, [3000, 0]);
+assert.deepEqual(result.deficits, [2000, 0]);
+assert.deepEqual(result.effectiveTotals, [18000, 30000]);
 assert.equal(result.priority, 0);
 assert.equal(result.candidate.userId, "leaf-a");
 assert.deepEqual(result.warnings, []);
@@ -68,12 +69,32 @@ assert.equal(achievedResult.achieved, true);
 assert.equal(achievedResult.priority, null);
 assert.equal(achievedResult.candidate, null);
 
+const ownNvResult = calculatePerformance(
+  buildPerformanceModel({
+    rstLst: [
+      { userId: "root", userName: "한수진", ppId: "" },
+      { userId: "major", userName: "서브1", ppId: "root", abPos: 1 },
+      { userId: "minor", userName: "서브2", ppId: "root", abPos: 2 },
+    ],
+    members: [
+      { userId: "root", ordPv: 105300 },
+      { userId: "major", ordPv: 118908, maxPv: 177876, minPv: 88776 },
+      { userId: "minor", ordPv: 16200, maxPv: 252541, minPv: 0 },
+    ],
+  }),
+  "root",
+  { majorTarget: 400000, minorTarget: 400000 },
+);
+assert.equal(ownNvResult.minorRequiredTarget, 294700);
+assert.deepEqual(ownNvResult.effectiveTotals, [385560, 374041]);
+assert.deepEqual(ownNvResult.deficits, [14440, 25959]);
+
 const emptyLineModel = buildPerformanceModel({
   rstLst: [{ userId: "solo", userName: "단독", ppId: "" }],
   members: [{ userId: "solo", ordPv: 1000, maxPv: 0, minPv: 0 }],
 });
 const emptyLineResult = calculatePerformance(emptyLineModel, "solo", 20000);
-assert.deepEqual(emptyLineResult.deficits, [20000, 20000]);
+assert.deepEqual(emptyLineResult.deficits, [20000, 19000]);
 assert.equal(emptyLineResult.candidate, null);
 assert.throws(
   () => calculatePerformance(emptyLineModel, "solo", 0),
