@@ -36,3 +36,11 @@
   .family-node{min-width:0}
   .family-branch>summary,.family-leaf{padding-left:38px}
 }
+/* Daily closing report */
+.closing-tabs{margin-bottom:12px}
+.daily-close-form{display:grid;grid-template-columns:minmax(160px,1fr) minmax(220px,1fr) auto;gap:10px;align-items:end}
+.daily-close-form button{margin:0 0 1px}
+.daily-close-preview{min-height:230px;margin:12px 0;padding:18px;border:1px solid var(--line);border-radius:12px;background:#f8faf7;white-space:pre-wrap;font:inherit;line-height:1.55}
+.daily-close-actions{display:flex;gap:8px}
+.daily-close-actions button{width:auto;margin:0}
+@media(max-width:700px){.daily-close-form{grid-template-columns:1fr}.daily-close-actions{display:grid}.daily-close-actions button{width:100%}}
