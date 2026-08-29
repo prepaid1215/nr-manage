@@ -9,6 +9,7 @@ nrcom.com 데이터를 가져갈 수 있습니다.
 
 import json
 import hmac
+import html
 import os
 import time
 import uuid
@@ -22,6 +23,7 @@ from flask_cors import CORS
 import keyring
 import scraper as scraper_module
 from scraper import run_daily, run_sales_now, run_closings, run_combined
+from queue_worker import configure_worker, worker_configuration, worker_loop
 
 app = Flask(__name__)
 CORS(
@@ -49,6 +51,58 @@ KEYRING_SERVICE = "NRC-Management-Scheduler"
 MANUAL_KEYRING_SERVICE = "NRC-Management-Manual"
 SUPABASE_URL = "https://ymagjzwebshfnjiisrao.supabase.co"
 SUPABASE_KEY = "sb_publishable_odxxHbBufV-ZSFlVJ8xFiw_18hBVyJf"
+
+
+def setup_page(message="", error=False):
+    configured = worker_configuration()
+    current_name = html.escape(str(configured.get("device_name", "")))
+    current_nrc = html.escape(str(configured.get("source_account_id", "")))
+    notice = ""
+    if message:
+        color = "#b42318" if error else "#176b4d"
+        notice = f'<div style="padding:12px;border-radius:12px;background:#f5f3ff;color:{color};margin-bottom:16px">{html.escape(message)}</div>'
+    return f'''<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>NRC Sync PC 등록</title><style>
+    body{{font-family:system-ui,sans-serif;background:#f6f5ff;margin:0;padding:24px;color:#202038}}
+    main{{max-width:560px;margin:24px auto;background:white;padding:28px;border-radius:24px;box-shadow:0 18px 50px #5048a51f}}
+    h1{{color:#5b55b9}}p{{color:#6e7191;line-height:1.55}}label{{display:block;margin:15px 0 6px}}
+    input{{box-sizing:border-box;width:100%;padding:13px;border:1px solid #d8d8ea;border-radius:12px;font-size:16px}}
+    button{{width:100%;margin-top:22px;padding:14px;border:0;border-radius:13px;background:#655cc8;color:white;font-weight:700;font-size:16px}}
+    small{{display:block;margin-top:16px;color:#8386a3;line-height:1.5}}</style>
+    <main><h1>NRC Sync PC 등록</h1><p>이 PC를 앱 계정에 한 번 등록하면 연결 코드 없이 어디서든 수집을 요청할 수 있습니다.</p>{notice}
+    <form method="post" action="/setup/save">
+    <label>이 PC 이름</label><input name="deviceName" value="{current_name}" placeholder="예: 사무실 PC" required>
+    <label>관리 앱 아이디</label><input name="appUsername" autocomplete="username" required>
+    <label>관리 앱 비밀번호</label><input name="appPassword" type="password" autocomplete="current-password" required>
+    <label>NRC 홈페이지 아이디</label><input name="nrcLoginId" value="{current_nrc}" autocomplete="username" required>
+    <label>NRC 홈페이지 비밀번호</label><input name="nrcPassword" type="password" autocomplete="current-password" required>
+    <button type="submit">이 PC 등록하기</button></form>
+    <small>NRC 비밀번호는 Supabase로 전송하지 않고 이 PC의 Windows 자격 증명 저장소에만 보관됩니다.</small></main></html>'''
+
+
+@app.route("/setup", methods=["GET"])
+def worker_setup_page():
+    configured = worker_configuration()
+    message = "이 PC가 이미 등록되어 있습니다. 다시 저장하면 계정 정보를 갱신합니다." if configured.get("configured") else ""
+    return Response(setup_page(message), content_type="text/html; charset=utf-8")
+
+
+@app.route("/setup/save", methods=["POST"])
+def worker_setup_save():
+    try:
+        device = configure_worker(
+            request.form.get("appUsername", ""),
+            request.form.get("appPassword", ""),
+            request.form.get("nrcLoginId", ""),
+            request.form.get("nrcPassword", ""),
+            request.form.get("deviceName", ""),
+        )
+        return Response(
+            setup_page(f"{device['device_name']} 등록 완료. 이제 이 창을 닫아도 됩니다."),
+            content_type="text/html; charset=utf-8",
+        )
+    except Exception as exc:
+        return Response(setup_page(str(exc), True), status=400, content_type="text/html; charset=utf-8")
 
 
 def load_schedules():
@@ -380,4 +434,5 @@ if __name__ == "__main__":
     print("  POST /api/sync/sales      - 매출내역 즉시 수집")
     print()
     threading.Thread(target=scheduler_loop, daemon=True).start()
+    threading.Thread(target=worker_loop, daemon=True).start()
     app.run(host="127.0.0.1", port=5050, debug=False)

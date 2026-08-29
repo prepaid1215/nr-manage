@@ -646,7 +646,7 @@ async function organizationDashboard() {
 const LOCAL_SYNC = "http://127.0.0.1:5050";
 async function settings(initialView = "profile") {
   $("content").innerHTML =
-    `<div class="view-tabs settings-tabs"><button class="active" data-settings-view="profile" type="button">내 정보</button><button data-settings-view="connection" type="button">PC 연결</button><button data-settings-view="collection" type="button">수집</button><button data-settings-view="account" type="button">계정</button></div><section id="profileSettings" class="card"><div class="section-head"><div><h2>내 정보</h2><p class="help">이름을 바꾸면 화면 상단 인사말에도 바로 반영됩니다.</p></div></div><form id="profileForm"><div class="profile-form-grid"><label>이름<input id="profileName" required maxlength="40"></label><label>전화번호<input id="profilePhone" type="tel" inputmode="tel" placeholder="010-0000-0000"></label><label>이메일<input id="profileEmail" type="email" placeholder="name@example.com"></label><label>회원번호<input id="profileMemberNo" inputmode="numeric"></label><label>상호명<input id="profileBusiness" placeholder="예: 주하루"></label><label class="full">주소<input id="profileAddress"></label></div><button class="primary" id="saveProfile" type="submit">내 정보 저장</button><div id="profileStatus" class="connection-status" hidden></div><div id="profileError" class="error"></div></form></section><section id="connectionSettings" class="card" hidden><h2>내 컴퓨터 연결</h2><p class="help">최초 한 번만 이 PC의 NRC Sync 연결 코드를 저장하세요.</p><label>내 컴퓨터 연결 코드<input id="syncToken" type="password" autocomplete="off" placeholder="NRC Sync 연결 코드"></label><button class="primary" id="saveSyncToken" type="button">연결 코드 저장</button><div id="nrcStatus" class="connection-status">내 컴퓨터 연결 확인 중...</div><div id="nrcError" class="error"></div></section><section id="accountSettings" class="card" hidden><h2>앱 계정</h2><p class="help" id="profileUsername"></p><button class="secondary" id="logout">로그아웃</button></section>`;
+    `<div class="view-tabs settings-tabs"><button class="active" data-settings-view="profile" type="button">내 정보</button><button data-settings-view="connection" type="button">수집 PC</button><button data-settings-view="collection" type="button">수집</button><button data-settings-view="account" type="button">계정</button></div><section id="profileSettings" class="card"><div class="section-head"><div><h2>내 정보</h2><p class="help">이름을 바꾸면 화면 상단 인사말에도 바로 반영됩니다.</p></div></div><form id="profileForm"><div class="profile-form-grid"><label>이름<input id="profileName" required maxlength="40"></label><label>전화번호<input id="profilePhone" type="tel" inputmode="tel" placeholder="010-0000-0000"></label><label>이메일<input id="profileEmail" type="email" placeholder="name@example.com"></label><label>회원번호<input id="profileMemberNo" inputmode="numeric"></label><label>상호명<input id="profileBusiness" placeholder="예: 주하루"></label><label class="full">주소<input id="profileAddress"></label></div><button class="primary" id="saveProfile" type="submit">내 정보 저장</button><div id="profileStatus" class="connection-status" hidden></div><div id="profileError" class="error"></div></form></section><section id="connectionSettings" class="card" hidden><div class="section-head"><div><h2>수집 PC</h2><p class="help">여러 PC를 등록하면 켜져 있는 PC가 자동으로 수집 작업을 처리합니다. 연결 코드는 필요 없습니다.</p></div><a class="secondary" href="${LOCAL_SYNC}/setup" target="_blank" rel="noopener">이 PC 등록</a></div><div id="nrcStatus" class="connection-status">등록된 PC 확인 중...</div><div id="deviceList" class="schedule-list"></div><div id="nrcError" class="error"></div></section><section id="accountSettings" class="card" hidden><h2>앱 계정</h2><p class="help" id="profileUsername"></p><button class="secondary" id="logout">로그아웃</button></section>`;
   const profile = await currentProfile();
   if (profile) {
     $("profileName").value = profile.name || "";
@@ -720,40 +720,122 @@ async function settings(initialView = "profile") {
     await supabase.auth.signOut({ scope: "local" });
     location.reload();
   };
-  $("syncToken").value = localStorage.getItem("nrc-sync-token") || "";
-  $("saveSyncToken").onclick = () => {
-    localStorage.setItem("nrc-sync-token", $("syncToken").value.trim());
-    loadLocalStatus();
-  };
   if (initialView !== "profile")
     document.querySelector(`[data-settings-view="${initialView}"]`)?.click();
 }
 async function collection() {
   $("content").innerHTML =
-    `<div class="view-tabs settings-tabs"><button data-settings-jump="profile" type="button">내 정보</button><button data-settings-jump="connection" type="button">PC 연결</button><button class="active" type="button">수집</button><button data-settings-jump="account" type="button">계정</button></div><section class="card"><h2>NRC 홈페이지 JSON 수집</h2><p class="help">저장을 선택하면 NRC 로그인 정보는 이 PC의 Windows 자격 증명 저장소에만 보관됩니다.</p><form id="collectForm"><label>NRC 홈페이지 아이디<input id="nrcLoginId" autocomplete="username" required></label><label>NRC 홈페이지 비밀번호<input id="nrcPassword" type="password" autocomplete="current-password" placeholder="저장된 경우 비워도 됩니다"></label><label class="check"><input id="rememberNrc" type="checkbox"> NRC 아이디·비밀번호 이 PC에 저장</label><button class="primary" id="nrcRun" type="submit">매출 데이터 받기</button></form><button class="secondary" id="clearNrcCredentials" type="button" hidden>저장된 NRC 로그인 정보 삭제</button><div id="nrcStatus" class="connection-status">수집 준비</div><div id="nrcError" class="error"></div></section><section class="card"><h2>PC 자동수집 예약</h2><p class="help">PC가 켜져 있고 NRC Sync가 실행 중이면 매일 지정 시간에 자동 수집하고 Supabase에 저장합니다.</p><form id="scheduleForm"><label>예약 이름<input id="scheduleLabel" placeholder="예: 임영은 오전 수집" required></label><label>NRC 홈페이지 아이디<input id="scheduleLoginId" autocomplete="username" required></label><label>NRC 홈페이지 비밀번호<input id="schedulePassword" type="password" autocomplete="current-password" required></label><label>매일 실행 시간<input id="scheduleTime" type="time" required></label><button class="primary" type="submit">자동수집 예약 저장</button></form><div id="scheduleList" class="schedule-list"></div><div id="scheduleError" class="error"></div></section>`;
+    `<div class="view-tabs settings-tabs"><button data-settings-jump="profile" type="button">내 정보</button><button data-settings-jump="connection" type="button">수집 PC</button><button class="active" type="button">수집</button><button data-settings-jump="account" type="button">계정</button></div><section class="card"><h2>NRC 데이터 수집</h2><p class="help">어디서든 요청하면 켜져 있는 등록 PC 중 하나가 자동으로 수집합니다.</p><form id="collectForm"><label>수집할 NRC 계정<select id="nrcSourceAccount" required><option value="">등록 PC 확인 중...</option></select></label><button class="primary" id="nrcRun" type="submit">매출 데이터 받기</button></form><div id="nrcStatus" class="connection-status">수집 준비</div><div id="nrcError" class="error"></div></section><section class="card"><h2>최근 수집 요청</h2><div id="jobList" class="schedule-list"><p class="help">요청 내역을 불러오는 중...</p></div></section>`;
   $("collectForm").onsubmit = runCollection;
-  $("clearNrcCredentials").onclick = clearSavedNrc;
-  $("scheduleForm").onsubmit = addSchedule;
   document
     .querySelectorAll("[data-settings-jump]")
     .forEach(
       (button) =>
         (button.onclick = () => settings(button.dataset.settingsJump)),
     );
-  await Promise.all([loadLocalStatus(), loadSavedNrc(), loadSchedules()]);
+  await Promise.all([loadLocalStatus(), loadSavedNrc(), loadRecentJobs()]);
 }
 async function localApi(path, options = {}) {
   const token = localStorage.getItem("nrc-sync-token") || "";
   const headers = { ...(options.headers || {}), "X-NRC-Sync-Token": token };
-  const response = await fetch(`${LOCAL_SYNC}${path}`, {
-    ...options,
-    headers,
-    targetAddressSpace: "local",
-  });
+  let response;
+  try {
+    response = await fetch(`${LOCAL_SYNC}${path}`, {
+      ...options,
+      headers,
+      targetAddressSpace: "local",
+    });
+  } catch (error) {
+    const connectionError = new Error(
+      "NRC Sync에 연결할 수 없습니다. Chrome의 로컬 네트워크 접근 권한을 허용한 뒤 새로고침해 주세요.",
+    );
+    connectionError.code = "LOCAL_SYNC_UNREACHABLE";
+    throw connectionError;
+  }
   const data = await response.json();
-  if (!response.ok || !data.ok)
-    throw Error(data.message || "로컬 동기화 프로그램 요청에 실패했습니다.");
+  if (!response.ok || !data.ok) {
+    const requestError = new Error(
+      data.message || "로컬 동기화 프로그램 요청에 실패했습니다.",
+    );
+    requestError.status = response.status;
+    throw requestError;
+  }
   return data;
+}
+async function loadSyncDevices() {
+  const { data, error } = await supabase
+    .from("nrc_sync_devices")
+    .select("id,device_name,source_account_id,status,last_seen_at,last_error")
+    .order("last_seen_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+function isDeviceOnline(device) {
+  const age = Date.now() - new Date(device.last_seen_at).getTime();
+  return age < 45000 && ["ONLINE", "BUSY"].includes(device.status);
+}
+async function enqueueCollection(sourceAccountId = null) {
+  const devices = await loadSyncDevices();
+  const online = devices.filter(
+    (device) =>
+      isDeviceOnline(device) &&
+      (!sourceAccountId || device.source_account_id === sourceAccountId),
+  );
+  if (!online.length)
+    throw Error(
+      sourceAccountId
+        ? `${sourceAccountId} 계정으로 등록된 온라인 수집 PC가 없습니다.`
+        : "현재 온라인인 수집 PC가 없습니다.",
+    );
+  const { data, error } = await supabase
+    .from("nrc_sync_jobs")
+    .insert({
+      owner_id: me.id,
+      source_account_id: sourceAccountId || online[0].source_account_id,
+      status: "QUEUED",
+      message: "온라인 PC의 작업 수신 대기 중...",
+    })
+    .select("id,status,message")
+    .single();
+  if (error) throw error;
+  return data;
+}
+async function waitForCollectionJob(jobId, onProgress) {
+  for (let index = 0; index < 180; index++) {
+    const { data, error } = await supabase
+      .from("nrc_sync_jobs")
+      .select("status,message,error")
+      .eq("id", jobId)
+      .single();
+    if (error) throw error;
+    onProgress?.(data.message || "수집 진행 중...");
+    if (data.status === "SUCCESS") return data;
+    if (["ERROR", "CANCELLED"].includes(data.status))
+      throw Error(data.error || data.message || "수집에 실패했습니다.");
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+  throw Error("수집 요청은 유지 중입니다. 잠시 후 최근 수집 요청에서 확인해 주세요.");
+}
+async function loadRecentJobs() {
+  const list = $("jobList");
+  if (!list) return;
+  const { data, error } = await supabase
+    .from("nrc_sync_jobs")
+    .select("id,source_account_id,status,message,error,requested_at,completed_at")
+    .order("requested_at", { ascending: false })
+    .limit(10);
+  if (error) {
+    list.innerHTML = `<p class="error">${safe(error.message)}</p>`;
+    return;
+  }
+  list.innerHTML = data.length
+    ? data
+        .map(
+          (job) =>
+            `<article class="schedule-item"><div><b>${safe(job.source_account_id || "NRC 수집")}</b><small>${safe(job.message || job.status)} · ${safe(new Date(job.requested_at).toLocaleString("ko-KR"))}</small>${job.error ? `<small class="error">${safe(job.error)}</small>` : ""}</div><span class="job-status ${safe(job.status.toLowerCase())}">${safe(job.status)}</span></article>`,
+        )
+        .join("")
+    : '<p class="help">아직 수집 요청이 없습니다.</p>';
 }
 async function runHomeCollection() {
   const button = $("homeCollect"),
@@ -765,43 +847,18 @@ async function runHomeCollection() {
   button.disabled = true;
   button.textContent = "수집 중...";
   try {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    await localApi("/api/sync/combined", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ appUserId: user.id }),
+    const devices = await loadSyncDevices();
+    const available = devices.find((device) => isDeviceOnline(device));
+    if (!available)
+      throw Error("현재 켜져 있는 수집 PC가 없습니다. NRC Sync를 실행해 주세요.");
+    const job = await enqueueCollection(available.source_account_id);
+    await waitForCollectionJob(job.id, (message) => {
+      status.textContent = message;
     });
-    let result = null;
-    for (let index = 0; index < 150; index++) {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      const current = await localApi("/api/status");
-      status.textContent = current.sync?.message || "매출 데이터 수집 중...";
-      if (current.sync?.error) throw Error(current.sync.error);
-      if (current.sync?.completed) {
-        result = await localApi("/api/combined");
-        break;
-      }
-    }
-    if (!result)
-      throw Error("수집 시간이 오래 걸립니다. 잠시 후 다시 눌러주세요.");
-    const { error } = await supabase.from("nrc_sync_snapshots").insert({
-      owner_id: user.id,
-      source_account_id:
-        result.data?.rstLst?.[0]?.userId || me.member_no || "saved",
-      snapshot_type: "combined",
-      payload: result.data,
-      collected_at: result.collected_at || new Date().toISOString(),
-    });
-    if (error) throw error;
-    status.textContent = "매출·소비자회선 수집 완료";
+    status.textContent = "매출·계보·소비자회선 수집 완료";
     await home();
   } catch (error) {
-    status.hidden = true;
-    errorBox.textContent = /아이디와 비밀번호|확인하세요/i.test(error.message)
-      ? "설정 → 수집에서 NRC 로그인 정보를 최초 한 번 저장해 주세요."
-      : error.message;
+    errorBox.textContent = error.message;
   } finally {
     button.disabled = false;
     button.textContent = "매출받기";
@@ -811,97 +868,45 @@ async function loadLocalStatus() {
   const box = $("nrcStatus");
   if (!box) return;
   try {
-    const result = await localApi("/api/status");
-    box.textContent = result.sync?.running
-      ? "NRC 데이터 수집 중..."
-      : "내 컴퓨터 NRC Sync 연결됨";
+    const devices = await loadSyncDevices();
+    const online = devices.filter(isDeviceOnline);
+    box.textContent = devices.length
+      ? `등록 PC ${devices.length}대 · 현재 온라인 ${online.length}대`
+      : "등록된 수집 PC가 없습니다. ‘이 PC 등록’을 눌러 최초 설정해 주세요.";
+    const list = $("deviceList");
+    if (list)
+      list.innerHTML = devices.length
+        ? devices
+            .map(
+              (device) =>
+                `<article class="schedule-item"><div><b>${safe(device.device_name)}</b><small>NRC ${safe(device.source_account_id)} · ${isDeviceOnline(device) ? "온라인" : "오프라인"}</small><small>최근 확인: ${safe(new Date(device.last_seen_at).toLocaleString("ko-KR"))}</small></div><span class="device-dot ${isDeviceOnline(device) ? "online" : "offline"}"></span></article>`,
+            )
+            .join("")
+        : "";
     $("nrcError").textContent = "";
   } catch (err) {
-    box.textContent = "NRC Sync가 꺼져 있거나 연결 코드가 다릅니다.";
-    $("nrcError").textContent = err.message;
+    box.textContent = "수집 PC 정보를 불러오지 못했습니다.";
+    $("nrcError").textContent = /nrc_sync_devices|schema cache/i.test(err.message)
+      ? "Supabase에서 RUN_013_MULTI_PC_SYNC_QUEUE.sql을 먼저 실행해 주세요."
+      : err.message;
   }
 }
 async function runCollection(e) {
   e.preventDefault();
   const button = $("nrcRun"),
     error = $("nrcError"),
-    loginId = $("nrcLoginId").value.trim(),
-    password = $("nrcPassword").value;
+    loginId = $("nrcSourceAccount").value;
   error.textContent = "";
-  $("nrcStatus").textContent = "NRC Sync에 수집을 요청하는 중...";
+  $("nrcStatus").textContent = "온라인 수집 PC에 작업을 보내는 중...";
   button.disabled = true;
   button.textContent = "Playwright 수집 중...";
   try {
-    const user = me;
-    const popup = window.open(
-      "about:blank",
-      "nrc-sync-collect",
-      "width=420,height=220",
-    );
-    if (!popup)
-      throw Error("수집 창이 차단되었습니다. 이 사이트의 팝업을 허용해 주세요.");
-    const form = document.createElement("form");
-    form.method = "POST";
-    form.action = `${LOCAL_SYNC}/collect/start`;
-    form.target = "nrc-sync-collect";
-    const fields = {
-      syncToken: localStorage.getItem("nrc-sync-token") || "",
-      loginId,
-      password,
-      remember: $("rememberNrc").checked ? "true" : "",
-      appUserId: user.id,
-    };
-    Object.entries(fields).forEach(([name, value]) => {
-      const input = document.createElement("input");
-      input.type = "hidden";
-      input.name = name;
-      input.value = value;
-      form.appendChild(input);
+    const job = await enqueueCollection(loginId);
+    await waitForCollectionJob(job.id, (message) => {
+      $("nrcStatus").textContent = message;
     });
-    document.body.appendChild(form);
-    form.submit();
-    form.remove();
-    error.textContent = "";
-    $("nrcPassword").value = "";
-    await new Promise((resolve) => setTimeout(resolve, 1200));
-    const started = await localApi("/api/status");
-    if (!started.sync?.running && !started.sync?.completed)
-      throw Error("PC 수집 시작 요청이 전달되지 않았습니다. 팝업 허용 여부를 확인하세요.");
-    let result = null;
-    for (let i = 0; i < 120; i++) {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      const status = await localApi("/api/status");
-      $("nrcStatus").textContent =
-        status.sync?.message || "NRC 데이터 수집 중...";
-      if (status.sync?.error) throw Error(status.sync.error);
-      if (
-        status.sync?.completed &&
-        status.sync?.source_account_id === loginId
-      ) {
-        result = await localApi("/api/combined");
-        break;
-      }
-    }
-    if (!result)
-      throw Error("수집 시간이 오래 걸립니다. 잠시 후 다시 확인하세요.");
-    const collectedAccount = String(result.data?.sourceAccountId || "").trim();
-    if (collectedAccount && collectedAccount !== loginId)
-      throw Error(
-        `요청 계정(${loginId})과 수집 계정(${collectedAccount})이 달라 저장을 중단했습니다.`,
-      );
-    const { error: saveError } = await supabase
-      .from("nrc_sync_snapshots")
-      .insert({
-        owner_id: user.id,
-        source_account_id: loginId,
-        snapshot_type: "combined",
-        payload: result.data,
-        collected_at: result.collected_at || new Date().toISOString(),
-      });
-    if (saveError) throw saveError;
-    $("nrcStatus").textContent =
-      "계보·NV·소비자회선 수집 및 Supabase 저장 완료";
-    await loadSavedNrc();
+    $("nrcStatus").textContent = "계보·NV·소비자회선 수집 완료";
+    await loadRecentJobs();
   } catch (err) {
     error.textContent = err.message;
   } finally {
@@ -911,33 +916,14 @@ async function runCollection(e) {
 }
 async function loadSavedNrc() {
   try {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    const result = await localApi(
-      `/api/manual-credentials?appUserId=${encodeURIComponent(user.id)}`,
-    );
-    if (result.saved) {
-      $("nrcLoginId").value = result.loginId;
-      $("rememberNrc").checked = true;
-      $("clearNrcCredentials").hidden = false;
-    }
-  } catch {}
-}
-async function clearSavedNrc() {
-  try {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    await localApi("/api/manual-credentials", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ appUserId: user.id }),
-    });
-    $("rememberNrc").checked = false;
-    $("nrcPassword").value = "";
-    $("clearNrcCredentials").hidden = true;
-    $("nrcStatus").textContent = "저장된 NRC 로그인 정보를 삭제했습니다.";
+    const devices = await loadSyncDevices();
+    const select = $("nrcSourceAccount");
+    if (!select) return;
+    const accounts = [...new Set(devices.map((item) => item.source_account_id))];
+    select.innerHTML = accounts.length
+      ? accounts.map((account) => `<option value="${safe(account)}">${safe(account)}</option>`).join("")
+      : '<option value="">등록된 NRC 계정 없음</option>';
+    $("nrcRun").disabled = !accounts.length;
   } catch (err) {
     $("nrcError").textContent = err.message;
   }

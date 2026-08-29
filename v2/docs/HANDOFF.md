@@ -22,6 +22,7 @@ cd nr-manage
 - 아이디/비밀번호 회원가입 및 로그인
 - Supabase RLS 기반 본인/하위/팀 공유 권한 구조
 - PC Playwright NRC 10단계 JSON 수집 및 예약 수집
+- Supabase 작업 대기열 기반 다중 PC 자동 수집(연결 코드·브라우저 localhost 호출 제거)
 - 조직 목록, 계보도, 회원별 본인 NV/서브1/서브2/대실적/소실적
 - 고객 등록/수정/삭제, 내 고객/공유 고객
 - 충전 알림, 약정 만료, 문자, VCF 연락처 저장
@@ -50,6 +51,11 @@ cd nr-manage
 6. `006_authenticated_table_grants.sql`
 7. `007_customer_registration_fields.sql`
 8. `008_team_table_grants.sql`
+9. `009_profile_contact_fields.sql`
+10. `010_signup_name_member.sql`
+11. `011_partner_code_appointment.sql`
+12. `012_closing_plans.sql`
+13. `013_multi_pc_sync_queue.sql`
 
 화면에 `permission denied for table ...`가 나오면 `006_authenticated_table_grants.sql`을 실행한다.
 
@@ -59,7 +65,7 @@ cd nr-manage
 - 파트너끼리는 기본적으로 서로 볼 수 없다.
 - 명시적인 팀 또는 공유 허용이 있을 때만 데이터 공유가 가능하다.
 - NRC 홈페이지 비밀번호는 Supabase에 저장하지 않는다.
-- 예약 수집 비밀번호는 PC의 Windows 자격 증명 저장소에만 저장한다.
+- 각 수집 PC의 NRC 비밀번호와 앱 갱신 토큰은 Windows 자격 증명 저장소에만 저장한다.
 - Supabase service role key를 프런트엔드에 넣지 않는다.
 
 ## 다음 작업
