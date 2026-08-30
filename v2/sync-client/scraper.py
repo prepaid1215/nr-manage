@@ -36,14 +36,15 @@ def wait_for_page(page, timeout=12000):
     try:
         page.wait_for_load_state("networkidle", timeout=timeout)
     except Exception:
-        # NRC 페이지는 광고/알림 리소스가 연결된 채로 남을 수 있다.
-        page.wait_for_load_state("domcontentloaded", timeout=NAVIGATION_TIMEOUT_MS)
+        # NRC 페이지는 동기 스크립트나 광고 리소스 때문에 DOMContentLoaded도
+        # 끝나지 않을 수 있다. 이후 locator가 필요한 요소를 직접 기다린다.
+        page.wait_for_timeout(1500)
 
 
 def open_page(page, path):
     page.goto(
         f"{BASE_URL}{path}",
-        wait_until="domcontentloaded",
+        wait_until="commit",
         timeout=NAVIGATION_TIMEOUT_MS,
     )
     wait_for_page(page)
@@ -61,6 +62,8 @@ def login(page):
     print("🔐 로그인 중...")
     open_page(page, "/myofficePlus/os/2/user/osLogin")
 
+    page.wait_for_selector('input[type="text"]', state="attached", timeout=45000)
+    page.wait_for_selector('input[type="password"]', state="attached", timeout=45000)
     page.fill('input[type="text"]', USER_ID)
     page.fill('input[type="password"]', USER_PW)
     page.click('a[href="javascript:go_loginProc();"]')
