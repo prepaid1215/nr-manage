@@ -391,14 +391,17 @@ async function organizationTree() {
     $("orgError").textContent = err.message;
   }
 }
-async function organizationDashboard() {
+async function organizationDashboard(targetOwner) {
   $("content").innerHTML =
-    `<section class="card"><div class="section-head"><div><h2>조직 현황</h2><p class="help" id="orgCollected">최신 데이터를 불러오는 중...</p></div><button class="secondary compact" id="orgReload" type="button">새로고침</button></div><div class="view-tabs"><button class="active" data-view="list" type="button">하위 매출 현황</button><button data-view="tree" type="button">계보도</button></div><div class="org-summary" id="orgSummary"></div><label>회원 검색<input id="orgSearch" type="search" placeholder="이름 또는 회원번호"></label><div class="depth-filter" id="depthFilter" hidden></div><div id="orgError" class="error"></div><section class="card member-sales-card member-sales-inline"><h2>선택 회원 매출 현황</h2><div id="memberDetailInline"><p class="help">회원 이름을 선택하세요.</p></div></section><div id="orgView"></div></section>`;
-  $("orgReload").onclick = organizationDashboard;
+    `<section class="card"><div class="section-head"><div><h2>${targetOwner ? `${safe(targetOwner.name)}의 조직 현황` : "조직 현황"}</h2><p class="help" id="orgCollected">최신 데이터를 불러오는 중...</p></div><button class="secondary compact" id="orgReload" type="button">새로고침</button></div>${targetOwner ? `<button class="secondary compact" id="orgBack" type="button">← 내 조직으로</button>` : ""}<div class="view-tabs"><button class="active" data-view="list" type="button">하위 매출 현황</button><button data-view="tree" type="button">계보도</button></div><div class="org-summary" id="orgSummary"></div><label>회원 검색<input id="orgSearch" type="search" placeholder="이름 또는 회원번호"></label><div class="depth-filter" id="depthFilter" hidden></div><div id="orgError" class="error"></div><section class="card member-sales-card member-sales-inline"><h2>선택 회원 매출 현황</h2><div id="memberDetailInline"><p class="help">회원 이름을 선택하세요.</p></div></section><div id="orgView"></div></section>`;
+  $("orgReload").onclick = () => organizationDashboard(targetOwner);
+  if (targetOwner)
+    $("orgBack").onclick = () => organizationDashboard();
   try {
     const { data, error } = await supabase
       .from("nrc_sync_snapshots")
       .select("source_account_id,payload,collected_at")
+      .eq("owner_id", targetOwner?.id || me.id)
       .eq("snapshot_type", "combined")
       .order("collected_at", { ascending: false })
       .limit(1)
@@ -467,26 +470,42 @@ async function organizationDashboard() {
             ? "회원 상세 응답"
             : "해당 회원 계정 수집 필요";
       $("memberDetailInline").innerHTML =
-        `<table class="detail-table inline"><tbody><tr><th>성명</th><td>${safe(item.userName || "—")}</td><th>회원번호</th><td>${safe(item.userId || "—")}</td></tr><tr><th>현재직급</th><td>${safe(item.rankName || "회원")}</td><th>인증직급</th><td>${safe(item.rankMaxName || "회원")}</td></tr><tr><th>본인매출 NV</th><td>${number(item.ordPv)}</td><th>정산 적용 NV</th><td>${number(item.ordPv)}</td></tr><tr><th>대실적(실시간)</th><td>${number(item.maxPv)}</td><th>소실적(실시간)</th><td>${number(item.minPv)}</td></tr><tr><th>소비자 총회선</th><td>${detailTotal == null ? "해당 계정 수집 필요" : `${number(detailTotal)}회선`}</td><th>실회선</th><td>${item.lineMetricsFound ? `${number(item.realLines)}회선` : "—"}</td></tr><tr><th>본인 매출 회선</th><td>${item.lineMetricsFound ? `${number(item.ownSalesLines)}회선` : "—"}</td><th>정기배송 회선</th><td>${item.lineMetricsFound ? `${number(item.regularDeliveryLines)}회선` : "—"}</td></tr><tr><th>KT / LG 회선</th><td>${detailKt == null ? "해당 계정 수집 필요" : `${number(detailKt)} / ${number(detailLg)}`}</td><th>계보 단계</th><td>${Number(item.lv) || 0}단계</td></tr><tr><th>상위회원</th><td>${parent ? safe(parent.userName) : "—"}</td><th>활동 상태</th><td>${item.dormant ? "휴면" : String(item.status) === "1" ? "활동" : "비활동"}</td></tr><tr><th>가입일</th><td>${safe(item.regDate || "—")}</td><th>수집 기준</th><td>${lineSource}</td></tr></tbody></table><p class="detail-note">※ 소비자회선 목록은 NRC에서 현재 로그인한 계정 소유 데이터만 제공합니다. 하위회원 회선은 해당 회원 계정으로 수집하거나 팀 공유가 필요합니다.</p>${item.userId !== String(me.member_no || "") ? `<button class="secondary compact" data-view-customers="${safe(item.userId)}" data-view-name="${safe(item.userName || "")}" type="button">이 사업자 고객 보기</button>` : ""}`;
+        `<table class="detail-table inline"><tbody><tr><th>성명</th><td>${safe(item.userName || "—")}</td><th>회원번호</th><td>${safe(item.userId || "—")}</td></tr><tr><th>현재직급</th><td>${safe(item.rankName || "회원")}</td><th>인증직급</th><td>${safe(item.rankMaxName || "회원")}</td></tr><tr><th>본인매출 NV</th><td>${number(item.ordPv)}</td><th>정산 적용 NV</th><td>${number(item.ordPv)}</td></tr><tr><th>대실적(실시간)</th><td>${number(item.maxPv)}</td><th>소실적(실시간)</th><td>${number(item.minPv)}</td></tr><tr><th>소비자 총회선</th><td>${detailTotal == null ? "해당 계정 수집 필요" : `${number(detailTotal)}회선`}</td><th>실회선</th><td>${item.lineMetricsFound ? `${number(item.realLines)}회선` : "—"}</td></tr><tr><th>본인 매출 회선</th><td>${item.lineMetricsFound ? `${number(item.ownSalesLines)}회선` : "—"}</td><th>정기배송 회선</th><td>${item.lineMetricsFound ? `${number(item.regularDeliveryLines)}회선` : "—"}</td></tr><tr><th>KT / LG 회선</th><td>${detailKt == null ? "해당 계정 수집 필요" : `${number(detailKt)} / ${number(detailLg)}`}</td><th>계보 단계</th><td>${Number(item.lv) || 0}단계</td></tr><tr><th>상위회원</th><td>${parent ? safe(parent.userName) : "—"}</td><th>활동 상태</th><td>${item.dormant ? "휴면" : String(item.status) === "1" ? "활동" : "비활동"}</td></tr><tr><th>가입일</th><td>${safe(item.regDate || "—")}</td><th>수집 기준</th><td>${lineSource}</td></tr></tbody></table><p class="detail-note">※ 소비자회선 목록은 NRC에서 현재 로그인한 계정 소유 데이터만 제공합니다. 하위회원 회선은 해당 회원 계정으로 수집하거나 팀 공유가 필요합니다.</p>${item.userId !== String(me.member_no || "") ? `<div class="detail-actions"><button class="secondary compact" data-view-customers="${safe(item.userId)}" data-view-name="${safe(item.userName || "")}" type="button">이 사업자 고객 보기</button><button class="secondary compact" data-view-tree="${safe(item.userId)}" data-view-name="${safe(item.userName || "")}" type="button">이 사업자 계보 보기</button></div>` : ""}`;
+      const resolveMemberProfile = async (memberNo) => {
+        const { data: target } = await supabase
+          .from("profiles")
+          .select("id,name")
+          .eq("member_no", memberNo)
+          .maybeSingle();
+        if (!target)
+          $("orgError").textContent =
+            "해당 회원의 앱 계정을 찾을 수 없습니다(가입 안 했거나 회원번호 불일치).";
+        return target;
+      };
       $("memberDetailInline")
         .querySelector("[data-view-customers]")
         ?.addEventListener("click", async (event) => {
           const button = event.currentTarget;
-          const { data: target } = await supabase
-            .from("profiles")
-            .select("id,name")
-            .eq("member_no", button.dataset.viewCustomers)
-            .maybeSingle();
-          if (!target) {
-            $("orgError").textContent =
-              "해당 회원의 앱 계정을 찾을 수 없습니다(가입 안 했거나 회원번호 불일치).";
-            return;
-          }
+          const target = await resolveMemberProfile(
+            button.dataset.viewCustomers,
+          );
+          if (!target) return;
           show("customers", {
             viewOwner: {
               id: target.id,
               name: target.name || button.dataset.viewName,
             },
+          });
+        });
+      $("memberDetailInline")
+        .querySelector("[data-view-tree]")
+        ?.addEventListener("click", async (event) => {
+          const button = event.currentTarget;
+          const target = await resolveMemberProfile(button.dataset.viewTree);
+          if (!target) return;
+          organizationDashboard({
+            id: target.id,
+            name: target.name || button.dataset.viewName,
           });
         });
     };
