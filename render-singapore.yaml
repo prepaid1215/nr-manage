@@ -19,3 +19,5 @@ services:
         generateValue: true
       - key: APP_ORIGIN
         value: https://prepaid1215.github.io
+      - key: RUN_BROWSER_WORKER
+        value: "false"

@@ -19,6 +19,7 @@ from scraper import run_combined
 
 SUPABASE_URL = "https://ymagjzwebshfnjiisrao.supabase.co"
 SUPABASE_KEY = "sb_publishable_odxxHbBufV-ZSFlVJ8xFiw_18hBVyJf"
+CLOUD_COORDINATOR = "https://nrc-sync-cloud-sg.onrender.com"
 DATA_DIR = Path(__file__).parent / "data"
 DEVICE_FILE = DATA_DIR / "worker_device.json"
 SESSION_SERVICE = "NRC-Management-Worker-Session"
@@ -153,6 +154,16 @@ def _rest(path, method="GET", body=None, prefer=None):
     return _json_request(f"{SUPABASE_URL}/rest/v1/{path}", method, body, headers)
 
 
+def _coordinator(path, body=None, timeout=60):
+    return _json_request(
+        f"{CLOUD_COORDINATOR}{path}",
+        "POST",
+        body or {},
+        {"Authorization": f"Bearer {_access_token()}"},
+        timeout=timeout,
+    )
+
+
 def heartbeat(status="ONLINE", error=None):
     device = _load_device()
     if not device:
@@ -187,8 +198,8 @@ def claim_job():
     device = _load_device()
     if not device:
         return None
-    rows = _rest("rpc/claim_nrc_sync_job", "POST", {"p_device_id": device["id"]}) or []
-    return rows[0] if rows else None
+    result = _coordinator("/worker/claim", {"deviceId": device["id"]}) or {}
+    return result.get("job")
 
 
 def enqueue_due_schedules():
@@ -206,52 +217,48 @@ def _load_combined():
 
 def process_job(job):
     device = _load_device()
-    credentials_text = keyring.get_password(CREDENTIAL_SERVICE, device["owner_id"])
-    if not credentials_text:
-        raise RuntimeError("이 PC에 저장된 NRC 로그인 정보가 없습니다. NRC Sync 설정을 다시 해주세요.")
-    credentials = json.loads(credentials_text)
+    credentials = job.get("credentials") or {}
     login_id = credentials["loginId"]
-    requested_account = str(job.get("source_account_id") or "").strip()
+    requested_account = str(job.get("sourceAccountId") or "").strip()
     if requested_account and requested_account != login_id:
-        raise RuntimeError(f"이 PC는 NRC 계정 {login_id}용으로 등록되어 있습니다.")
+        raise RuntimeError("배정된 NRC 계정 정보가 일치하지 않습니다.")
 
-    _patch_job(
-        job["id"],
-        {"status": "RUNNING", "started_at": utc_now(), "message": f"{device['device_name']}에서 수집 중...", "error": None},
-    )
     heartbeat("BUSY", None)
-    scraper_module.USER_ID = login_id
-    scraper_module.USER_PW = credentials["password"]
-    run_combined()
-    data = _load_combined()
-    collected_account = str(data.get("sourceAccountId") or login_id).strip()
-    if collected_account != login_id:
-        raise RuntimeError(f"요청 계정({login_id})과 수집 계정({collected_account})이 다릅니다.")
-
-    snapshots = _rest(
-        "nrc_sync_snapshots",
-        "POST",
-        {
-            "owner_id": device["owner_id"],
-            "source_account_id": login_id,
-            "snapshot_type": "combined",
-            "payload": data,
-            "collected_at": data.get("수집일시") or data.get("collectedAt") or utc_now(),
-        },
-        "return=representation",
-    )
-    snapshot_id = snapshots[0]["id"]
-    _patch_job(
-        job["id"],
-        {
-            "status": "SUCCESS",
-            "snapshot_id": snapshot_id,
-            "completed_at": utc_now(),
-            "message": "매출·계보·소비자회선 수집 완료",
-            "error": None,
-        },
-    )
-    heartbeat("ONLINE", None)
+    try:
+        (DATA_DIR / "combined_latest.json").unlink(missing_ok=True)
+        scraper_module.USER_ID = login_id
+        scraper_module.USER_PW = credentials["password"]
+        run_combined()
+        data = _load_combined()
+        collected_account = str(data.get("sourceAccountId") or login_id).strip()
+        if collected_account != login_id:
+            raise RuntimeError(
+                f"요청 계정({login_id})과 수집 계정({collected_account})이 다릅니다."
+            )
+        _coordinator(
+            "/worker/complete",
+            {
+                "deviceId": device["id"],
+                "jobId": job["id"],
+                "leaseToken": job["leaseToken"],
+                "payload": data,
+            },
+            timeout=180,
+        )
+        heartbeat("ONLINE", None)
+    except Exception as exc:
+        try:
+            _coordinator(
+                "/worker/complete",
+                {
+                    "deviceId": device["id"],
+                    "jobId": job["id"],
+                    "leaseToken": job["leaseToken"],
+                    "error": str(exc),
+                },
+            )
+        finally:
+            raise
 
 
 def worker_loop():
@@ -273,10 +280,6 @@ def worker_loop():
                 process_job(job)
             except Exception as exc:
                 message = str(exc)
-                _patch_job(
-                    job["id"],
-                    {"status": "ERROR", "completed_at": utc_now(), "message": "수집 실패", "error": message},
-                )
                 heartbeat("ERROR", message)
         except Exception as exc:
             print(f"Supabase 작업 대기열 오류: {exc}")

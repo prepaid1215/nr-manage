@@ -3,6 +3,7 @@
 import json
 import base64
 import hashlib
+import hmac
 import os
 import shutil
 import tempfile
@@ -26,6 +27,7 @@ ENCRYPTION_KEY = os.getenv("NRC_CREDENTIAL_ENCRYPTION_KEY", "")
 APP_ORIGIN = os.getenv("APP_ORIGIN", "https://prepaid1215.github.io")
 WORKER_ID = os.getenv("WORKER_ID", f"cloud-{uuid.uuid4().hex[:8]}")
 POLL_SECONDS = int(os.getenv("POLL_SECONDS", "4"))
+RUN_BROWSER_WORKER = os.getenv("RUN_BROWSER_WORKER", "false").lower() == "true"
 
 app = Flask(__name__)
 worker_state = {"running": False, "job_id": None, "message": "대기 중", "error": None}
@@ -174,6 +176,152 @@ def load_credentials(owner_id, source_account_id):
         raise RuntimeError("저장된 NRC 로그인 정보를 복호화할 수 없습니다.") from exc
 
 
+def pc_worker_id(user_id, device_id):
+    clean_device_id = str(device_id or "").strip()
+    if len(clean_device_id) < 8:
+        raise ValueError("PC 장치 정보가 올바르지 않습니다.")
+    return f"pc-pool:{user_id}:{clean_device_id}"
+
+
+def lease_token(job_id, worker_id):
+    return hmac.new(
+        ENCRYPTION_KEY.encode("utf-8"),
+        f"{job_id}|{worker_id}".encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+@app.route("/worker/claim", methods=["POST", "OPTIONS"])
+def worker_claim():
+    if request.method == "OPTIONS":
+        return "", 204
+    try:
+        user = user_from_request()
+        body = request.get_json(silent=True) or {}
+        device_id = str(body.get("deviceId", "")).strip()
+        worker_id = pc_worker_id(user["id"], device_id)
+        devices = admin_request(
+            f"nrc_sync_devices?id=eq.{device_id}&owner_id=eq.{user['id']}&select=id"
+        ) or []
+        if not devices:
+            raise PermissionError("이 앱 계정에 등록된 수집 PC가 아닙니다.")
+        rows = admin_request(
+            "rpc/claim_cloud_sync_job", "POST", {"p_worker_id": worker_id}
+        ) or []
+        if not rows:
+            return jsonify({"ok": True, "job": None})
+        job = rows[0]
+        try:
+            credentials = load_credentials(job["owner_id"], job["source_account_id"])
+        except Exception as exc:
+            patch_job(
+                job["id"],
+                {
+                    "status": "ERROR",
+                    "completed_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    "message": "공유 수집 승인정보 확인 실패",
+                    "error": str(exc)[:4000],
+                },
+            )
+            raise
+        patch_job(
+            job["id"],
+            {
+                "status": "RUNNING",
+                "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "message": "승인된 Windows PC에서 수집 중...",
+                "error": None,
+            },
+        )
+        return jsonify(
+            {
+                "ok": True,
+                "job": {
+                    "id": job["id"],
+                    "ownerId": job["owner_id"],
+                    "sourceAccountId": job["source_account_id"],
+                    "credentials": credentials,
+                    "leaseToken": lease_token(job["id"], worker_id),
+                },
+            }
+        )
+    except PermissionError as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 401
+    except Exception as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 500
+
+
+@app.route("/worker/complete", methods=["POST", "OPTIONS"])
+def worker_complete():
+    if request.method == "OPTIONS":
+        return "", 204
+    try:
+        user = user_from_request()
+        body = request.get_json(silent=True) or {}
+        job_id = str(body.get("jobId", "")).strip()
+        worker_id = pc_worker_id(user["id"], body.get("deviceId"))
+        supplied_lease = str(body.get("leaseToken", ""))
+        if not job_id or not hmac.compare_digest(
+            supplied_lease, lease_token(job_id, worker_id)
+        ):
+            raise PermissionError("수집 작업 인증이 만료되었습니다.")
+        rows = admin_request(
+            f"nrc_sync_jobs?id=eq.{job_id}&select=id,owner_id,source_account_id,cloud_worker_id,status,snapshot_id"
+        ) or []
+        if not rows or rows[0].get("cloud_worker_id") != worker_id:
+            raise PermissionError("이 PC에 배정된 작업이 아닙니다.")
+        job = rows[0]
+        if job.get("status") == "SUCCESS" and job.get("snapshot_id"):
+            return jsonify({"ok": True, "alreadyCompleted": True})
+        if job.get("status") != "RUNNING":
+            raise PermissionError("이미 종료되었거나 유효하지 않은 수집 작업입니다.")
+        error_message = str(body.get("error", "")).strip()
+        if error_message:
+            patch_job(
+                job_id,
+                {
+                    "status": "ERROR",
+                    "completed_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    "message": "Windows PC 수집 실패",
+                    "error": error_message[:4000],
+                },
+            )
+            return jsonify({"ok": True})
+        data = body.get("payload") or {}
+        collected_account = str(data.get("sourceAccountId") or "").strip()
+        if collected_account != job["source_account_id"]:
+            raise ValueError("요청 계정과 수집 결과 계정이 다릅니다.")
+        snapshots = admin_request(
+            "nrc_sync_snapshots",
+            "POST",
+            {
+                "owner_id": job["owner_id"],
+                "source_account_id": collected_account,
+                "snapshot_type": "combined",
+                "payload": data,
+                "collected_at": data.get("수집일시")
+                or data.get("collectedAt")
+                or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            },
+            "return=representation",
+        )
+        patch_job(
+            job_id,
+            {
+                "status": "SUCCESS",
+                "snapshot_id": snapshots[0]["id"],
+                "completed_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "message": "승인된 Windows PC 수집 완료",
+                "error": None,
+            },
+        )
+        return jsonify({"ok": True})
+    except PermissionError as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 401
+    except Exception as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 500
+
+
 def process_job(job):
     credentials = load_credentials(job["owner_id"], job["source_account_id"])
     temp_dir = Path(tempfile.mkdtemp(prefix="nrc-cloud-"))
@@ -211,10 +359,18 @@ def worker_loop():
                 time.sleep(10)
                 continue
             admin_request("rpc/enqueue_due_cloud_schedules", "POST", {})
-            job = claim_job()
-            if job:
-                process_job(job)
-                continue
+            if RUN_BROWSER_WORKER:
+                job = claim_job()
+                if job:
+                    process_job(job)
+                    continue
+            else:
+                worker_state.update(
+                    running=False,
+                    job_id=None,
+                    message="승인된 Windows PC에 수집 작업 배정 중",
+                    error=None,
+                )
         except Exception as exc:
             worker_state.update(running=False, message="클라우드 작업 확인 오류", error=str(exc))
         _wake_event.wait(POLL_SECONDS)

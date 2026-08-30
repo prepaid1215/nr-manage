@@ -726,7 +726,7 @@ async function settings(initialView = "profile") {
 }
 async function collection() {
   $("content").innerHTML =
-    `<div class="view-tabs settings-tabs"><button data-settings-jump="profile" type="button">내 정보</button><button data-settings-jump="connection" type="button">수집 PC</button><button class="active" type="button">수집</button><button data-settings-jump="account" type="button">계정</button></div><section class="card"><div class="section-head"><div><h2>클라우드 수집 계정</h2><p class="help">Singapore 수집 서버로 전환되었습니다. NRC 비밀번호를 한 번 다시 입력해 저장하세요. 비밀번호는 암호화되어 보관됩니다.</p></div></div><form id="cloudCredentialForm"><label>NRC 홈페이지 아이디<input id="cloudLoginId" autocomplete="username" required></label><label>NRC 홈페이지 비밀번호<input id="cloudPassword" type="password" autocomplete="current-password" required></label><button class="primary" id="cloudCredentialSave" type="submit">클라우드 수집 계정 저장</button></form><button class="secondary compact" id="cloudCredentialDelete" type="button" hidden>저장 정보 삭제</button><div id="cloudCredentialStatus" class="connection-status">Singapore 클라우드 상태 확인 중...</div><div id="cloudCredentialError" class="error"></div></section><section class="card"><h2>NRC 데이터 수집</h2><p class="help">PC 연결 없이 Singapore 클라우드에서 계보·NV·소비자회선을 수집합니다.</p><form id="collectForm"><label>수집할 NRC 계정<select id="nrcSourceAccount" required><option value="">클라우드 계정 확인 중...</option></select></label><button class="primary" id="nrcRun" type="submit">매출 데이터 받기</button></form><div id="nrcStatus" class="connection-status">수집 준비</div><div id="nrcError" class="error"></div></section><section class="card"><h2>클라우드 자동수집 예약</h2><p class="help">컴퓨터를 켜두지 않아도 매일 지정 시간에 클라우드 수집기가 실행합니다.</p><form id="scheduleForm"><label>예약 이름<input id="scheduleLabel" placeholder="예: 주하루 오전 수집" required></label><label>NRC 계정<select id="scheduleSourceAccount" required><option value="">클라우드 계정 확인 중...</option></select></label><label>매일 실행 시간<input id="scheduleTime" type="time" required></label><button class="primary" type="submit">자동수집 예약 저장</button></form><div id="scheduleList" class="schedule-list"></div><div id="scheduleError" class="error"></div></section><section class="card"><h2>최근 수집 요청</h2><div id="jobList" class="schedule-list"><p class="help">요청 내역을 불러오는 중...</p></div></section>`;
+    `<div class="view-tabs settings-tabs"><button data-settings-jump="profile" type="button">내 정보</button><button data-settings-jump="connection" type="button">수집 PC</button><button class="active" type="button">수집</button><button data-settings-jump="account" type="button">계정</button></div><section class="card"><div class="section-head"><div><h2>공유 PC 수집 승인</h2><p class="help">NRC 로그인정보를 암호화해 보관하고, 승인된 온라인 Windows PC에 수집할 때만 전달합니다. 저장하면 공유 수집에 동의한 것으로 처리됩니다.</p></div></div><form id="cloudCredentialForm"><label>NRC 홈페이지 아이디<input id="cloudLoginId" autocomplete="username" required></label><label>NRC 홈페이지 비밀번호<input id="cloudPassword" type="password" autocomplete="current-password" required></label><button class="primary" id="cloudCredentialSave" type="submit">공유 PC 수집 승인·저장</button></form><button class="secondary compact" id="cloudCredentialDelete" type="button" hidden>공유 승인 취소·정보 삭제</button><div id="cloudCredentialStatus" class="connection-status">공유 수집 승인 상태 확인 중...</div><div id="cloudCredentialError" class="error"></div></section><section class="card"><h2>NRC 데이터 수집</h2><p class="help">승인된 PC 중 현재 켜져 있는 한 대가 계보·NV·소비자회선을 수집합니다. 모든 PC가 꺼져 있으면 요청은 대기합니다.</p><form id="collectForm"><label>수집할 NRC 계정<select id="nrcSourceAccount" required><option value="">승인 계정 확인 중...</option></select></label><button class="primary" id="nrcRun" type="submit">매출 데이터 받기</button></form><div id="nrcStatus" class="connection-status">수집 준비</div><div id="nrcError" class="error"></div></section><section class="card"><h2>공유 PC 자동수집 예약</h2><p class="help">매일 지정 시간에 켜져 있는 승인 PC 한 대가 자동 수집합니다.</p><form id="scheduleForm"><label>예약 이름<input id="scheduleLabel" placeholder="예: 주하루 오전 수집" required></label><label>NRC 계정<select id="scheduleSourceAccount" required><option value="">승인 계정 확인 중...</option></select></label><label>매일 실행 시간<input id="scheduleTime" type="time" required></label><button class="primary" type="submit">자동수집 예약 저장</button></form><div id="scheduleList" class="schedule-list"></div><div id="scheduleError" class="error"></div></section><section class="card"><h2>최근 수집 요청</h2><div id="jobList" class="schedule-list"><p class="help">요청 내역을 불러오는 중...</p></div></section>`;
   $("cloudCredentialForm").onsubmit = saveCloudCredential;
   $("cloudCredentialDelete").onclick = deleteCloudCredential;
   $("collectForm").onsubmit = runCollection;
@@ -803,10 +803,10 @@ async function loadCloudCredential() {
       $("cloudPassword").value = "";
       $("cloudPassword").placeholder = "변경할 때만 다시 입력";
       $("cloudCredentialDelete").hidden = false;
-      status.textContent = `클라우드 수집 준비 완료 · NRC ${account}`;
+      status.textContent = `공유 PC 수집 승인 완료 · NRC ${account}`;
     } else {
       $("cloudCredentialDelete").hidden = true;
-      status.textContent = "NRC 아이디와 비밀번호를 저장하면 바로 수집할 수 있습니다.";
+      status.textContent = "NRC 아이디와 비밀번호를 저장하면 공유 PC 수집이 승인됩니다.";
     }
     return data;
   } catch (err) {
@@ -830,7 +830,7 @@ async function saveCloudCredential(event) {
       method: "POST",
       body: JSON.stringify({ loginId, password }),
     });
-    status.textContent = `클라우드 수집 준비 완료 · NRC ${loginId}`;
+    status.textContent = `공유 PC 수집 승인 완료 · NRC ${loginId}`;
     $("cloudPassword").value = "";
     $("cloudPassword").placeholder = "변경할 때만 다시 입력";
     $("cloudCredentialDelete").hidden = false;
@@ -839,7 +839,7 @@ async function saveCloudCredential(event) {
     error.textContent = err.message;
   } finally {
     button.disabled = false;
-    button.textContent = "클라우드 수집 계정 저장";
+    button.textContent = "공유 PC 수집 승인·저장";
   }
 }
 async function deleteCloudCredential() {
@@ -886,8 +886,8 @@ async function enqueueCollection(sourceAccountId = null) {
   if (!useCloud && !online.length)
     throw Error(
       sourceAccountId
-        ? `${sourceAccountId} 계정의 클라우드 로그인 정보를 먼저 저장해 주세요.`
-        : "클라우드 NRC 로그인 정보를 먼저 저장해 주세요.",
+        ? `${sourceAccountId} 계정의 공유 수집 승인을 먼저 저장해 주세요.`
+        : "NRC 계정의 공유 PC 수집 승인을 먼저 저장해 주세요.",
     );
   const { data, error } = await supabase
     .from("nrc_sync_jobs")
@@ -896,7 +896,7 @@ async function enqueueCollection(sourceAccountId = null) {
       source_account_id: selectedAccount,
       status: "QUEUED",
       message: useCloud
-        ? "클라우드 수집기 시작 대기 중..."
+        ? "수집 가능한 승인 PC 배정 대기 중..."
         : "온라인 PC의 작업 수신 대기 중...",
     })
     .select("id,status,message")
@@ -998,7 +998,7 @@ async function runCollection(e) {
     error = $("nrcError"),
     loginId = $("nrcSourceAccount").value;
   error.textContent = "";
-  $("nrcStatus").textContent = "클라우드 수집기를 시작하는 중...";
+  $("nrcStatus").textContent = "수집 가능한 승인 PC를 찾는 중...";
   button.disabled = true;
   button.textContent = "Playwright 수집 중...";
   try {
