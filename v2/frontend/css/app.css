@@ -114,6 +114,13 @@
 .closing-line small{display:block;margin-top:3px;color:var(--muted)}
 .closing-line .sale-hint{display:block;margin-top:6px;color:#2462dc;font-weight:700;font-size:12px}
 .closing-line>span{display:block;margin-top:6px;font-size:12px;color:var(--muted)}
+.closing-breadcrumb{margin:2px 0 0;color:var(--muted);font-size:12px}
+.closing-todo{margin:10px 0;padding:12px;border:2px solid #2462dc;border-radius:11px;background:#eaf1ff}
+.closing-todo>b{display:block;color:#1a4faf;margin-bottom:6px}
+.closing-todo>span{display:block;margin-top:4px;font-size:13px}
+.closing-todo>small{display:block;margin-top:6px;color:var(--muted)}
+.closing-todo.done{border-color:#2fa96b;background:#eaf9f1}
+.closing-todo.done>b{color:#1c7a4b}
 @media(max-width:700px){.closing-lines{grid-template-columns:1fr}}
 .closing-target-edit{display:grid;grid-template-columns:1fr 120px 120px auto;gap:8px;align-items:end;margin:10px 0;padding:11px;border:1px solid var(--line);border-radius:11px;background:#fff}
 .closing-target-edit>span{color:var(--muted);font-size:12px;font-weight:700}

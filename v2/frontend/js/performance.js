@@ -396,24 +396,12 @@ export async function performancePage(root, me) {
       index === result.ownContributionIndex && result.minorOwnContribution > 0
         ? `<small>본인 매출 ${fmt(result.minorOwnContribution)} NV가 이 라인에 합산됩니다.</small>`
         : "";
-    const lineSales = (projection.sales || []).filter(
-      (sale) => sale.lineIndex === index,
-    );
-    const saleLine = lineSales.length
-      ? lineSales
-          .map(
-            (sale) =>
-              `<span class="sale-hint">매출 넣을 곳: ${safe(sale.target?.userName || "-")} (${safe(sale.memberId || "-")}) · ${fmt(sale.salesWon)}원 → +${fmt(sale.addedNv)} NV</span>`,
-          )
-          .join("")
-      : deficit > 0
-        ? `<span class="sale-hint">부족하지만 매출을 넣을 코드가 없습니다.</span>`
-        : `<span>추가 매출이 필요 없습니다.</span>`;
-    const splitNote =
-      lineSales.length > 1
-        ? `<small>한 코드에 몰지 않도록 ${lineSales.length}곳으로 나눴습니다. 합계 ${fmt(topUp.salesWon)}원은 한 번에 넣을 때와 같습니다.</small>`
-        : "";
-    return `<article class="closing-line"><b>서브${index + 1} · ${isMajor ? "대실적" : "소실적"}</b><small>${role}</small>${ownNote}<small>지금 ${fmt(result.effectiveTotals[index])} NV · 라인 목표 ${fmt(line.lineTarget)} · ${deficit > 0 ? `${fmt(deficit)} NV 부족` : "목표를 채웠습니다"}</small>${saleLine}${splitNote}</article>`;
+    const projectedTotal = projection.projectedTotals?.[index];
+    const hasTopUp = Boolean(topUp?.salesWon > 0);
+    const totalsLine = hasTopUp
+      ? `<small><b>실제(현재)</b> ${fmt(result.effectiveTotals[index])} NV · 라인 목표 ${fmt(line.lineTarget)} · ${fmt(deficit)} NV 부족 → <b>매출 넣으면(가상)</b> ${fmt(projectedTotal)} NV · 목표 채움</small>`
+      : `<small><b>실제(현재)</b> ${fmt(result.effectiveTotals[index])} NV · 라인 목표 ${fmt(line.lineTarget)} · ${deficit > 0 ? `${fmt(deficit)} NV 부족 · 넣을 코드 없음` : "목표를 채웠습니다"}</small>`;
+    return `<article class="closing-line"><b>서브${index + 1} · ${isMajor ? "대실적" : "소실적"}</b><small>${role}</small>${ownNote}${totalsLine}</article>`;
   };
 
   const treeHtml = (item) => {
@@ -506,11 +494,28 @@ export async function performancePage(root, me) {
 
   const stepHtml = (item, order, total) => {
     const member = model.byId.get(item.node.memberId);
+    const parent = member?.ppId ? model.byId.get(String(member.ppId)) : null;
+    const breadcrumb = parent
+      ? `<p class="closing-breadcrumb">상위 사업자 <b>${safe(parent.userName)}</b> (${safe(parent.userId)}) 아래</p>`
+      : `<p class="closing-breadcrumb">계보 최상위 사업자</p>`;
     const title = `${order}/${total} · ${safe(member?.userName || "이름 없음")} <small>(${safe(item.node.memberId)})</small>`;
     if (item.skipped) {
-      return `<section class="card closing-step"><div class="section-head"><h2>${title}</h2><b>추가 마감 불필요</b></div><p class="help">위에서 내려온 목표가 이미 라인 실적으로 채워져 추가 마감이 필요 없습니다.</p></section>`;
+      return `<section class="card closing-step"><div class="section-head"><h2>${title}</h2><b>추가 마감 불필요</b></div>${breadcrumb}<p class="help">위에서 내려온 목표가 이미 라인 실적으로 채워져 추가 마감이 필요 없습니다.</p></section>`;
     }
     const { node, result, projection, completion } = item;
+    const todoSales = (projection.sales || []).filter(
+      (sale) => sale.salesWon > 0,
+    );
+    const todoHtml = completion
+      ? ""
+      : todoSales.length
+        ? `<div class="closing-todo"><b>지금 할 일 · 매출 넣기</b>${todoSales
+            .map(
+              (sale) =>
+                `<span>${safe(sale.target?.userName || "-")} <small>(${safe(sale.memberId || "-")})</small> 코드에 <b>${fmt(sale.salesWon)}원</b> → +${fmt(sale.addedNv)} NV</span>`,
+            )
+            .join("")}${todoSales.length > 1 ? `<small>합계 ${fmt(todoSales.reduce((sum, sale) => sum + sale.salesWon, 0))}원 · 한 코드에 몰리지 않게 나눴습니다.</small>` : ""}</div>`
+        : `<div class="closing-todo done"><b>지금 할 일 없음</b> · 이미 목표를 채웠습니다</div>`;
     const state = completion
       ? "완료"
       : item.canComplete
@@ -532,7 +537,7 @@ export async function performancePage(root, me) {
       node.depth === 0
         ? `<p class="help">최상위 목표 · 대 ${fmt(node.majorTarget)} / 소 ${fmt(node.minorTarget)} (위에서 직접 입력한 값)</p>`
         : `<div class="closing-target-edit" data-target-member="${safe(node.memberId)}"><span>이 사업자 마감 목표 ${node.overridden ? "<em>직접 입력함</em>" : "<em>자동 배분값</em>"}</span><label>라인 합계<input data-sub-target="line" type="number" min="0" step="10000" value="${node.lineTarget}" ${completion ? "disabled" : ""}></label><label>소실적 최소<input data-sub-target="floor" type="number" min="0" step="10000" value="${node.minorFloor}" ${completion ? "disabled" : ""}></label><button class="secondary compact" data-reset-target="${safe(node.memberId)}" type="button" ${node.overridden && !completion ? "" : "disabled"}>자동값으로</button><small>자동 배분값 라인 합계 ${fmt(node.autoLineTarget)} · 소실적 기준선 ${fmt(node.autoMinorFloor)}${node.autoMinorFloor > 0 ? " (인증직급 기준)" : " (인증직급이 없어 기준선 없음)"}${completion ? " · 마감을 취소해야 수정할 수 있습니다" : ""}</small></div>`;
-    return `<section class="card closing-step"><div class="section-head"><h2>${title}</h2><b>${state}</b></div>${targetBox}<div class="closing-lines">${lineHtml(item, 0)}${lineHtml(item, 1)}</div>${treeHtml(item)}${final}${payoutHtml(item, finalMinorNv, Boolean(completion))}${warn}${button}</section>`;
+    return `<section class="card closing-step"><div class="section-head"><h2>${title}</h2><b>${state}</b></div>${breadcrumb}${todoHtml}${targetBox}<div class="closing-lines">${lineHtml(item, 0)}${lineHtml(item, 1)}</div>${treeHtml(item)}${final}${payoutHtml(item, finalMinorNv, Boolean(completion))}${warn}${button}</section>`;
   };
 
   const runPlan = () => {
