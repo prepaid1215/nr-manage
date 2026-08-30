@@ -2,7 +2,13 @@
 
 PC에서 Playwright로 NRC 홈페이지 데이터를 수집하고 Supabase에 저장하는 로컬 동기화 프로그램입니다.
 
-## 최초 설치
+## 최초 설치 (설치파일 사용 — 추천)
+
+Python을 따로 설치할 필요 없이, `installer/` 폴더의 `NRCSync.exe`로 바로 설치할 수 있습니다.
+자세한 방법은 [installer/README.md](installer/README.md) 참고. Windows 로그인 시 자동으로
+백그라운드에서 실행되도록 등록까지 한 번에 됩니다.
+
+## 최초 설치 (Python 직접 실행)
 
 ```powershell
 python -m pip install -r requirements.txt

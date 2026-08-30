@@ -11,9 +11,12 @@ import json
 import hmac
 import html
 import os
+import subprocess
+import sys
 import time
 import uuid
 import threading
+import webbrowser
 import urllib.error
 import urllib.request
 from datetime import datetime
@@ -420,7 +423,49 @@ def status():
     })
 
 
+def ensure_chromium_installed():
+    """설치 파일로 처음 실행될 때 Playwright 브라우저를 한 번 자동 설치한다."""
+    marker = DATA_DIR / ".chromium_installed"
+    if marker.exists():
+        return
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    print("🧩 처음 실행 중입니다. NRC 수집용 브라우저를 설치합니다 (1~2분 소요)...")
+    try:
+        python_exe = sys.executable
+        args = (
+            [python_exe, "-m", "playwright", "install", "chromium"]
+            if not getattr(sys, "frozen", False)
+            else [python_exe, "--playwright-install"]
+        )
+        subprocess.run(args, check=True)
+        marker.write_text("ok", encoding="utf-8")
+        print("✅ 브라우저 설치 완료.")
+    except Exception as exc:
+        print(f"⚠️ 브라우저 자동 설치 실패, 수동으로 설치가 필요할 수 있습니다: {exc}")
+
+
+def open_setup_page_if_needed():
+    if worker_configuration().get("configured"):
+        return
+
+    def _open():
+        time.sleep(1.5)
+        try:
+            webbrowser.open("http://127.0.0.1:5050/setup")
+        except Exception:
+            pass
+
+    threading.Thread(target=_open, daemon=True).start()
+
+
 if __name__ == "__main__":
+    if "--playwright-install" in sys.argv:
+        from playwright.__main__ import main as playwright_main
+
+        sys.argv = ["playwright", "install", "chromium"]
+        playwright_main()
+        sys.exit(0)
+
     print("🚀 NRC Sync API 서버 시작")
     print("📡 주소: http://localhost:5050")
     print()
@@ -433,6 +478,8 @@ if __name__ == "__main__":
     print("  POST /api/sync/daily      - 소비자현황+실적 즉시 수집")
     print("  POST /api/sync/sales      - 매출내역 즉시 수집")
     print()
+    ensure_chromium_installed()
+    open_setup_page_if_needed()
     threading.Thread(target=scheduler_loop, daemon=True).start()
     threading.Thread(target=worker_loop, daemon=True).start()
     app.run(host="127.0.0.1", port=5050, debug=False)

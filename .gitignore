@@ -1,4 +1,7 @@
 v2/sync-client/.env
 v2/sync-client/data/
 v2/sync-client/__pycache__/
+v2/sync-client/build/
+v2/sync-client/dist/
+v2/sync-client/*.spec
 *.py[cod]
