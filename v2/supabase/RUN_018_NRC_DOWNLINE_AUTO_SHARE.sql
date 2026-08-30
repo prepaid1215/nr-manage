@@ -1,6 +1,6 @@
 -- Supabase SQL Editor에서 이 파일 전체를 복사해 한 번 실행하세요.
--- NRC 계보상 실제 하위 회원이면, 팀/파트너 임명 없이도 활동·체크리스트·실적·조직
--- 자료를 자동으로 읽을 수 있게 합니다(읽기 전용). 고객·수당처럼 더 민감한 항목과
+-- NRC 계보상 실제 하위 회원이면, 팀/파트너 임명 없이도 고객·활동·체크리스트·실적·조직
+-- 자료를 자동으로 읽을 수 있게 합니다(읽기 전용). 수당처럼 더 민감한 항목과
 -- 계보에 안 잡히는 관계는 지금처럼 "팀" 메뉴에서 수동으로 공유해야 합니다.
 
 begin;
@@ -40,7 +40,7 @@ returns boolean language sql stable security definer set search_path=public as $
     )
     or (
       not p_write
-      and p_resource in ('activity','checklist','performance','organization_summary')
+      and p_resource in ('customers','activity','checklist','performance','organization_summary')
       and public.is_nrc_downline(p_owner_id)
     )
 $$;

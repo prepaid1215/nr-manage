@@ -27,7 +27,7 @@ grant execute on function public.is_nrc_downline(uuid) to authenticated;
 -- can_access_owner에 "NRC 계보상 실제 하위면 읽기 권한 자동 부여" 조건을 추가한다.
 -- 팀/공유권한(sharing_grants) 경로는 그대로 남아있어, 계보에 안 잡히는 관계는
 -- 지금처럼 수동으로 파트너 임명해서 공유할 수 있다.
--- 고객(customers)·수당(commission)처럼 더 민감한 항목은 자동 공유 대상에서 제외했다.
+-- 수당(commission)처럼 더 민감한 항목은 자동 공유 대상에서 제외했다.
 create or replace function public.can_access_owner(p_owner_id uuid,p_resource public.share_resource,p_write boolean default false)
 returns boolean language sql stable security definer set search_path=public as $$
   select auth.uid()=p_owner_id
@@ -42,7 +42,7 @@ returns boolean language sql stable security definer set search_path=public as $
     )
     or (
       not p_write
-      and p_resource in ('activity','checklist','performance','organization_summary')
+      and p_resource in ('customers','activity','checklist','performance','organization_summary')
       and public.is_nrc_downline(p_owner_id)
     )
 $$;

@@ -5,7 +5,7 @@ import {
   currentProfile,
   setRememberLogin,
 } from "./supabase.js?v=20260829-34";
-import { customersPage } from "./customers.js?v=20260829-23";
+import { customersPage } from "./customers.js?v=20260829-24";
 import { activityPage } from "./activity.js?v=20260829-25";
 import {
   checklistItemCount,
@@ -467,7 +467,28 @@ async function organizationDashboard() {
             ? "회원 상세 응답"
             : "해당 회원 계정 수집 필요";
       $("memberDetailInline").innerHTML =
-        `<table class="detail-table inline"><tbody><tr><th>성명</th><td>${safe(item.userName || "—")}</td><th>회원번호</th><td>${safe(item.userId || "—")}</td></tr><tr><th>현재직급</th><td>${safe(item.rankName || "회원")}</td><th>인증직급</th><td>${safe(item.rankMaxName || "회원")}</td></tr><tr><th>본인매출 NV</th><td>${number(item.ordPv)}</td><th>정산 적용 NV</th><td>${number(item.ordPv)}</td></tr><tr><th>대실적(실시간)</th><td>${number(item.maxPv)}</td><th>소실적(실시간)</th><td>${number(item.minPv)}</td></tr><tr><th>소비자 총회선</th><td>${detailTotal == null ? "해당 계정 수집 필요" : `${number(detailTotal)}회선`}</td><th>실회선</th><td>${item.lineMetricsFound ? `${number(item.realLines)}회선` : "—"}</td></tr><tr><th>본인 매출 회선</th><td>${item.lineMetricsFound ? `${number(item.ownSalesLines)}회선` : "—"}</td><th>정기배송 회선</th><td>${item.lineMetricsFound ? `${number(item.regularDeliveryLines)}회선` : "—"}</td></tr><tr><th>KT / LG 회선</th><td>${detailKt == null ? "해당 계정 수집 필요" : `${number(detailKt)} / ${number(detailLg)}`}</td><th>계보 단계</th><td>${Number(item.lv) || 0}단계</td></tr><tr><th>상위회원</th><td>${parent ? safe(parent.userName) : "—"}</td><th>활동 상태</th><td>${item.dormant ? "휴면" : String(item.status) === "1" ? "활동" : "비활동"}</td></tr><tr><th>가입일</th><td>${safe(item.regDate || "—")}</td><th>수집 기준</th><td>${lineSource}</td></tr></tbody></table><p class="detail-note">※ 소비자회선 목록은 NRC에서 현재 로그인한 계정 소유 데이터만 제공합니다. 하위회원 회선은 해당 회원 계정으로 수집하거나 팀 공유가 필요합니다.</p>`;
+        `<table class="detail-table inline"><tbody><tr><th>성명</th><td>${safe(item.userName || "—")}</td><th>회원번호</th><td>${safe(item.userId || "—")}</td></tr><tr><th>현재직급</th><td>${safe(item.rankName || "회원")}</td><th>인증직급</th><td>${safe(item.rankMaxName || "회원")}</td></tr><tr><th>본인매출 NV</th><td>${number(item.ordPv)}</td><th>정산 적용 NV</th><td>${number(item.ordPv)}</td></tr><tr><th>대실적(실시간)</th><td>${number(item.maxPv)}</td><th>소실적(실시간)</th><td>${number(item.minPv)}</td></tr><tr><th>소비자 총회선</th><td>${detailTotal == null ? "해당 계정 수집 필요" : `${number(detailTotal)}회선`}</td><th>실회선</th><td>${item.lineMetricsFound ? `${number(item.realLines)}회선` : "—"}</td></tr><tr><th>본인 매출 회선</th><td>${item.lineMetricsFound ? `${number(item.ownSalesLines)}회선` : "—"}</td><th>정기배송 회선</th><td>${item.lineMetricsFound ? `${number(item.regularDeliveryLines)}회선` : "—"}</td></tr><tr><th>KT / LG 회선</th><td>${detailKt == null ? "해당 계정 수집 필요" : `${number(detailKt)} / ${number(detailLg)}`}</td><th>계보 단계</th><td>${Number(item.lv) || 0}단계</td></tr><tr><th>상위회원</th><td>${parent ? safe(parent.userName) : "—"}</td><th>활동 상태</th><td>${item.dormant ? "휴면" : String(item.status) === "1" ? "활동" : "비활동"}</td></tr><tr><th>가입일</th><td>${safe(item.regDate || "—")}</td><th>수집 기준</th><td>${lineSource}</td></tr></tbody></table><p class="detail-note">※ 소비자회선 목록은 NRC에서 현재 로그인한 계정 소유 데이터만 제공합니다. 하위회원 회선은 해당 회원 계정으로 수집하거나 팀 공유가 필요합니다.</p>${item.userId !== String(me.member_no || "") ? `<button class="secondary compact" data-view-customers="${safe(item.userId)}" data-view-name="${safe(item.userName || "")}" type="button">이 사업자 고객 보기</button>` : ""}`;
+      $("memberDetailInline")
+        .querySelector("[data-view-customers]")
+        ?.addEventListener("click", async (event) => {
+          const button = event.currentTarget;
+          const { data: target } = await supabase
+            .from("profiles")
+            .select("id,name")
+            .eq("member_no", button.dataset.viewCustomers)
+            .maybeSingle();
+          if (!target) {
+            $("orgError").textContent =
+              "해당 회원의 앱 계정을 찾을 수 없습니다(가입 안 했거나 회원번호 불일치).";
+            return;
+          }
+          show("customers", {
+            viewOwner: {
+              id: target.id,
+              name: target.name || button.dataset.viewName,
+            },
+          });
+        });
     };
     const bind = () =>
       document.querySelectorAll("[data-member]").forEach(
