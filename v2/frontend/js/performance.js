@@ -883,6 +883,58 @@ export async function performancePage(root, me) {
     treeFocusHistory = [];
     navigateTree(plan.topMemberId);
   };
+  {
+    const canvas = $("closingMainTree");
+    let panActive = false,
+      panMoved = false,
+      panCaptured = false,
+      panStartX = 0,
+      panStartY = 0,
+      panScrollLeft = 0,
+      panScrollTop = 0;
+    canvas.onpointerdown = (event) => {
+      if (event.button !== 0) return;
+      panActive = true;
+      panMoved = false;
+      panStartX = event.clientX;
+      panStartY = event.clientY;
+      panScrollLeft = canvas.scrollLeft;
+      panScrollTop = canvas.scrollTop;
+    };
+    canvas.onpointermove = (event) => {
+      if (!panActive) return;
+      const dx = event.clientX - panStartX,
+        dy = event.clientY - panStartY;
+      if (!panMoved && Math.abs(dx) + Math.abs(dy) > 6) {
+        panMoved = true;
+        panCaptured = true;
+        canvas.classList.add("dragging");
+        canvas.setPointerCapture(event.pointerId);
+      }
+      if (!panMoved) return;
+      canvas.scrollLeft = panScrollLeft - dx;
+      canvas.scrollTop = panScrollTop - dy;
+    };
+    const panStop = (event) => {
+      panActive = false;
+      canvas.classList.remove("dragging");
+      if (panCaptured && canvas.hasPointerCapture(event.pointerId))
+        canvas.releasePointerCapture(event.pointerId);
+      panCaptured = false;
+    };
+    canvas.onpointerup = panStop;
+    canvas.onpointercancel = panStop;
+    canvas.addEventListener(
+      "click",
+      (event) => {
+        if (!panMoved) return;
+        event.preventDefault();
+        event.stopPropagation();
+        panMoved = false;
+      },
+      true,
+    );
+  }
   $("closingMainTree").addEventListener("click", (event) => {
     const button = event.target.closest("[data-member]");
     if (!button) return;
