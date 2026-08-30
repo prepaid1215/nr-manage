@@ -4,7 +4,7 @@ import {
   signIn,
   currentProfile,
 } from "./supabase.js?v=20260829-32";
-import { customersPage } from "./customers.js?v=20260829-21";
+import { customersPage } from "./customers.js?v=20260829-22";
 import { activityPage } from "./activity.js?v=20260829-25";
 import {
   checklistItemCount,
@@ -48,7 +48,7 @@ async function home() {
   $("content").replaceChildren(frag);
   $("content").insertAdjacentHTML(
     "afterbegin",
-    `<section class="card home-nrc"><div class="section-head"><div><h2>NRC 매출 대시보드</h2><p class="help" id="homeNrcUpdated">최근 수집 데이터를 불러오는 중...</p></div><button class="primary compact" id="homeCollect" type="button">매출받기</button></div><div id="homePcStatus" class="pc-status-badge"><span class="device-dot"></span><span>수집 PC 상태 확인 중...</span></div><div id="homeCollectStatus" class="connection-status" hidden></div><div id="homeCollectError" class="error"></div><div id="homeNrcDashboard"><p class="help">수집된 매출 데이터가 없습니다.</p></div></section>`,
+    `<section class="card home-actions"><button class="primary" id="homeAddCustomer" type="button">+ 고객 등록</button></section><section class="card home-nrc"><div class="section-head"><div><h2>NRC 매출 대시보드</h2><p class="help" id="homeNrcUpdated">최근 수집 데이터를 불러오는 중...</p></div></div><div id="homePcStatus" class="pc-status-badge"><span class="device-dot"></span><span>수집 PC 상태 확인 중...</span></div><div id="homeCollectStatus" class="connection-status" hidden></div><div id="homeCollectError" class="error"></div><div id="homeNrcDashboard"><p class="help">수집된 매출 데이터가 없습니다.</p></div><button class="secondary home-collect-btn" id="homeCollect" type="button">매출받기 (마감할 때만 눌러도 됩니다)</button></section>`,
   );
   loadHomePcStatus();
   $("content").insertAdjacentHTML(
@@ -56,6 +56,7 @@ async function home() {
     `<section class="card"><h2>알림</h2><div id="homeAlerts" class="home-alerts"><p class="help">알림을 불러오는 중...</p></div></section>`,
   );
   $("homeCollect").onclick = runHomeCollection;
+  $("homeAddCustomer").onclick = () => show("customers", { openAdd: true });
   const date = new Date(),
     today = localDate(date),
     month = today.slice(0, 7),
@@ -164,12 +165,12 @@ async function home() {
     ? alerts.map((a) => `<article>🔔 ${a}</article>`).join("")
     : '<p class="help">현재 긴급한 알림이 없습니다.</p>';
 }
-async function show(page) {
+async function show(page, options) {
   document
     .querySelectorAll("[data-page]")
     .forEach((b) => b.classList.toggle("active", b.dataset.page === page));
   if (page === "home") return home();
-  if (page === "customers") return customersPage($("content"), me);
+  if (page === "customers") return customersPage($("content"), me, options);
   if (page === "activity") return activityPage($("content"), me);
   if (page === "checklist") return checklistPage($("content"), me);
   if (page === "organization") return organizationDashboard();
