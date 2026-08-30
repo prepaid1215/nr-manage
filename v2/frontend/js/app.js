@@ -77,7 +77,7 @@ async function home() {
   );
   $("content").querySelector(".kpis").insertAdjacentHTML(
     "afterend",
-    `<section class="card home-nrc"><div class="section-head"><div><h2>NRC 매출 대시보드</h2><p class="help" id="homeNrcUpdated">최근 수집 데이터를 불러오는 중...</p></div></div><div id="homePcStatus" class="pc-status-badge"><span class="device-dot"></span><span>수집 PC 상태 확인 중...</span></div><div id="homeCollectStatus" class="connection-status" hidden></div><div id="homeCollectError" class="error"></div><div id="homeNrcDashboard"><p class="help">수집된 매출 데이터가 없습니다.</p></div><button class="secondary home-collect-btn" id="homeCollect" type="button">매출받기 (마감할 때만 눌러도 됩니다)</button></section>`,
+    `<section class="card home-nrc"><div class="section-head"><div><h2>NRC 매출 대시보드</h2><p class="help" id="homeNrcUpdated">최근 수집 데이터를 불러오는 중...</p></div></div><div id="homePcStatus" class="pc-status-badge"><span class="device-dot"></span><span>수집 PC 상태 확인 중...</span></div><div id="homeCollectStatus" class="connection-status" hidden></div><div id="homeCollectError" class="error"></div><button class="secondary home-collect-btn" id="homeCollect" type="button">매출받기 (마감할 때만 눌러도 됩니다)</button><div id="homeNrcDashboard"><p class="help">수집된 매출 데이터가 없습니다.</p></div></section>`,
   );
   loadHomePcStatus();
   $("content").insertAdjacentHTML(
