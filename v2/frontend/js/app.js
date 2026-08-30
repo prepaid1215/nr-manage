@@ -644,6 +644,7 @@ async function organizationDashboard() {
   }
 }
 const LOCAL_SYNC = "http://127.0.0.1:5050";
+const CLOUD_SYNC = "https://nrc-sync-cloud.onrender.com";
 async function settings(initialView = "profile") {
   $("content").innerHTML =
     `<div class="view-tabs settings-tabs"><button class="active" data-settings-view="profile" type="button">내 정보</button><button data-settings-view="connection" type="button">수집 PC</button><button data-settings-view="collection" type="button">수집</button><button data-settings-view="account" type="button">계정</button></div><section id="profileSettings" class="card"><div class="section-head"><div><h2>내 정보</h2><p class="help">이름을 바꾸면 화면 상단 인사말에도 바로 반영됩니다.</p></div></div><form id="profileForm"><div class="profile-form-grid"><label>이름<input id="profileName" required maxlength="40"></label><label>전화번호<input id="profilePhone" type="tel" inputmode="tel" placeholder="010-0000-0000"></label><label>이메일<input id="profileEmail" type="email" placeholder="name@example.com"></label><label>회원번호<input id="profileMemberNo" inputmode="numeric"></label><label>상호명<input id="profileBusiness" placeholder="예: 주하루"></label><label class="full">주소<input id="profileAddress"></label></div><button class="primary" id="saveProfile" type="submit">내 정보 저장</button><div id="profileStatus" class="connection-status" hidden></div><div id="profileError" class="error"></div></form></section><section id="connectionSettings" class="card" hidden><div class="section-head"><div><h2>수집 PC</h2><p class="help">여러 PC를 등록하면 켜져 있는 PC가 자동으로 수집 작업을 처리합니다. 연결 코드는 필요 없습니다.</p></div><a class="secondary" href="${LOCAL_SYNC}/setup" target="_blank" rel="noopener">이 PC 등록</a></div><div id="nrcStatus" class="connection-status">등록된 PC 확인 중...</div><div id="deviceList" class="schedule-list"></div><div id="nrcError" class="error"></div></section><section id="accountSettings" class="card" hidden><h2>앱 계정</h2><p class="help" id="profileUsername"></p><button class="secondary" id="logout">로그아웃</button></section>`;
@@ -725,7 +726,9 @@ async function settings(initialView = "profile") {
 }
 async function collection() {
   $("content").innerHTML =
-    `<div class="view-tabs settings-tabs"><button data-settings-jump="profile" type="button">내 정보</button><button data-settings-jump="connection" type="button">수집 PC</button><button class="active" type="button">수집</button><button data-settings-jump="account" type="button">계정</button></div><section class="card"><h2>NRC 데이터 수집</h2><p class="help">어디서든 요청하면 켜져 있는 등록 PC 중 하나가 자동으로 수집합니다.</p><form id="collectForm"><label>수집할 NRC 계정<select id="nrcSourceAccount" required><option value="">등록 PC 확인 중...</option></select></label><button class="primary" id="nrcRun" type="submit">매출 데이터 받기</button></form><div id="nrcStatus" class="connection-status">수집 준비</div><div id="nrcError" class="error"></div></section><section class="card"><h2>다중 PC 자동수집 예약</h2><p class="help">해당 NRC 계정으로 등록된 PC 중 한 대만 매일 지정 시간에 작업을 실행합니다.</p><form id="scheduleForm"><label>예약 이름<input id="scheduleLabel" placeholder="예: 주하루 오전 수집" required></label><label>NRC 계정<select id="scheduleSourceAccount" required><option value="">등록 PC 확인 중...</option></select></label><label>매일 실행 시간<input id="scheduleTime" type="time" required></label><button class="primary" type="submit">자동수집 예약 저장</button></form><div id="scheduleList" class="schedule-list"></div><div id="scheduleError" class="error"></div></section><section class="card"><h2>최근 수집 요청</h2><div id="jobList" class="schedule-list"><p class="help">요청 내역을 불러오는 중...</p></div></section>`;
+    `<div class="view-tabs settings-tabs"><button data-settings-jump="profile" type="button">내 정보</button><button data-settings-jump="connection" type="button">수집 PC</button><button class="active" type="button">수집</button><button data-settings-jump="account" type="button">계정</button></div><section class="card"><div class="section-head"><div><h2>클라우드 수집 계정</h2><p class="help">한 번 저장하면 PC가 꺼져 있어도 어디서든 중앙 수집기가 실행됩니다. 비밀번호는 암호화되어 보관됩니다.</p></div></div><form id="cloudCredentialForm"><label>NRC 홈페이지 아이디<input id="cloudLoginId" autocomplete="username" required></label><label>NRC 홈페이지 비밀번호<input id="cloudPassword" type="password" autocomplete="current-password" required></label><button class="primary" id="cloudCredentialSave" type="submit">클라우드 수집 계정 저장</button></form><button class="secondary compact" id="cloudCredentialDelete" type="button" hidden>저장 정보 삭제</button><div id="cloudCredentialStatus" class="connection-status">클라우드 상태 확인 중...</div><div id="cloudCredentialError" class="error"></div></section><section class="card"><h2>NRC 데이터 수집</h2><p class="help">PC 연결 없이 클라우드에서 계보·NV·소비자회선을 수집합니다.</p><form id="collectForm"><label>수집할 NRC 계정<select id="nrcSourceAccount" required><option value="">클라우드 계정 확인 중...</option></select></label><button class="primary" id="nrcRun" type="submit">매출 데이터 받기</button></form><div id="nrcStatus" class="connection-status">수집 준비</div><div id="nrcError" class="error"></div></section><section class="card"><h2>클라우드 자동수집 예약</h2><p class="help">컴퓨터를 켜두지 않아도 매일 지정 시간에 클라우드 수집기가 실행합니다.</p><form id="scheduleForm"><label>예약 이름<input id="scheduleLabel" placeholder="예: 주하루 오전 수집" required></label><label>NRC 계정<select id="scheduleSourceAccount" required><option value="">클라우드 계정 확인 중...</option></select></label><label>매일 실행 시간<input id="scheduleTime" type="time" required></label><button class="primary" type="submit">자동수집 예약 저장</button></form><div id="scheduleList" class="schedule-list"></div><div id="scheduleError" class="error"></div></section><section class="card"><h2>최근 수집 요청</h2><div id="jobList" class="schedule-list"><p class="help">요청 내역을 불러오는 중...</p></div></section>`;
+  $("cloudCredentialForm").onsubmit = saveCloudCredential;
+  $("cloudCredentialDelete").onclick = deleteCloudCredential;
   $("collectForm").onsubmit = runCollection;
   $("scheduleForm").onsubmit = addSchedule;
   document
@@ -735,7 +738,7 @@ async function collection() {
         (button.onclick = () => settings(button.dataset.settingsJump)),
     );
   await loadSavedNrc();
-  await Promise.all([loadLocalStatus(), loadSchedules(), loadRecentJobs()]);
+  await Promise.all([loadCloudCredential(), loadSchedules(), loadRecentJobs()]);
 }
 async function localApi(path, options = {}) {
   const token = localStorage.getItem("nrc-sync-token") || "";
@@ -764,6 +767,97 @@ async function localApi(path, options = {}) {
   }
   return data;
 }
+async function cloudApi(path, options = {}) {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) throw Error("앱 로그인 세션이 만료되었습니다. 다시 로그인해 주세요.");
+  let response;
+  try {
+    response = await fetch(`${CLOUD_SYNC}${path}`, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+  } catch {
+    throw Error("클라우드 수집기를 깨우는 중입니다. 잠시 후 다시 눌러 주세요.");
+  }
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.ok)
+    throw Error(data.message || "클라우드 수집기 요청에 실패했습니다.");
+  return data;
+}
+async function loadCloudCredential() {
+  const status = $("cloudCredentialStatus");
+  if (!status) return null;
+  const error = $("cloudCredentialError");
+  error.textContent = "";
+  try {
+    const data = await cloudApi("/credentials");
+    if (data.saved) {
+      const account = data.credential.source_account_id;
+      $("cloudLoginId").value = account;
+      $("cloudPassword").value = "";
+      $("cloudPassword").placeholder = "변경할 때만 다시 입력";
+      $("cloudCredentialDelete").hidden = false;
+      status.textContent = `클라우드 수집 준비 완료 · NRC ${account}`;
+    } else {
+      $("cloudCredentialDelete").hidden = true;
+      status.textContent = "NRC 아이디와 비밀번호를 저장하면 바로 수집할 수 있습니다.";
+    }
+    return data;
+  } catch (err) {
+    status.textContent = "클라우드 수집기 상태를 확인하지 못했습니다.";
+    error.textContent = err.message;
+    return null;
+  }
+}
+async function saveCloudCredential(event) {
+  event.preventDefault();
+  const button = $("cloudCredentialSave"),
+    status = $("cloudCredentialStatus"),
+    error = $("cloudCredentialError"),
+    loginId = $("cloudLoginId").value.trim(),
+    password = $("cloudPassword").value;
+  error.textContent = "";
+  button.disabled = true;
+  button.textContent = "암호화하여 저장 중...";
+  try {
+    await cloudApi("/credentials", {
+      method: "POST",
+      body: JSON.stringify({ loginId, password }),
+    });
+    status.textContent = `클라우드 수집 준비 완료 · NRC ${loginId}`;
+    $("cloudPassword").value = "";
+    $("cloudPassword").placeholder = "변경할 때만 다시 입력";
+    $("cloudCredentialDelete").hidden = false;
+    await loadSavedNrc();
+  } catch (err) {
+    error.textContent = err.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = "클라우드 수집 계정 저장";
+  }
+}
+async function deleteCloudCredential() {
+  if (!confirm("클라우드에 저장한 NRC 로그인 정보를 삭제할까요?")) return;
+  const error = $("cloudCredentialError");
+  error.textContent = "";
+  try {
+    await cloudApi("/credentials", { method: "DELETE" });
+    $("cloudLoginId").value = "";
+    $("cloudPassword").value = "";
+    $("cloudCredentialDelete").hidden = true;
+    $("cloudCredentialStatus").textContent =
+      "저장 정보를 삭제했습니다. 새 계정을 저장할 수 있습니다.";
+    await loadSavedNrc();
+  } catch (err) {
+    error.textContent = err.message;
+  }
+}
 async function loadSyncDevices() {
   const { data, error } = await supabase
     .from("nrc_sync_devices")
@@ -777,29 +871,38 @@ function isDeviceOnline(device) {
   return age < 45000 && ["ONLINE", "BUSY"].includes(device.status);
 }
 async function enqueueCollection(sourceAccountId = null) {
-  const devices = await loadSyncDevices();
+  const cloud = await cloudApi("/credentials").catch(() => null);
+  const cloudAccount = cloud?.saved
+    ? cloud.credential.source_account_id
+    : null;
+  const devices = await loadSyncDevices().catch(() => []);
   const online = devices.filter(
     (device) =>
       isDeviceOnline(device) &&
       (!sourceAccountId || device.source_account_id === sourceAccountId),
   );
-  if (!online.length)
+  const selectedAccount = sourceAccountId || cloudAccount || online[0]?.source_account_id;
+  const useCloud = Boolean(cloudAccount && selectedAccount === cloudAccount);
+  if (!useCloud && !online.length)
     throw Error(
       sourceAccountId
-        ? `${sourceAccountId} 계정으로 등록된 온라인 수집 PC가 없습니다.`
-        : "현재 온라인인 수집 PC가 없습니다.",
+        ? `${sourceAccountId} 계정의 클라우드 로그인 정보를 먼저 저장해 주세요.`
+        : "클라우드 NRC 로그인 정보를 먼저 저장해 주세요.",
     );
   const { data, error } = await supabase
     .from("nrc_sync_jobs")
     .insert({
       owner_id: me.id,
-      source_account_id: sourceAccountId || online[0].source_account_id,
+      source_account_id: selectedAccount,
       status: "QUEUED",
-      message: "온라인 PC의 작업 수신 대기 중...",
+      message: useCloud
+        ? "클라우드 수집기 시작 대기 중..."
+        : "온라인 PC의 작업 수신 대기 중...",
     })
     .select("id,status,message")
     .single();
   if (error) throw error;
+  if (useCloud) await cloudApi("/wake", { method: "POST" });
   return data;
 }
 async function waitForCollectionJob(jobId, onProgress) {
@@ -849,11 +952,7 @@ async function runHomeCollection() {
   button.disabled = true;
   button.textContent = "수집 중...";
   try {
-    const devices = await loadSyncDevices();
-    const available = devices.find((device) => isDeviceOnline(device));
-    if (!available)
-      throw Error("현재 켜져 있는 수집 PC가 없습니다. NRC Sync를 실행해 주세요.");
-    const job = await enqueueCollection(available.source_account_id);
+    const job = await enqueueCollection();
     await waitForCollectionJob(job.id, (message) => {
       status.textContent = message;
     });
@@ -899,7 +998,7 @@ async function runCollection(e) {
     error = $("nrcError"),
     loginId = $("nrcSourceAccount").value;
   error.textContent = "";
-  $("nrcStatus").textContent = "온라인 수집 PC에 작업을 보내는 중...";
+  $("nrcStatus").textContent = "클라우드 수집기를 시작하는 중...";
   button.disabled = true;
   button.textContent = "Playwright 수집 중...";
   try {
@@ -918,10 +1017,18 @@ async function runCollection(e) {
 }
 async function loadSavedNrc() {
   try {
-    const devices = await loadSyncDevices();
+    const [cloud, devices] = await Promise.all([
+      cloudApi("/credentials").catch(() => null),
+      loadSyncDevices().catch(() => []),
+    ]);
     const select = $("nrcSourceAccount");
     if (!select) return;
-    const accounts = [...new Set(devices.map((item) => item.source_account_id))];
+    const accounts = [
+      ...new Set([
+        ...(cloud?.saved ? [cloud.credential.source_account_id] : []),
+        ...devices.map((item) => item.source_account_id),
+      ]),
+    ];
     select.innerHTML = accounts.length
       ? accounts.map((account) => `<option value="${safe(account)}">${safe(account)}</option>`).join("")
       : '<option value="">등록된 NRC 계정 없음</option>';
