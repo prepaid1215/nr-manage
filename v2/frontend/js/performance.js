@@ -343,11 +343,22 @@ export async function performancePage(root, me) {
   const applyClosingFilter = () => {
     const query = $("closingFilter").value.trim().toLowerCase();
     $("closingOptions")
-      .querySelectorAll("label")
+      .querySelectorAll(".closing-group")
+      .forEach((group) => {
+        let anyVisible = false;
+        group.querySelectorAll("label").forEach((label) => {
+          const matches =
+            !query || label.textContent.toLowerCase().includes(query);
+          label.hidden = !matches;
+          if (matches) anyVisible = true;
+        });
+        group.hidden = Boolean(query) && !anyVisible;
+      });
+    $("closingOptions")
+      .querySelectorAll(":scope > label")
       .forEach((label) => {
-        const isSingle = !label.closest(".closing-group");
         const matches = !query || label.textContent.toLowerCase().includes(query);
-        label.hidden = !matches || (isSingle && !showSingles && !query);
+        label.hidden = !matches || (!query && !showSingles);
       });
   };
 
@@ -687,7 +698,20 @@ export async function performancePage(root, me) {
     collapsedGroups.delete(name);
     renderClosers();
   };
-  $("closingFilter").oninput = applyClosingFilter;
+  $("closingFilter").oninput = () => {
+    const query = $("closingFilter").value.trim().toLowerCase();
+    let expanded = false;
+    if (query) {
+      for (const name of [...collapsedGroups]) {
+        if (name.toLowerCase().includes(query)) {
+          collapsedGroups.delete(name);
+          expanded = true;
+        }
+      }
+    }
+    if (expanded) renderClosers();
+    else applyClosingFilter();
+  };
   $("closingShowSingles").onclick = () => {
     showSingles = !showSingles;
     renderClosers();
