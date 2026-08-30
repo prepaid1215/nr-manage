@@ -87,6 +87,7 @@ export async function performancePage(root, me) {
     ? ""
     : "로그인 정보를 찾지 못해 이 브라우저에만 저장합니다.";
   let plan = null;
+  let selfClosings = {};
   const collapsedGroups = new Set();
   let showSingles = false;
   let lastRun = null;
@@ -270,6 +271,8 @@ export async function performancePage(root, me) {
   );
   renderStorageNote();
 
+  const effectiveCompletion = (id) => plan.completions[id] || selfClosings[id] || null;
+
   const descendantsOf = (topId) => {
     const out = [];
     const stack = [...(model.children.get(String(topId)) || [])];
@@ -381,7 +384,7 @@ export async function performancePage(root, me) {
     } else if (line.childAllocation) {
       const child = line.childAllocation;
       const closer = model.byId.get(child.memberId);
-      const childDone = Boolean(plan.completions[child.memberId]);
+      const childDone = Boolean(effectiveCompletion(child.memberId));
       const targetKind = child.overridden ? "직접 입력" : "자동";
       role = branch.completed
         ? `하위 마감 ${safe(closer?.userName || "")} ${childDone ? "완료값" : "예상 완료값"} ${fmt(branch.total)} NV 반영`
@@ -517,11 +520,13 @@ export async function performancePage(root, me) {
       ? `<p class="error">${result.warnings.map(safe).join(" ")}</p>`
       : "";
     const button = completion
-      ? `<button class="secondary" data-cancel-closing="${safe(node.memberId)}" type="button">마감 취소</button>`
+      ? completion.external
+        ? `<p class="help">이 사업자 본인 계정에서 직접 마감 완료한 값입니다 · 취소는 본인 계정에서만 가능합니다.</p>`
+        : `<button class="secondary" data-cancel-closing="${safe(node.memberId)}" type="button">마감 취소</button>`
       : `<button class="primary" data-complete-closing="${safe(node.memberId)}" type="button" ${item.canComplete && projection.feasible !== false ? "" : "disabled"}>${projection.feasible === false ? "마감 불가" : item.canComplete ? "마감 완료로 표시" : "앞 순서부터 완료하세요"}</button>`;
     const finalMinorNv = completion ? completion.minorNv : projection.minorNv;
     const final = completion
-      ? `<p><b>확정 마감</b> · 대 ${fmt(completion.majorNv)} / 소 ${fmt(completion.minorNv)} → 상위 라인에 <b>${fmt(completion.completedNv)} NV</b> 반영</p>`
+      ? `<p><b>확정 마감</b>${completion.external ? " <em>(본인 계정 마감)</em>" : ""} · 대 ${fmt(completion.majorNv)} / 소 ${fmt(completion.minorNv)} → 상위 라인에 <b>${fmt(completion.completedNv)} NV</b> 반영</p>`
       : `<p><b>예상 마감</b> · 대 ${fmt(projection.majorNv)} / 소 ${fmt(projection.minorNv)} → 상위 라인에 <b>${fmt(projection.completedNv)} NV</b> 반영 예정</p>`;
     const targetBox =
       node.depth === 0
@@ -591,7 +596,7 @@ export async function performancePage(root, me) {
           nodeTargets(node),
         );
         const projection = projectClosingCompletion(result);
-        const completion = plan.completions[node.memberId] || null;
+        const completion = effectiveCompletion(node.memberId);
         if (completion) {
           applyClosingCompletion(model, node.memberId, completion);
         } else if (projection.feasible !== false) {
@@ -803,6 +808,28 @@ export async function performancePage(root, me) {
       await persistPlan();
     }
   };
+
+  try {
+    const memberIds = model.rows.map((row) => String(row.userId));
+    const { data: selfRows, error: selfError } = await supabase.rpc(
+      "get_self_closings",
+      { p_member_ids: memberIds },
+    );
+    if (!selfError && selfRows) {
+      selfClosings = Object.fromEntries(
+        selfRows.map((row) => [
+          String(row.member_no),
+          {
+            majorNv: Number(row.major_nv),
+            minorNv: Number(row.minor_nv),
+            completedNv: Number(row.completed_nv),
+            completedAt: row.completed_at,
+            external: true,
+          },
+        ]),
+      );
+    }
+  } catch {}
 
   renderControls();
   runPlan();
