@@ -5,3 +5,5 @@ flask
 flask-cors
 schedule
 keyring
+pystray
+pillow

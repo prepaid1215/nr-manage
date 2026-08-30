@@ -29,6 +29,15 @@ import scraper as scraper_module
 from scraper import run_daily, run_sales_now, run_closings, run_combined
 from queue_worker import configure_worker, worker_configuration, worker_loop
 
+if getattr(sys, "frozen", False) and (sys.stdout is None or not hasattr(sys.stdout, "write")):
+    # --windowed 빌드는 콘솔이 없어 sys.stdout/stderr가 None이라 print()가 죽는다.
+    # 로그 파일로 대신 보내서 기존 print() 호출들이 계속 동작하게 한다.
+    _log_dir = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "NRCSync"
+    _log_dir.mkdir(parents=True, exist_ok=True)
+    _log_file = open(_log_dir / "nrcsync.log", "a", encoding="utf-8", buffering=1)
+    sys.stdout = _log_file
+    sys.stderr = _log_file
+
 app = Flask(__name__)
 CORS(
     app,
@@ -532,6 +541,51 @@ def open_setup_page_if_needed():
     threading.Thread(target=_open, daemon=True).start()
 
 
+def _tray_icon_image():
+    from PIL import Image
+
+    candidates = []
+    if getattr(sys, "frozen", False):
+        candidates.append(Path(sys._MEIPASS) / "app_icon.ico")
+    candidates.append(Path(__file__).parent / "app_icon.ico")
+    for candidate in candidates:
+        if candidate.exists():
+            return Image.open(candidate)
+    image = Image.new("RGB", (64, 64), "#173b8f")
+    return image
+
+
+def run_with_tray():
+    """트레이 아이콘이 되면 트레이로, 안 되면(라이브러리 없음 등) 콘솔 모드로 그냥 서버만 켠다."""
+    try:
+        import pystray
+    except Exception:
+        app.run(host="127.0.0.1", port=5050, debug=False, use_reloader=False)
+        return
+
+    server_thread = threading.Thread(
+        target=lambda: app.run(
+            host="127.0.0.1", port=5050, debug=False, use_reloader=False
+        ),
+        daemon=True,
+    )
+    server_thread.start()
+
+    def open_setup(icon_obj=None, item=None):
+        webbrowser.open("http://127.0.0.1:5050/setup")
+
+    def quit_app(icon_obj=None, item=None):
+        icon_obj.stop()
+        os._exit(0)
+
+    menu = pystray.Menu(
+        pystray.MenuItem("설정 열기", open_setup, default=True),
+        pystray.MenuItem("종료", quit_app),
+    )
+    icon = pystray.Icon("NRCSync", _tray_icon_image(), "NRC Sync 실행 중", menu)
+    icon.run()
+
+
 if __name__ == "__main__":
     if "--playwright-install" in sys.argv:
         from playwright.__main__ import main as playwright_main
@@ -559,4 +613,4 @@ if __name__ == "__main__":
     open_setup_page_if_needed()
     threading.Thread(target=scheduler_loop, daemon=True).start()
     threading.Thread(target=worker_loop, daemon=True).start()
-    app.run(host="127.0.0.1", port=5050, debug=False)
+    run_with_tray()
