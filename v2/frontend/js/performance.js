@@ -423,9 +423,7 @@ export async function performancePage(root, me) {
       totalOf: (row) => branchBreakdown(row).total,
     });
     box.scrollTop = 0;
-    requestAnimationFrame(() => {
-      box.scrollLeft = Math.max(0, (box.scrollWidth - box.clientWidth) / 2);
-    });
+    fitTrees();
   };
   const pinTargetCache = new Map();
   const renderTreePins = async () => {
@@ -645,6 +643,7 @@ export async function performancePage(root, me) {
   const fitTrees = () => {
     const boxes = [
       ...$("perfResult").querySelectorAll(".closing-tree[open] .box-tree"),
+      ...(($("closingMainTree") && [$("closingMainTree")]) || []),
     ];
     const pass = (round) => {
       boxes.forEach((box) => {
