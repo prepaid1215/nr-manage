@@ -1,5 +1,7 @@
 import { supabase } from "./supabase.js?v=20260829-34";
 import { friendlyError } from "./errors.js?v=20260830-1";
+import { branchBreakdown, buildPerformanceModel } from "./performance-calculator.js?v=20260829-55";
+import { boxTreeHtml } from "./box-tree.js?v=20260829-53";
 
 const safe = (value) =>
   String(value ?? "").replace(
@@ -21,7 +23,7 @@ export async function isAppAdmin() {
 }
 
 export async function adminPage(root) {
-  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>관리자 사용현황</h2><p class="help">가입자별 접속·수집·마감 사용 현황입니다. 비밀번호와 입력 내용은 기록하지 않습니다.</p></div><button id="adminReload" class="secondary compact" type="button">새로고침</button></div><div id="adminSummary" class="admin-summary"></div><label>사용자 검색<input id="adminSearch" type="search" placeholder="이름, 앱 아이디, 회원번호"></label><div id="adminError" class="error"></div></section><section class="card"><h2>가입자 현황</h2><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>사용자</th><th>최근 활동</th><th>최근 화면</th><th>수집</th><th>마감 계획</th></tr></thead><tbody id="adminUsers"></tbody></table></div></section><section class="card"><h2>최근 행동</h2><div id="adminEvents" class="admin-events"></div></section>`;
+  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>관리자 사용현황</h2><p class="help">가입자별 접속·수집·마감 사용 현황입니다. 비밀번호와 입력 내용은 기록하지 않습니다.</p></div><button id="adminReload" class="secondary compact" type="button">새로고침</button></div><div id="adminSummary" class="admin-summary"></div><label>사용자 검색<input id="adminSearch" type="search" placeholder="이름, 앱 아이디, 회원번호"></label><div id="adminError" class="error"></div></section><section class="card"><h2>가입자 현황</h2><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>사용자</th><th>최근 활동</th><th>최근 화면</th><th>수집</th><th>마감 계획</th></tr></thead><tbody id="adminUsers"></tbody></table></div></section><section class="card"><h2>최근 행동</h2><div id="adminEvents" class="admin-events"></div></section><dialog id="adminGenealogyDialog" class="member-dialog admin-genealogy-dialog"><div class="dialog-head"><h2 id="adminGenealogyTitle">사용자 계보도</h2><button id="adminGenealogyClose" type="button">×</button></div><div class="admin-genealogy-body"><p id="adminGenealogyMeta" class="help"></p><div id="adminPlanSummary" class="admin-plan-summary"></div><div id="adminGenealogyError" class="error"></div><div id="adminGenealogyTree" class="box-tree"><p class="help">계보도를 불러오는 중...</p></div></div></dialog>`;
   const $ = (id) => document.getElementById(id);
   let users = [];
   const renderUsers = () => {
@@ -30,7 +32,7 @@ export async function adminPage(root) {
       [row.name, row.username, row.member_no].some((value) => String(value || "").toLowerCase().includes(query)),
     );
     $("adminUsers").innerHTML = filtered.length
-      ? filtered.map((row) => `<tr><td><b>${safe(row.name || "이름 없음")}</b><small>${safe(row.username || "-")} · ${safe(row.member_no || "회원번호 없음")}</small></td><td>${safe(date(row.last_seen_at))}<small>기록 ${Number(row.event_count || 0).toLocaleString()}건</small></td><td>${safe(pageNames[row.last_page] || row.last_page || "-")}</td><td>${safe(date(row.last_snapshot_at))}</td><td>진행 ${Number(row.draft_plan_count || 0)} · 완료 ${Number(row.done_plan_count || 0)}</td></tr>`).join("")
+      ? filtered.map((row) => `<tr><td><b>${safe(row.name || "이름 없음")}</b><small>${safe(row.username || "-")} · ${safe(row.member_no || "회원번호 없음")}</small></td><td>${safe(date(row.last_seen_at))}<small>기록 ${Number(row.event_count || 0).toLocaleString()}건</small></td><td>${safe(pageNames[row.last_page] || row.last_page || "-")}</td><td>${safe(date(row.last_snapshot_at))}${row.last_snapshot_at ? `<button class="secondary compact admin-tree-button" data-admin-user="${safe(row.user_id)}" type="button">계보도 보기</button>` : ""}</td><td>진행 ${Number(row.draft_plan_count || 0)} · 완료 ${Number(row.done_plan_count || 0)}</td></tr>`).join("")
       : '<tr><td colspan="5">일치하는 사용자가 없습니다.</td></tr>';
   };
   const load = async () => {
@@ -57,5 +59,53 @@ export async function adminPage(root) {
   };
   $("adminSearch").oninput = renderUsers;
   $("adminReload").onclick = load;
+  $("adminGenealogyClose").onclick = () => $("adminGenealogyDialog").close();
+  $("adminUsers").onclick = async (event) => {
+    const button = event.target.closest("[data-admin-user]");
+    if (!button) return;
+    const user = users.find((row) => row.user_id === button.dataset.adminUser);
+    $("adminGenealogyTitle").textContent = `${user?.name || "사용자"} 계보도`;
+    $("adminGenealogyMeta").textContent = "최신 수집 데이터와 마감 계획을 불러오는 중...";
+    $("adminPlanSummary").innerHTML = "";
+    $("adminGenealogyError").textContent = "";
+    $("adminGenealogyTree").innerHTML = '<p class="help">계보도를 불러오는 중...</p>';
+    $("adminGenealogyDialog").showModal();
+    const [snapshotResult, plansResult] = await Promise.all([
+      supabase.rpc("admin_user_latest_snapshot", { p_user_id: button.dataset.adminUser }),
+      supabase.rpc("admin_user_closing_plans", { p_user_id: button.dataset.adminUser }),
+    ]);
+    const error = snapshotResult.error || plansResult.error;
+    if (error) {
+      $("adminGenealogyError").textContent = friendlyError(error, "계보 데이터를 불러오지 못했습니다. RUN_022를 먼저 실행해 주세요.");
+      $("adminGenealogyTree").innerHTML = "";
+      return;
+    }
+    const snapshot = snapshotResult.data?.[0];
+    if (!snapshot) {
+      $("adminGenealogyMeta").textContent = "수집된 계보 데이터가 없습니다.";
+      $("adminGenealogyTree").innerHTML = "";
+      return;
+    }
+    try {
+      const payload = typeof snapshot.payload === "string" ? JSON.parse(snapshot.payload) : snapshot.payload;
+      const model = buildPerformanceModel(payload);
+      const rootId = [user?.member_no, snapshot.source_account_id, model.rows[0]?.userId]
+        .map(String).find((id) => model.byId.has(id));
+      $("adminGenealogyMeta").textContent = `수집 ${date(snapshot.collected_at)} · NRC 계정 ${snapshot.source_account_id || "-"} · 계보 ${model.rows.length.toLocaleString()}명`;
+      const plans = plansResult.data || [];
+      $("adminPlanSummary").innerHTML = plans.length
+        ? plans.map((plan) => `<article><b>${safe(plan.top_member_id)} · ${plan.status === "DONE" ? "완료" : "진행"}</b><span>목표 대 ${Number(plan.top_major_target || 0).toLocaleString()} / 소 ${Number(plan.top_minor_target || 0).toLocaleString()} NV</span><span>결과 대 ${Number(plan.top_major_nv || 0).toLocaleString()} / 소 ${Number(plan.top_minor_nv || 0).toLocaleString()} NV</span></article>`).join("")
+        : '<p class="help">저장된 마감 계획이 없습니다.</p>';
+      $("adminGenealogyTree").innerHTML = boxTreeHtml(model, rootId, {
+        depth: 10,
+        hideDate: true,
+        clickable: false,
+        totalOf: (row) => branchBreakdown(row).total,
+      });
+    } catch (parseError) {
+      $("adminGenealogyError").textContent = friendlyError(parseError, "계보 데이터 형식을 읽지 못했습니다.");
+      $("adminGenealogyTree").innerHTML = "";
+    }
+  };
   await load();
 }
