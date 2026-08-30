@@ -14,7 +14,7 @@ import {
   pruneInvalidCompletions,
   salesTopUpForDeficit,
   sortMembersDeepestFirst,
-} from "./performance-calculator.js?v=20260829-54";
+} from "./performance-calculator.js?v=20260829-55";
 import { boxTreeHtml } from "./box-tree.js?v=20260829-53";
 
 const PLAN_TABLE = "nrc_closing_plans";
@@ -51,7 +51,7 @@ const flattenAllocation = (node, out = []) => {
 };
 
 export async function performancePage(root, me) {
-  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>마감 실적 계산기</h2><p class="help">기준이 되는 최상위 마감 사업자와 목표만 정하면, 아래 사업자에게는 &quot;라인 합계&quot; 목표로 내려갑니다. 대·소를 각각 채우지 않으므로 매출이 덜 들어갑니다.</p></div></div><p id="perfSource" class="help"></p><p id="perfStorage" class="help"></p><div class="closing-target-row"><label>최상위 마감 사업자<select id="topMemberSelect"></select></label><label>대실적 목표 (NV)<input id="topMajor" type="number" min="1" step="10000"></label><label>소실적 목표 (NV)<input id="topMinor" type="number" min="1" step="10000"></label></div><details class="closing-member-picker" open><summary>마감할 하위 사업자 선택 <b id="closingCount">0명</b></summary><p class="help">체크하지 않은 회원의 라인은 라인 합계만 맞으면 그대로 통과합니다. 체크한 사업자는 라인 합계를 맞추면서 소실적이 인증직급 지급 기준선(DT 3만 · GD 이상 6만 NV) 이상이 되게 채웁니다.</p><div class="closing-picker-tools"><input id="closingFilter" type="search" placeholder="이름 또는 회원번호 검색"><button class="secondary compact" id="closingShowSingles" type="button">단독 계정 보기</button><button class="secondary compact" id="closingSelectAll" type="button">전체 선택</button><button class="secondary compact" id="closingSelectNone" type="button">전체 해제</button></div><div id="closingCollapsedGroups" class="closing-collapsed-groups"></div><div id="closingOptions" class="closing-member-options"></div></details><button id="perfRun" class="primary">자동 배분 계산</button><p id="perfNotice" class="help"></p><div id="perfError" class="error"></div></section><section id="perfSummary"></section><section id="perfResult"></section>`;
+  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>마감 실적 계산기</h2><p class="help">기준이 되는 최상위 마감 사업자와 목표만 정하면, 아래 사업자에게는 &quot;라인 합계&quot; 목표로 내려갑니다. 대·소를 각각 채우지 않으므로 매출이 덜 들어갑니다.</p></div></div><p id="perfSource" class="help"></p><p id="perfStorage" class="help"></p><div class="closing-target-row"><label>최상위 마감 사업자<select id="topMemberSelect"></select></label><label>대실적 목표 (NV)<input id="topMajor" type="number" min="1" step="10000"></label><label>소실적 목표 (NV)<input id="topMinor" type="number" min="1" step="10000"></label></div><section class="card closing-main-tree"><div class="section-head"><div><h2>계보도에서 목표 설정</h2><p class="help">사람을 클릭하면 그 사업자의 대실적·소실적 목표를 직접 입력할 수 있습니다.</p></div></div><div id="closingMainTree" class="box-tree"></div></section><dialog id="treeTargetDialog" class="customer-dialog small"><form id="treeTargetForm"><div class="dialog-head"><h2 id="treeTargetTitle">목표 설정</h2><button id="treeTargetClose" type="button">×</button></div><label>대실적 목표 (NV)<input id="treeTargetMajor" type="number" min="0" step="10000" required></label><label>소실적 목표 (NV)<input id="treeTargetMinor" type="number" min="0" step="10000" required></label><p id="treeTargetAuto" class="help"></p><div class="customer-actions"><button class="secondary" id="treeTargetReset" type="button">자동값으로</button><button class="primary" type="submit">저장</button></div></form></dialog><details class="closing-member-picker" open><summary>마감할 하위 사업자 선택 <b id="closingCount">0명</b></summary><p class="help">체크하지 않은 회원의 라인은 라인 합계만 맞으면 그대로 통과합니다. 체크한 사업자는 라인 합계를 맞추면서 소실적이 인증직급 지급 기준선(DT 3만 · GD 이상 6만 NV) 이상이 되게 채웁니다.</p><div class="closing-picker-tools"><input id="closingFilter" type="search" placeholder="이름 또는 회원번호 검색"><button class="secondary compact" id="closingShowSingles" type="button">단독 계정 보기</button><button class="secondary compact" id="closingSelectAll" type="button">전체 선택</button><button class="secondary compact" id="closingSelectNone" type="button">전체 해제</button></div><div id="closingCollapsedGroups" class="closing-collapsed-groups"></div><div id="closingOptions" class="closing-member-options"></div></details><button id="perfRun" class="primary">자동 배분 계산</button><p id="perfNotice" class="help"></p><div id="perfError" class="error"></div></section><section id="perfSummary"></section><section id="perfResult"></section>`;
   const $ = (id) => document.getElementById(id);
   const { data, error } = await supabase
     .from("nrc_sync_snapshots")
@@ -286,6 +286,58 @@ export async function performancePage(root, me) {
     return out.sort(
       (left, right) => model.rows.indexOf(left) - model.rows.indexOf(right),
     );
+  };
+
+  const openTreeTarget = (memberId) => {
+    const row = model.byId.get(memberId);
+    if (!row) return;
+    if (memberId === plan.topMemberId) {
+      $("topMajor").focus();
+      return;
+    }
+    const isDescendant = descendantsOf(plan.topMemberId).some(
+      (r) => String(r.userId) === memberId,
+    );
+    const item = items.find((entry) => entry.node.memberId === memberId);
+    const node = item?.node;
+    const existingOverride = plan.targetOverrides?.[memberId];
+    $("treeTargetTitle").textContent = `${row.userName} 목표 설정`;
+    $("treeTargetMajor").value =
+      node?.mode === "sides" ? node.majorTarget : (existingOverride?.majorTarget ?? "");
+    $("treeTargetMinor").value =
+      node?.mode === "sides" ? node.minorTarget : (existingOverride?.minorTarget ?? "");
+    $("treeTargetAuto").textContent = node
+      ? `자동 배분값 라인 합계 ${fmt(node.autoLineTarget)} · 소실적 기준선 ${fmt(node.autoMinorFloor)}`
+      : isDescendant
+        ? "아직 마감 대상으로 체크되지 않았습니다. 저장하면 자동으로 추가됩니다."
+        : "이 사업자는 최상위 사업자의 하위가 아니어서 목표를 설정할 수 없습니다.";
+    $("treeTargetForm").hidden = !isDescendant;
+    $("treeTargetDialog").dataset.member = memberId;
+    $("treeTargetDialog").showModal();
+  };
+  const renderMainTree = () => {
+    const box = $("closingMainTree");
+    if (!box) return;
+    const badges = {},
+      notes = {};
+    items.forEach((item) => {
+      if (item.skipped) return;
+      const { node, completion } = item;
+      badges[node.memberId] =
+        node.mode === "sides"
+          ? `대 ${fmt(node.majorTarget)} / 소 ${fmt(node.minorTarget)}`
+          : `목표 ${fmt(node.lineTarget)}`;
+      notes[node.memberId] = completion ? "마감 완료" : "진행 예정";
+    });
+    box.innerHTML = boxTreeHtml(model, plan.topMemberId, {
+      depth: 8,
+      badges,
+      notes,
+      hideDate: true,
+      clickable: true,
+      selectedId: plan.topMemberId,
+      totalOf: (row) => branchBreakdown(row).total,
+    });
   };
 
   const renderControls = () => {
@@ -665,6 +717,7 @@ export async function performancePage(root, me) {
         .join("");
       fitTrees();
       renderClosers();
+      renderMainTree();
     } catch (calculationError) {
       $("perfError").textContent = calculationError.message;
       $("perfSummary").replaceChildren();
@@ -672,6 +725,35 @@ export async function performancePage(root, me) {
     }
   };
 
+  $("closingMainTree").onclick = (event) => {
+    const button = event.target.closest("[data-member]");
+    if (!button) return;
+    openTreeTarget(button.dataset.member);
+  };
+  $("treeTargetClose").onclick = () => $("treeTargetDialog").close();
+  $("treeTargetForm").onsubmit = async (event) => {
+    event.preventDefault();
+    const memberId = $("treeTargetDialog").dataset.member;
+    const major = Number($("treeTargetMajor").value || 0);
+    const minor = Number($("treeTargetMinor").value || 0);
+    if (!plan.closingMemberIds.includes(memberId))
+      plan.closingMemberIds.push(memberId);
+    plan.targetOverrides = {
+      ...plan.targetOverrides,
+      [memberId]: { majorTarget: major, minorTarget: minor },
+    };
+    $("treeTargetDialog").close();
+    runPlan();
+    await persistPlan();
+  };
+  $("treeTargetReset").onclick = async () => {
+    const memberId = $("treeTargetDialog").dataset.member;
+    const { [memberId]: _removed, ...rest } = plan.targetOverrides || {};
+    plan.targetOverrides = rest;
+    $("treeTargetDialog").close();
+    runPlan();
+    await persistPlan();
+  };
   $("topMemberSelect").onchange = () => {
     plan.topMemberId = $("topMemberSelect").value;
     const allowed = new Set(

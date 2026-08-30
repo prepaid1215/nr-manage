@@ -688,9 +688,11 @@ export function allocateClosingTargets(
     const majorIndex = effectiveTotals[0] >= effectiveTotals[1] ? 0 : 1;
     const minorIndex = majorIndex === 0 ? 1 : 0;
 
-    // 각 서브라인이 도달해야 하는 "라인 합계" 목표
+    // 대실적·소실적을 따로 입력받은 경우("sides") 그대로 각 라인에 배정하고,
+    // 아니면 "라인 합계" 하나를 두 라인의 부족분으로 나눈다("total").
+    const useSidesMode = targets.majorTarget != null && targets.minorTarget != null;
     const lineGoals = [];
-    if (depth === 0) {
+    if (useSidesMode) {
       lineGoals[majorIndex] = Math.max(targets.majorTarget, targets.minorFloor);
       lineGoals[minorIndex] = Math.max(targets.minorTarget, targets.minorFloor);
     } else {
@@ -728,21 +730,32 @@ export function allocateClosingTargets(
       const autoLineTarget = Math.max(0, lineGoals[index] - passthroughNv);
       const autoMinorFloor = minorPayoutFloor(closer);
       const override = overrides[memberId(closer)];
-      const childLineTarget =
-        override && override.lineTarget != null
-          ? Math.max(0, numeric(override.lineTarget))
-          : autoLineTarget;
+      const overrideUsesSides =
+        override && override.majorTarget != null && override.minorTarget != null;
       const childMinorFloor =
         override && override.minorFloor != null
           ? Math.max(0, numeric(override.minorFloor))
           : autoMinorFloor;
+      const childTargets = overrideUsesSides
+        ? {
+            majorTarget: Math.max(0, numeric(override.majorTarget)),
+            minorTarget: Math.max(0, numeric(override.minorTarget)),
+            minorFloor: childMinorFloor,
+          }
+        : {
+            lineTarget:
+              override && override.lineTarget != null
+                ? Math.max(0, numeric(override.lineTarget))
+                : autoLineTarget,
+            minorFloor: childMinorFloor,
+          };
       return {
         index,
         lineTarget: lineGoals[index],
         passthroughNv,
         childAllocation: allocate(
           closer,
-          { lineTarget: childLineTarget, minorFloor: childMinorFloor },
+          childTargets,
           depth + 1,
           { lineTarget: autoLineTarget, minorFloor: autoMinorFloor },
         ),
@@ -754,7 +767,7 @@ export function allocateClosingTargets(
     return {
       memberId: memberId(member),
       depth,
-      mode: depth === 0 ? "sides" : "total",
+      mode: useSidesMode ? "sides" : "total",
       majorTarget: targets.majorTarget ?? 0,
       minorTarget: targets.minorTarget ?? 0,
       lineTarget: targets.lineTarget ?? 0,
@@ -763,7 +776,8 @@ export function allocateClosingTargets(
       autoMinorFloor,
       overridden:
         depth > 0 &&
-        (targets.lineTarget !== autoLineTarget ||
+        (useSidesMode ||
+          targets.lineTarget !== autoLineTarget ||
           targets.minorFloor !== autoMinorFloor),
       lineGoals,
       sourceTopMemberId: String(topMemberId),
