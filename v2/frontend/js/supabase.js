@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { friendlyError } from "./errors.js?v=20260830-1";
 const url = "https://ymagjzwebshfnjiisrao.supabase.co";
 const key = "sb_publishable_odxxHbBufV-ZSFlVJ8xFiw_18hBVyJf";
 const REMEMBER_KEY = "nrc-remember-login";
@@ -63,7 +64,7 @@ export async function signUp({ username, password, name, memberNo }) {
       },
     },
   });
-  if (error) throw error;
+  if (error) throw new Error(friendlyError(error, "회원가입하지 못했습니다. 입력 내용을 확인해 주세요."), { cause: error });
   return data;
 }
 export async function signIn({ username, password }) {
@@ -72,7 +73,7 @@ export async function signIn({ username, password }) {
     email: accountEmail(username),
     password,
   });
-  if (error) throw error;
+  if (error) throw new Error(friendlyError(error, "로그인하지 못했습니다. 잠시 후 다시 시도해 주세요."), { cause: error });
   return data;
 }
 export async function currentProfile() {

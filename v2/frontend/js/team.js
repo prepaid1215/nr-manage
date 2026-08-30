@@ -1,4 +1,5 @@
 import { supabase } from "./supabase.js?v=20260829-34";
+import { friendlyError } from "./errors.js?v=20260830-1";
 
 const resources = [
   ["customers", "고객"],
@@ -25,7 +26,7 @@ export async function teamPage(root, me) {
   const explainError = (error) =>
     /function .* does not exist|schema cache/i.test(error.message)
       ? "Supabase에서 RUN_011_PARTNER_CODE_APPOINTMENT.sql을 먼저 실행하세요."
-      : error.message;
+      : friendlyError(error);
 
   async function load() {
     errorBox.textContent = "";
@@ -99,7 +100,7 @@ export async function teamPage(root, me) {
             },
             { onConflict: "team_id,viewer_id,owner_id,resource" },
           );
-          if (error) errorBox.textContent = error.message;
+          if (error) errorBox.textContent = friendlyError(error);
           else {
             const status = root.querySelector(
               `[data-team-status="${form.dataset.share}"]`,
@@ -173,7 +174,7 @@ export async function teamPage(root, me) {
       .select()
       .single();
     if (error) {
-      errorBox.textContent = error.message;
+      errorBox.textContent = friendlyError(error);
       return;
     }
     const result = await supabase.from("team_members").insert({
@@ -182,7 +183,7 @@ export async function teamPage(root, me) {
       role: "OWNER",
       active: true,
     });
-    if (result.error) errorBox.textContent = result.error.message;
+    if (result.error) errorBox.textContent = friendlyError(result.error);
     else load();
   };
   await load();

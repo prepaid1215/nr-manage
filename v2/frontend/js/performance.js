@@ -16,6 +16,7 @@ import {
   sortMembersDeepestFirst,
 } from "./performance-calculator.js?v=20260829-55";
 import { boxTreeHtml } from "./box-tree.js?v=20260829-53";
+import { friendlyError } from "./errors.js?v=20260830-1";
 
 const PLAN_TABLE = "nrc_closing_plans";
 const MIN_TREE_ZOOM = 0.72;
@@ -62,7 +63,9 @@ export async function performancePage(root, me) {
     .maybeSingle();
 
   if (error || !data) {
-    $("perfError").textContent = error?.message || "수집된 JSON이 없습니다.";
+    $("perfError").textContent = error
+      ? friendlyError(error, "실적 데이터를 불러오지 못했습니다.")
+      : "수집된 JSON이 없습니다.";
     return;
   }
 

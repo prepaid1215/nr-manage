@@ -1,5 +1,6 @@
 import { supabase } from "./supabase.js?v=20260829-34";
 import { localDate, monthRange } from "./date.js?v=20260829-25";
+import { friendlyError } from "./errors.js?v=20260830-1";
 const postingFields = [
   ["blog_sloom", "슬룸"],
   ["blog_modoo", "모두"],
@@ -52,7 +53,7 @@ export async function activityPage(root, me) {
       ]),
       { data, error } = record;
     if (error) {
-      $("activityError").textContent = error.message;
+      $("activityError").textContent = friendlyError(error);
       return;
     }
     $("activationTotal").textContent = `${activations.count || 0}건`;
@@ -216,7 +217,7 @@ export async function activityPage(root, me) {
       { error } = await supabase
         .from("daily_activities")
         .upsert(value, { onConflict: "owner_id,activity_date" });
-    if (error) $("activityError").textContent = error.message;
+    if (error) $("activityError").textContent = friendlyError(error);
     else {
       $("activityStatus").hidden = false;
       $("activityStatus").textContent = "이 날짜의 기록을 저장했습니다.";
