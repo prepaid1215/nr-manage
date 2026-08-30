@@ -37,17 +37,23 @@ def _json_request(url, method="GET", body=None, headers=None, timeout=60):
     request_headers = {"Content-Type": "application/json", **(headers or {})}
     payload = None if body is None else json.dumps(body).encode("utf-8")
     req = urllib.request.Request(url, data=payload, headers=request_headers, method=method)
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as response:
-            text = response.read().decode("utf-8")
-            return json.loads(text) if text else None
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")
+    for attempt in range(3):
         try:
-            message = json.loads(detail).get("message") or detail
-        except json.JSONDecodeError:
-            message = detail
-        raise RuntimeError(f"Supabase 요청 실패({exc.code}): {message}") from exc
+            with urllib.request.urlopen(req, timeout=timeout) as response:
+                text = response.read().decode("utf-8")
+                return json.loads(text) if text else None
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            try:
+                message = json.loads(detail).get("message") or detail
+            except json.JSONDecodeError:
+                message = detail
+            raise RuntimeError(f"서버 요청 실패({exc.code}): {message}") from exc
+        except urllib.error.URLError as exc:
+            if getattr(exc.reason, "winerror", None) == 10013 and attempt < 2:
+                time.sleep(attempt + 1)
+                continue
+            raise RuntimeError(f"서버 연결 실패: {exc.reason}") from exc
 
 
 def _load_device():
