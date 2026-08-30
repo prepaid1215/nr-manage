@@ -126,11 +126,17 @@ def credentials():
         owner_id = user["id"]
         if request.method == "GET":
             rows = admin_request(
-                f"nrc_cloud_credentials?owner_id=eq.{owner_id}&select=source_account_id,updated_at"
+                f"nrc_cloud_credentials?owner_id=eq.{owner_id}&select=source_account_id,updated_at&order=updated_at.desc"
             ) or []
-            return jsonify({"ok": True, "saved": bool(rows), "credential": rows[0] if rows else None})
+            return jsonify({"ok": True, "credentials": rows})
         if request.method == "DELETE":
-            admin_request(f"nrc_cloud_credentials?owner_id=eq.{owner_id}", "DELETE")
+            source_account_id = request.args.get("sourceAccountId", "").strip()
+            if not source_account_id:
+                return jsonify({"ok": False, "message": "삭제할 NRC 계정을 지정하세요."}), 400
+            admin_request(
+                f"nrc_cloud_credentials?owner_id=eq.{owner_id}&source_account_id=eq.{source_account_id}",
+                "DELETE",
+            )
             return jsonify({"ok": True})
         body = request.get_json(silent=True) or {}
         login_id, password = str(body.get("loginId", "")).strip(), str(body.get("password", ""))
@@ -140,13 +146,29 @@ def credentials():
             json.dumps({"loginId": login_id, "password": password}).encode("utf-8")
         ).decode("ascii")
         admin_request(
-            "nrc_cloud_credentials?on_conflict=owner_id",
+            "nrc_cloud_credentials?on_conflict=owner_id,source_account_id",
             "POST",
             {"owner_id": owner_id, "source_account_id": login_id, "encrypted_credentials": encrypted, "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())},
             "resolution=merge-duplicates,return=minimal",
         )
         _wake_event.set()
         return jsonify({"ok": True, "sourceAccountId": login_id})
+    except PermissionError as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 401
+    except Exception as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 500
+
+
+@app.route("/devices", methods=["GET", "OPTIONS"])
+def devices():
+    if request.method == "OPTIONS":
+        return "", 204
+    try:
+        user_from_request()
+        rows = admin_request(
+            "nrc_sync_devices?select=device_name,status,last_seen_at&order=last_seen_at.desc"
+        ) or []
+        return jsonify({"ok": True, "devices": rows})
     except PermissionError as exc:
         return jsonify({"ok": False, "message": str(exc)}), 401
     except Exception as exc:
