@@ -51,7 +51,7 @@ const flattenAllocation = (node, out = []) => {
 };
 
 export async function performancePage(root, me) {
-  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>마감 실적 계산기</h2><p class="help">기준이 되는 최상위 마감 사업자와 목표만 정하면, 아래 사업자에게는 &quot;라인 합계&quot; 목표로 내려갑니다. 대·소를 각각 채우지 않으므로 매출이 덜 들어갑니다.</p></div></div><p id="perfSource" class="help"></p><p id="perfStorage" class="help"></p><div class="closing-target-row"><label>최상위 마감 사업자<select id="topMemberSelect"></select></label><label>대실적 목표 (NV)<input id="topMajor" type="number" min="1" step="10000"></label><label>소실적 목표 (NV)<input id="topMinor" type="number" min="1" step="10000"></label></div><section class="card closing-main-tree"><div class="section-head"><div><h2>계보도에서 목표 설정</h2><p class="help">클릭하면 그 사람 기준으로 계보도가 이동하고, 더블클릭하면 대실적·소실적 목표를 입력합니다.</p></div></div><div id="treePins" class="tree-pins"></div><div id="closingMainTree" class="box-tree"></div></section><dialog id="treeTargetDialog" class="customer-dialog small"><form id="treeTargetForm"><div class="dialog-head"><h2 id="treeTargetTitle">목표 설정</h2><button id="treeTargetClose" type="button">×</button></div><label>대실적 목표 (NV)<input id="treeTargetMajor" type="number" min="0" step="10000" required></label><label>소실적 목표 (NV)<input id="treeTargetMinor" type="number" min="0" step="10000" required></label><p id="treeTargetAuto" class="help"></p><div class="customer-actions"><button class="secondary" id="treeTargetReset" type="button">자동값으로</button><button class="primary" type="submit">저장</button></div></form></dialog><details class="closing-member-picker" open><summary>마감할 하위 사업자 선택 <b id="closingCount">0명</b></summary><p class="help">체크하지 않은 회원의 라인은 라인 합계만 맞으면 그대로 통과합니다. 체크한 사업자는 라인 합계를 맞추면서 소실적이 인증직급 지급 기준선(DT 3만 · GD 이상 6만 NV) 이상이 되게 채웁니다.</p><div class="closing-picker-tools"><input id="closingFilter" type="search" placeholder="이름 또는 회원번호 검색"><button class="secondary compact" id="closingShowSingles" type="button">단독 계정 보기</button><button class="secondary compact" id="closingSelectAll" type="button">전체 선택</button><button class="secondary compact" id="closingSelectNone" type="button">전체 해제</button></div><div id="closingCollapsedGroups" class="closing-collapsed-groups"></div><div id="closingOptions" class="closing-member-options"></div></details><button id="perfRun" class="primary">자동 배분 계산</button><p id="perfNotice" class="help"></p><div id="perfError" class="error"></div></section><section id="perfSummary"></section><section id="perfResult"></section>`;
+  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>마감 실적 계산기</h2><p class="help">기준이 되는 최상위 마감 사업자와 목표만 정하면, 아래 사업자에게는 &quot;라인 합계&quot; 목표로 내려갑니다. 대·소를 각각 채우지 않으므로 매출이 덜 들어갑니다.</p></div></div><p id="perfSource" class="help"></p><p id="perfStorage" class="help"></p><div class="closing-target-row"><label>최상위 마감 사업자<select id="topMemberSelect"></select></label><label>대실적 목표 (NV)<input id="topMajor" type="number" min="1" step="10000"></label><label>소실적 목표 (NV)<input id="topMinor" type="number" min="1" step="10000"></label></div><section class="card closing-main-tree"><div class="section-head"><div><h2>계보도에서 목표 설정</h2><p class="help">클릭하면 그 사람 기준으로 계보도가 이동하고, 더블클릭하면 대실적·소실적 목표를 입력합니다.</p></div><div class="tree-nav"><button class="secondary compact" id="treeBack" type="button">← 뒤로</button><button class="secondary compact" id="treeHome" type="button">맨 위로</button></div></div><div id="treePins" class="tree-pins"></div><div id="closingMainTree" class="box-tree"></div></section><dialog id="treeTargetDialog" class="customer-dialog small"><form id="treeTargetForm"><div class="dialog-head"><h2 id="treeTargetTitle">목표 설정</h2><button id="treeTargetClose" type="button">×</button></div><label>대실적 목표 (NV)<input id="treeTargetMajor" type="number" min="0" step="10000" required></label><label>소실적 목표 (NV)<input id="treeTargetMinor" type="number" min="0" step="10000" required></label><p id="treeTargetAuto" class="help"></p><div class="customer-actions"><button class="secondary" id="treeTargetReset" type="button">자동값으로</button><button class="primary" type="submit">저장</button></div></form></dialog><details class="closing-member-picker" open><summary>마감할 하위 사업자 선택 <b id="closingCount">0명</b></summary><p class="help">체크하지 않은 회원의 라인은 라인 합계만 맞으면 그대로 통과합니다. 체크한 사업자는 라인 합계를 맞추면서 소실적이 인증직급 지급 기준선(DT 3만 · GD 이상 6만 NV) 이상이 되게 채웁니다.</p><div class="closing-picker-tools"><input id="closingFilter" type="search" placeholder="이름 또는 회원번호 검색"><button class="secondary compact" id="closingShowSingles" type="button">단독 계정 보기</button><button class="secondary compact" id="closingSelectAll" type="button">전체 선택</button><button class="secondary compact" id="closingSelectNone" type="button">전체 해제</button></div><div id="closingCollapsedGroups" class="closing-collapsed-groups"></div><div id="closingOptions" class="closing-member-options"></div></details><button id="perfRun" class="primary">자동 배분 계산</button><p id="perfNotice" class="help"></p><div id="perfError" class="error"></div></section><section id="perfSummary"></section><section id="perfResult"></section>`;
   const $ = (id) => document.getElementById(id);
   const { data, error } = await supabase
     .from("nrc_sync_snapshots")
@@ -108,7 +108,14 @@ export async function performancePage(root, me) {
   };
   let treePins = loadTreePins();
   let treeFocusId = null;
+  let treeFocusHistory = [];
   let treeClickTimer = null;
+  const navigateTree = (newId) => {
+    if (treeFocusId && treeFocusId !== newId) treeFocusHistory.push(treeFocusId);
+    treeFocusId = newId;
+    renderMainTree();
+    renderTreePins();
+  };
 
   const legacyPlan = () => {
     const selected = readJson("nrc-closing-members", [])
@@ -162,6 +169,64 @@ export async function performancePage(root, me) {
       completions: {},
     };
   };
+
+  async function loadPlanFor(topMemberId) {
+    if (storage === "supabase") {
+      const { data: planRow, error: planError } = await supabase
+        .from(PLAN_TABLE)
+        .select("*")
+        .eq("owner_id", ownerId)
+        .eq("top_member_id", topMemberId)
+        .maybeSingle();
+      if (!planError && planRow) return rowToPlan(planRow);
+    }
+    return {
+      topMemberId: String(topMemberId),
+      topMajorTarget: 400000,
+      topMinorTarget: 400000,
+      closingMemberIds: [String(topMemberId)],
+      targetOverrides: {},
+      acknowledged: {},
+      completions: {},
+    };
+  }
+
+  async function switchToTopMember(topMemberId) {
+    if (!model.byId.has(String(topMemberId))) return;
+    plan = await loadPlanFor(topMemberId);
+    plan.closingMemberIds = (plan.closingMemberIds || [])
+      .map(String)
+      .filter((id) => model.byId.has(id));
+    if (!plan.closingMemberIds.includes(plan.topMemberId)) {
+      plan.closingMemberIds.push(plan.topMemberId);
+    }
+    plan.targetOverrides = Object.fromEntries(
+      Object.entries(plan.targetOverrides || {}).filter(
+        ([id, override]) =>
+          model.byId.has(String(id)) &&
+          (override?.lineTarget != null ||
+            override?.minorFloor != null ||
+            (override?.majorTarget != null && override?.minorTarget != null)),
+      ),
+    );
+    plan.acknowledged = Object.fromEntries(
+      Object.entries(plan.acknowledged || {}).filter(([id]) =>
+        model.byId.has(String(id)),
+      ),
+    );
+    const descendantIds = new Set(
+      descendantsOf(plan.topMemberId).map((row) => String(row.userId)),
+    );
+    Object.keys(selfClosings).forEach((id) => {
+      if (descendantIds.has(id) && !plan.closingMemberIds.includes(id)) {
+        plan.closingMemberIds.push(id);
+      }
+    });
+    treeFocusId = plan.topMemberId;
+    treeFocusHistory = [];
+    renderControls();
+    runPlan();
+  }
 
   const rowToPlan = (row) => ({
     topMemberId: String(row.top_member_id),
@@ -364,7 +429,7 @@ export async function performancePage(root, me) {
       treePins
         .map(
           (pin) =>
-            `<button class="tree-pin${pin.id === treeFocusId ? " active" : ""}" data-pin="${safe(pin.id)}" type="button">${safe(pin.name)} <span data-unpin="${safe(pin.id)}">×</span></button>`,
+            `<button class="tree-pin${pin.id === plan.topMemberId ? " active" : ""}" data-pin="${safe(pin.id)}" type="button">${safe(pin.name)} <span data-unpin="${safe(pin.id)}">×</span></button>`,
         )
         .join("") +
       `<button class="tree-pin add" id="treePinAdd" type="button">+ 추가</button>`;
@@ -372,9 +437,7 @@ export async function performancePage(root, me) {
       (button) =>
         (button.onclick = (event) => {
           if (event.target.closest("[data-unpin]")) return;
-          treeFocusId = button.dataset.pin;
-          renderMainTree();
-          renderTreePins();
+          switchToTopMember(button.dataset.pin);
         }),
     );
     box.querySelectorAll("[data-unpin]").forEach(
@@ -405,9 +468,7 @@ export async function performancePage(root, me) {
         treePins = [...treePins, { id, name: match.userName }];
         saveTreePins(treePins);
       }
-      treeFocusId = id;
-      renderMainTree();
-      renderTreePins();
+      switchToTopMember(id);
     };
   };
 
@@ -797,6 +858,16 @@ export async function performancePage(root, me) {
     }
   };
 
+  $("treeBack").onclick = () => {
+    if (!treeFocusHistory.length) return;
+    treeFocusId = treeFocusHistory.pop();
+    renderMainTree();
+    renderTreePins();
+  };
+  $("treeHome").onclick = () => {
+    treeFocusHistory = [];
+    navigateTree(plan.topMemberId);
+  };
   $("closingMainTree").addEventListener("click", (event) => {
     const button = event.target.closest("[data-member]");
     if (!button) return;
@@ -807,9 +878,7 @@ export async function performancePage(root, me) {
     }
     treeClickTimer = setTimeout(() => {
       treeClickTimer = null;
-      treeFocusId = button.dataset.member;
-      renderMainTree();
-      renderTreePins();
+      navigateTree(button.dataset.member);
     }, 260);
   });
   $("closingMainTree").addEventListener("dblclick", (event) => {
@@ -845,19 +914,8 @@ export async function performancePage(root, me) {
     runPlan();
     await persistPlan();
   };
-  $("topMemberSelect").onchange = () => {
-    plan.topMemberId = $("topMemberSelect").value;
-    const allowed = new Set(
-      descendantsOf(plan.topMemberId).map((row) => String(row.userId)),
-    );
-    plan.closingMemberIds = plan.closingMemberIds.filter(
-      (id) => allowed.has(id) || id === plan.topMemberId,
-    );
-    if (!plan.closingMemberIds.includes(plan.topMemberId)) {
-      plan.closingMemberIds.push(plan.topMemberId);
-    }
-    renderClosers();
-  };
+  $("topMemberSelect").onchange = () =>
+    switchToTopMember($("topMemberSelect").value);
   const syncClosingSelection = () => {
     plan.closingMemberIds = [
       ...$("closingOptions").querySelectorAll("input:checked"),
