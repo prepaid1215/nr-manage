@@ -1,4 +1,4 @@
-import { supabase } from "./supabase.js?v=20260829-11";
+import { supabase } from "./supabase.js?v=20260829-34";
 import { boxCardHtml, boxTreeHtml } from "./box-tree.js?v=20260829-53";
 
 const number = (value) => Number(value || 0).toLocaleString("ko-KR");

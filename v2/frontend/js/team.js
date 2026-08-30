@@ -1,4 +1,4 @@
-import { supabase } from "./supabase.js?v=20260829-32";
+import { supabase } from "./supabase.js?v=20260829-34";
 
 const resources = [
   ["customers", "고객"],

@@ -1,7 +1,49 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const url = "https://ymagjzwebshfnjiisrao.supabase.co";
 const key = "sb_publishable_odxxHbBufV-ZSFlVJ8xFiw_18hBVyJf";
-export const supabase = key ? createClient(url, key) : null;
+const REMEMBER_KEY = "nrc-remember-login";
+export function setRememberLogin(remember) {
+  try {
+    localStorage.setItem(REMEMBER_KEY, remember ? "1" : "0");
+  } catch {}
+}
+const rememberedNow = () => {
+  try {
+    return localStorage.getItem(REMEMBER_KEY) === "1";
+  } catch {
+    return true;
+  }
+};
+const dynamicStorage = {
+  getItem: (storageKey) => {
+    try {
+      return rememberedNow()
+        ? localStorage.getItem(storageKey)
+        : sessionStorage.getItem(storageKey);
+    } catch {
+      return null;
+    }
+  },
+  setItem: (storageKey, value) => {
+    try {
+      if (rememberedNow()) sessionStorage.removeItem(storageKey);
+      else localStorage.removeItem(storageKey);
+      (rememberedNow() ? localStorage : sessionStorage).setItem(
+        storageKey,
+        value,
+      );
+    } catch {}
+  },
+  removeItem: (storageKey) => {
+    try {
+      localStorage.removeItem(storageKey);
+      sessionStorage.removeItem(storageKey);
+    } catch {}
+  },
+};
+export const supabase = key
+  ? createClient(url, key, { auth: { storage: dynamicStorage } })
+  : null;
 const normalizeUsername = (value) => String(value).trim().toLowerCase();
 export const accountEmail = (value) =>
   `app-${normalizeUsername(value)}@nrc-members.com`;

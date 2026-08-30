@@ -1,4 +1,4 @@
-import { supabase } from "./supabase.js?v=20260829-11";
+import { supabase } from "./supabase.js?v=20260829-34";
 import { localDate } from "./date.js?v=20260829-25";
 const now = new Date(),
   yearNow = now.getFullYear(),

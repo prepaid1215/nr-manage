@@ -3,7 +3,8 @@ import {
   signUp,
   signIn,
   currentProfile,
-} from "./supabase.js?v=20260829-32";
+  setRememberLogin,
+} from "./supabase.js?v=20260829-34";
 import { customersPage } from "./customers.js?v=20260829-22";
 import { activityPage } from "./activity.js?v=20260829-25";
 import {
@@ -48,7 +49,11 @@ async function home() {
   $("content").replaceChildren(frag);
   $("content").insertAdjacentHTML(
     "afterbegin",
-    `<section class="card home-actions"><button class="primary" id="homeAddCustomer" type="button">+ 고객 등록</button></section><section class="card home-nrc"><div class="section-head"><div><h2>NRC 매출 대시보드</h2><p class="help" id="homeNrcUpdated">최근 수집 데이터를 불러오는 중...</p></div></div><div id="homePcStatus" class="pc-status-badge"><span class="device-dot"></span><span>수집 PC 상태 확인 중...</span></div><div id="homeCollectStatus" class="connection-status" hidden></div><div id="homeCollectError" class="error"></div><div id="homeNrcDashboard"><p class="help">수집된 매출 데이터가 없습니다.</p></div><button class="secondary home-collect-btn" id="homeCollect" type="button">매출받기 (마감할 때만 눌러도 됩니다)</button></section>`,
+    `<section class="card home-actions"><button class="primary" id="homeAddCustomer" type="button">+ 고객 등록</button></section>`,
+  );
+  $("content").querySelector(".kpis").insertAdjacentHTML(
+    "afterend",
+    `<section class="card home-nrc"><div class="section-head"><div><h2>NRC 매출 대시보드</h2><p class="help" id="homeNrcUpdated">최근 수집 데이터를 불러오는 중...</p></div></div><div id="homePcStatus" class="pc-status-badge"><span class="device-dot"></span><span>수집 PC 상태 확인 중...</span></div><div id="homeCollectStatus" class="connection-status" hidden></div><div id="homeCollectError" class="error"></div><div id="homeNrcDashboard"><p class="help">수집된 매출 데이터가 없습니다.</p></div><button class="secondary home-collect-btn" id="homeCollect" type="button">매출받기 (마감할 때만 눌러도 됩니다)</button></section>`,
   );
   loadHomePcStatus();
   $("content").insertAdjacentHTML(
@@ -1202,6 +1207,7 @@ $("loginForm").onsubmit = async (e) => {
   errorBox.textContent = "";
   submit.disabled = true;
   submit.textContent = authMode === "signup" ? "가입 중..." : "로그인 중...";
+  setRememberLogin($("rememberLogin").checked);
   try {
     if (authMode === "signup") {
       try {

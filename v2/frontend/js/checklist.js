@@ -1,4 +1,4 @@
-import { supabase } from "./supabase.js?v=20260829-11";
+import { supabase } from "./supabase.js?v=20260829-34";
 const groups = [
   [
     "마케팅",
