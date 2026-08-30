@@ -51,7 +51,7 @@ const flattenAllocation = (node, out = []) => {
 };
 
 export async function performancePage(root) {
-  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>마감 실적 계산기</h2><p class="help">기준이 되는 최상위 마감 사업자와 목표만 정하면, 아래 사업자에게는 &quot;라인 합계&quot; 목표로 내려갑니다. 대·소를 각각 채우지 않으므로 매출이 덜 들어갑니다.</p></div></div><p id="perfSource" class="help"></p><p id="perfStorage" class="help"></p><div class="closing-target-row"><label>최상위 마감 사업자<select id="topMemberSelect"></select></label><label>대실적 목표 (NV)<input id="topMajor" type="number" min="1" step="1000"></label><label>소실적 목표 (NV)<input id="topMinor" type="number" min="1" step="1000"></label></div><details class="closing-member-picker" open><summary>마감할 하위 사업자 선택 <b id="closingCount">0명</b></summary><p class="help">체크하지 않은 회원의 라인은 라인 합계만 맞으면 그대로 통과합니다. 체크한 사업자는 라인 합계를 맞추면서 소실적이 인증직급 지급 기준선(DT 3만 · GD 이상 6만 NV) 이상이 되게 채웁니다.</p><div class="closing-picker-tools"><input id="closingFilter" type="search" placeholder="이름 또는 회원번호 검색"><button class="secondary compact" id="closingSelectAll" type="button">전체 선택</button><button class="secondary compact" id="closingSelectNone" type="button">전체 해제</button></div><div id="closingOptions" class="closing-member-options"></div></details><button id="perfRun" class="primary">자동 배분 계산</button><p id="perfNotice" class="help"></p><div id="perfError" class="error"></div></section><section id="perfSummary"></section><section id="perfResult"></section>`;
+  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>마감 실적 계산기</h2><p class="help">기준이 되는 최상위 마감 사업자와 목표만 정하면, 아래 사업자에게는 &quot;라인 합계&quot; 목표로 내려갑니다. 대·소를 각각 채우지 않으므로 매출이 덜 들어갑니다.</p></div></div><p id="perfSource" class="help"></p><p id="perfStorage" class="help"></p><div class="closing-target-row"><label>최상위 마감 사업자<select id="topMemberSelect"></select></label><label>대실적 목표 (NV)<input id="topMajor" type="number" min="1" step="1000"></label><label>소실적 목표 (NV)<input id="topMinor" type="number" min="1" step="1000"></label></div><details class="closing-member-picker" open><summary>마감할 하위 사업자 선택 <b id="closingCount">0명</b></summary><p class="help">체크하지 않은 회원의 라인은 라인 합계만 맞으면 그대로 통과합니다. 체크한 사업자는 라인 합계를 맞추면서 소실적이 인증직급 지급 기준선(DT 3만 · GD 이상 6만 NV) 이상이 되게 채웁니다.</p><div class="closing-picker-tools"><input id="closingFilter" type="search" placeholder="이름 또는 회원번호 검색"><button class="secondary compact" id="closingSelectAll" type="button">전체 선택</button><button class="secondary compact" id="closingSelectNone" type="button">전체 해제</button></div><div id="closingCollapsedGroups" class="closing-collapsed-groups"></div><div id="closingOptions" class="closing-member-options"></div></details><button id="perfRun" class="primary">자동 배분 계산</button><p id="perfNotice" class="help"></p><div id="perfError" class="error"></div></section><section id="perfSummary"></section><section id="perfResult"></section>`;
   const $ = (id) => document.getElementById(id);
   const { data, error } = await supabase
     .from("nrc_sync_snapshots")
@@ -87,6 +87,7 @@ export async function performancePage(root) {
     ? ""
     : "로그인 정보를 찾지 못해 이 브라우저에만 저장합니다.";
   let plan = null;
+  const collapsedGroups = new Set();
   let lastRun = null;
   let lastSignature = "";
   let items = [];
@@ -289,18 +290,40 @@ export async function performancePage(root) {
     renderClosers();
   };
 
+  const memberCheckHtml = (row, label) =>
+    `<label class="check"><input type="checkbox" value="${safe(row.userId)}" ${plan.closingMemberIds.includes(String(row.userId)) ? "checked" : ""}> <span>${safe(label)} <small>(${safe(row.userId)})</small></span></label>`;
   const renderClosers = () => {
     const rows = descendantsOf(plan.topMemberId);
     $("closingCount").textContent =
       `${plan.closingMemberIds.filter((id) => id !== plan.topMemberId).length}명`;
+    const groups = new Map();
+    rows.forEach((row) => {
+      if (!groups.has(row.userName)) groups.set(row.userName, []);
+      groups.get(row.userName).push(row);
+    });
+    for (const name of [...collapsedGroups]) {
+      if (!groups.has(name) || groups.get(name).length < 2)
+        collapsedGroups.delete(name);
+    }
     $("closingOptions").innerHTML = rows.length
-      ? rows
-          .map(
-            (row) =>
-              `<label class="check"><input type="checkbox" value="${safe(row.userId)}" ${plan.closingMemberIds.includes(String(row.userId)) ? "checked" : ""}> <span>${safe(row.userName)} <small>(${safe(row.userId)})</small></span></label>`,
-          )
+      ? [...groups.entries()]
+          .map(([name, members]) => {
+            if (members.length < 2) return memberCheckHtml(members[0], name);
+            if (collapsedGroups.has(name)) return "";
+            const suffixed = members.map((row, index) => [
+              row,
+              index === 0 ? name : `${name}${index}`,
+            ]);
+            return `<div class="closing-group" data-group="${safe(name)}"><div class="closing-group-head"><button class="closing-group-toggle" data-toggle-group="${safe(name)}" type="button">-</button><b>${safe(suffixed.map(([, label]) => label).join(" "))}</b></div><div class="closing-group-members">${suffixed.map(([row, label]) => memberCheckHtml(row, label)).join("")}</div></div>`;
+          })
           .join("")
       : '<p class="help">이 사업자 아래에는 하위 회원이 없습니다.</p>';
+    $("closingCollapsedGroups").innerHTML = [...collapsedGroups]
+      .map(
+        (name) =>
+          `<button class="closing-collapsed-chip" data-expand-group="${safe(name)}" type="button">+ ${safe(name)} 외 ${groups.get(name).length - 1}명</button>`,
+      )
+      .join("");
   };
 
   const lineHtml = (item, index) => {
@@ -627,6 +650,18 @@ export async function performancePage(root) {
       `${plan.closingMemberIds.filter((id) => id !== plan.topMemberId).length}명`;
   };
   $("closingOptions").onchange = syncClosingSelection;
+  $("closingOptions").onclick = (event) => {
+    const name = event.target.closest("[data-toggle-group]")?.dataset.toggleGroup;
+    if (!name) return;
+    collapsedGroups.add(name);
+    renderClosers();
+  };
+  $("closingCollapsedGroups").onclick = (event) => {
+    const name = event.target.closest("[data-expand-group]")?.dataset.expandGroup;
+    if (!name) return;
+    collapsedGroups.delete(name);
+    renderClosers();
+  };
   $("closingFilter").oninput = () => {
     const query = $("closingFilter").value.trim().toLowerCase();
     $("closingOptions")
