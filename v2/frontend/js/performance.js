@@ -830,6 +830,14 @@ export async function performancePage(root, me) {
       );
     }
   } catch {}
+  const selfClosedDescendantIds = new Set(
+    descendantsOf(plan.topMemberId).map((row) => String(row.userId)),
+  );
+  Object.keys(selfClosings).forEach((id) => {
+    if (selfClosedDescendantIds.has(id) && !plan.closingMemberIds.includes(id)) {
+      plan.closingMemberIds.push(id);
+    }
+  });
 
   renderControls();
   runPlan();
