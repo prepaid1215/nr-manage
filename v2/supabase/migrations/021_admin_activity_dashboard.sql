@@ -138,8 +138,21 @@ begin
   select id into v_admin_id from public.profiles
   where lower(username)=lower('bisangharu') limit 1;
   if v_admin_id is null then
-    raise exception '관리자 앱 아이디 bisangharu를 profiles에서 찾지 못했습니다.';
+    select id into v_admin_id from auth.users
+    where lower(email)=lower('app-bisangharu@nrc-members.com')
+       or lower(coalesce(raw_user_meta_data->>'username',''))=lower('bisangharu')
+    limit 1;
   end if;
+  if v_admin_id is null then
+    raise exception '관리자 앱 아이디 bisangharu를 Auth 사용자에서도 찾지 못했습니다.';
+  end if;
+  insert into public.profiles(id,username,name,status)
+  select v_admin_id, 'bisangharu',
+    coalesce(nullif(raw_user_meta_data->>'name',''), '관리자'), 'ACTIVE'
+  from auth.users where id=v_admin_id
+  on conflict(id) do update set
+    username=coalesce(public.profiles.username, excluded.username),
+    updated_at=now();
   insert into public.app_admins(user_id) values(v_admin_id)
   on conflict(user_id) do nothing;
 end
