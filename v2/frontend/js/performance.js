@@ -51,7 +51,7 @@ const flattenAllocation = (node, out = []) => {
 };
 
 export async function performancePage(root, me) {
-  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>마감 실적 계산기</h2><p class="help">기준이 되는 최상위 마감 사업자와 목표만 정하면, 아래 사업자에게는 &quot;라인 합계&quot; 목표로 내려갑니다. 대·소를 각각 채우지 않으므로 매출이 덜 들어갑니다.</p></div></div><p id="perfSource" class="help"></p><p id="perfStorage" class="help"></p><div class="closing-target-row"><label>최상위 마감 사업자<select id="topMemberSelect"></select></label><label>대실적 목표 (NV)<input id="topMajor" type="number" min="1" step="10000"></label><label>소실적 목표 (NV)<input id="topMinor" type="number" min="1" step="10000"></label></div><section class="card closing-main-tree"><div class="section-head"><div><h2>계보도에서 목표 설정</h2><p class="help">사람을 클릭하면 그 사업자의 대실적·소실적 목표를 직접 입력할 수 있습니다.</p></div></div><div id="closingMainTree" class="box-tree"></div></section><dialog id="treeTargetDialog" class="customer-dialog small"><form id="treeTargetForm"><div class="dialog-head"><h2 id="treeTargetTitle">목표 설정</h2><button id="treeTargetClose" type="button">×</button></div><label>대실적 목표 (NV)<input id="treeTargetMajor" type="number" min="0" step="10000" required></label><label>소실적 목표 (NV)<input id="treeTargetMinor" type="number" min="0" step="10000" required></label><p id="treeTargetAuto" class="help"></p><div class="customer-actions"><button class="secondary" id="treeTargetReset" type="button">자동값으로</button><button class="primary" type="submit">저장</button></div></form></dialog><details class="closing-member-picker" open><summary>마감할 하위 사업자 선택 <b id="closingCount">0명</b></summary><p class="help">체크하지 않은 회원의 라인은 라인 합계만 맞으면 그대로 통과합니다. 체크한 사업자는 라인 합계를 맞추면서 소실적이 인증직급 지급 기준선(DT 3만 · GD 이상 6만 NV) 이상이 되게 채웁니다.</p><div class="closing-picker-tools"><input id="closingFilter" type="search" placeholder="이름 또는 회원번호 검색"><button class="secondary compact" id="closingShowSingles" type="button">단독 계정 보기</button><button class="secondary compact" id="closingSelectAll" type="button">전체 선택</button><button class="secondary compact" id="closingSelectNone" type="button">전체 해제</button></div><div id="closingCollapsedGroups" class="closing-collapsed-groups"></div><div id="closingOptions" class="closing-member-options"></div></details><button id="perfRun" class="primary">자동 배분 계산</button><p id="perfNotice" class="help"></p><div id="perfError" class="error"></div></section><section id="perfSummary"></section><section id="perfResult"></section>`;
+  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>마감 실적 계산기</h2><p class="help">기준이 되는 최상위 마감 사업자와 목표만 정하면, 아래 사업자에게는 &quot;라인 합계&quot; 목표로 내려갑니다. 대·소를 각각 채우지 않으므로 매출이 덜 들어갑니다.</p></div></div><p id="perfSource" class="help"></p><p id="perfStorage" class="help"></p><div class="closing-target-row"><label>최상위 마감 사업자<select id="topMemberSelect"></select></label><label>대실적 목표 (NV)<input id="topMajor" type="number" min="1" step="10000"></label><label>소실적 목표 (NV)<input id="topMinor" type="number" min="1" step="10000"></label></div><section class="card closing-main-tree"><div class="section-head"><div><h2>계보도에서 목표 설정</h2><p class="help">클릭하면 그 사람 기준으로 계보도가 이동하고, 더블클릭하면 대실적·소실적 목표를 입력합니다.</p></div></div><div id="treePins" class="tree-pins"></div><div id="closingMainTree" class="box-tree"></div></section><dialog id="treeTargetDialog" class="customer-dialog small"><form id="treeTargetForm"><div class="dialog-head"><h2 id="treeTargetTitle">목표 설정</h2><button id="treeTargetClose" type="button">×</button></div><label>대실적 목표 (NV)<input id="treeTargetMajor" type="number" min="0" step="10000" required></label><label>소실적 목표 (NV)<input id="treeTargetMinor" type="number" min="0" step="10000" required></label><p id="treeTargetAuto" class="help"></p><div class="customer-actions"><button class="secondary" id="treeTargetReset" type="button">자동값으로</button><button class="primary" type="submit">저장</button></div></form></dialog><details class="closing-member-picker" open><summary>마감할 하위 사업자 선택 <b id="closingCount">0명</b></summary><p class="help">체크하지 않은 회원의 라인은 라인 합계만 맞으면 그대로 통과합니다. 체크한 사업자는 라인 합계를 맞추면서 소실적이 인증직급 지급 기준선(DT 3만 · GD 이상 6만 NV) 이상이 되게 채웁니다.</p><div class="closing-picker-tools"><input id="closingFilter" type="search" placeholder="이름 또는 회원번호 검색"><button class="secondary compact" id="closingShowSingles" type="button">단독 계정 보기</button><button class="secondary compact" id="closingSelectAll" type="button">전체 선택</button><button class="secondary compact" id="closingSelectNone" type="button">전체 해제</button></div><div id="closingCollapsedGroups" class="closing-collapsed-groups"></div><div id="closingOptions" class="closing-member-options"></div></details><button id="perfRun" class="primary">자동 배분 계산</button><p id="perfNotice" class="help"></p><div id="perfError" class="error"></div></section><section id="perfSummary"></section><section id="perfResult"></section>`;
   const $ = (id) => document.getElementById(id);
   const { data, error } = await supabase
     .from("nrc_sync_snapshots")
@@ -93,6 +93,22 @@ export async function performancePage(root, me) {
   let lastRun = null;
   let lastSignature = "";
   let items = [];
+  const TREE_PINS_KEY = "nrc-perf-tree-pins";
+  const loadTreePins = () => {
+    try {
+      return JSON.parse(localStorage.getItem(TREE_PINS_KEY)) || [];
+    } catch {
+      return [];
+    }
+  };
+  const saveTreePins = (pins) => {
+    try {
+      localStorage.setItem(TREE_PINS_KEY, JSON.stringify(pins));
+    } catch {}
+  };
+  let treePins = loadTreePins();
+  let treeFocusId = null;
+  let treeClickTimer = null;
 
   const legacyPlan = () => {
     const selected = readJson("nrc-closing-members", [])
@@ -329,7 +345,9 @@ export async function performancePage(root, me) {
           : `목표 ${fmt(node.lineTarget)}`;
       notes[node.memberId] = completion ? "마감 완료" : "진행 예정";
     });
-    box.innerHTML = boxTreeHtml(model, plan.topMemberId, {
+    if (!treeFocusId || !model.byId.has(treeFocusId))
+      treeFocusId = plan.topMemberId;
+    box.innerHTML = boxTreeHtml(model, treeFocusId, {
       depth: 8,
       badges,
       notes,
@@ -338,6 +356,59 @@ export async function performancePage(root, me) {
       selectedId: plan.topMemberId,
       totalOf: (row) => branchBreakdown(row).total,
     });
+  };
+  const renderTreePins = () => {
+    const box = $("treePins");
+    if (!box) return;
+    box.innerHTML =
+      treePins
+        .map(
+          (pin) =>
+            `<button class="tree-pin${pin.id === treeFocusId ? " active" : ""}" data-pin="${safe(pin.id)}" type="button">${safe(pin.name)} <span data-unpin="${safe(pin.id)}">×</span></button>`,
+        )
+        .join("") +
+      `<button class="tree-pin add" id="treePinAdd" type="button">+ 추가</button>`;
+    box.querySelectorAll("[data-pin]").forEach(
+      (button) =>
+        (button.onclick = (event) => {
+          if (event.target.closest("[data-unpin]")) return;
+          treeFocusId = button.dataset.pin;
+          renderMainTree();
+          renderTreePins();
+        }),
+    );
+    box.querySelectorAll("[data-unpin]").forEach(
+      (span) =>
+        (span.onclick = (event) => {
+          event.stopPropagation();
+          treePins = treePins.filter((pin) => pin.id !== span.dataset.unpin);
+          saveTreePins(treePins);
+          renderTreePins();
+        }),
+    );
+    $("treePinAdd").onclick = () => {
+      const query = prompt("고정할 사업자 이름 또는 회원번호를 입력하세요.");
+      if (!query) return;
+      const trimmed = query.trim(),
+        q = trimmed.toLowerCase();
+      const match = model.rows.find(
+        (row) =>
+          String(row.userId) === trimmed ||
+          String(row.userName || "").toLowerCase().includes(q),
+      );
+      if (!match) {
+        alert("일치하는 회원을 찾지 못했습니다.");
+        return;
+      }
+      const id = String(match.userId);
+      if (!treePins.some((pin) => pin.id === id)) {
+        treePins = [...treePins, { id, name: match.userName }];
+        saveTreePins(treePins);
+      }
+      treeFocusId = id;
+      renderMainTree();
+      renderTreePins();
+    };
   };
 
   const renderControls = () => {
@@ -718,6 +789,7 @@ export async function performancePage(root, me) {
       fitTrees();
       renderClosers();
       renderMainTree();
+      renderTreePins();
     } catch (calculationError) {
       $("perfError").textContent = calculationError.message;
       $("perfSummary").replaceChildren();
@@ -725,11 +797,30 @@ export async function performancePage(root, me) {
     }
   };
 
-  $("closingMainTree").onclick = (event) => {
+  $("closingMainTree").addEventListener("click", (event) => {
     const button = event.target.closest("[data-member]");
     if (!button) return;
+    if (treeClickTimer) {
+      clearTimeout(treeClickTimer);
+      treeClickTimer = null;
+      return;
+    }
+    treeClickTimer = setTimeout(() => {
+      treeClickTimer = null;
+      treeFocusId = button.dataset.member;
+      renderMainTree();
+      renderTreePins();
+    }, 260);
+  });
+  $("closingMainTree").addEventListener("dblclick", (event) => {
+    const button = event.target.closest("[data-member]");
+    if (!button) return;
+    if (treeClickTimer) {
+      clearTimeout(treeClickTimer);
+      treeClickTimer = null;
+    }
     openTreeTarget(button.dataset.member);
-  };
+  });
   $("treeTargetClose").onclick = () => $("treeTargetDialog").close();
   $("treeTargetForm").onsubmit = async (event) => {
     event.preventDefault();
