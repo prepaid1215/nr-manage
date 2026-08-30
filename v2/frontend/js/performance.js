@@ -422,6 +422,10 @@ export async function performancePage(root, me) {
       selectedId: plan.topMemberId,
       totalOf: (row) => branchBreakdown(row).total,
     });
+    box.scrollTop = 0;
+    requestAnimationFrame(() => {
+      box.scrollLeft = Math.max(0, (box.scrollWidth - box.clientWidth) / 2);
+    });
   };
   const pinTargetCache = new Map();
   const renderTreePins = async () => {
@@ -1037,6 +1041,10 @@ export async function performancePage(root, me) {
     syncClosingSelection();
   };
   $("perfRun").onclick = async () => {
+    runPlan();
+    await persistPlan();
+  };
+  $("topMajor").onchange = $("topMinor").onchange = async () => {
     runPlan();
     await persistPlan();
   };
