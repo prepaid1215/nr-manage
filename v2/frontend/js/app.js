@@ -906,7 +906,7 @@ async function enqueueCollection(sourceAccountId = null) {
   return data;
 }
 async function waitForCollectionJob(jobId, onProgress) {
-  for (let index = 0; index < 180; index++) {
+  for (let index = 0; index < 450; index++) {
     const { data, error } = await supabase
       .from("nrc_sync_jobs")
       .select("status,message,error")
@@ -919,7 +919,9 @@ async function waitForCollectionJob(jobId, onProgress) {
       throw Error(data.error || data.message || "수집에 실패했습니다.");
     await new Promise((resolve) => setTimeout(resolve, 2000));
   }
-  throw Error("수집 요청은 유지 중입니다. 잠시 후 최근 수집 요청에서 확인해 주세요.");
+  const pending = Error("수집 요청은 계속 대기 중이며 온라인 승인 PC가 자동으로 처리합니다.");
+  pending.isPending = true;
+  throw pending;
 }
 async function loadRecentJobs() {
   const list = $("jobList");
@@ -959,7 +961,12 @@ async function runHomeCollection() {
     status.textContent = "매출·계보·소비자회선 수집 완료";
     await home();
   } catch (error) {
-    errorBox.textContent = error.message;
+    if (error.isPending) {
+      status.textContent = error.message;
+      errorBox.textContent = "";
+    } else {
+      errorBox.textContent = error.message;
+    }
   } finally {
     button.disabled = false;
     button.textContent = "매출받기";
@@ -1000,7 +1007,7 @@ async function runCollection(e) {
   error.textContent = "";
   $("nrcStatus").textContent = "수집 가능한 승인 PC를 찾는 중...";
   button.disabled = true;
-  button.textContent = "Playwright 수집 중...";
+  button.textContent = "승인 PC 수집 중...";
   try {
     const job = await enqueueCollection(loginId);
     await waitForCollectionJob(job.id, (message) => {
@@ -1009,7 +1016,13 @@ async function runCollection(e) {
     $("nrcStatus").textContent = "계보·NV·소비자회선 수집 완료";
     await loadRecentJobs();
   } catch (err) {
-    error.textContent = err.message;
+    if (err.isPending) {
+      $("nrcStatus").textContent = err.message;
+      error.textContent = "";
+      await loadRecentJobs();
+    } else {
+      error.textContent = err.message;
+    }
   } finally {
     button.disabled = false;
     button.textContent = "매출 데이터 받기";
