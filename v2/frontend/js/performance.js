@@ -246,6 +246,7 @@ export async function performancePage(root, me) {
   };
 
   async function persistPlan() {
+    pinTargetCache.delete(plan.topMemberId);
     const topCompletion = plan.completions[plan.topMemberId] || null;
     if (storage === "supabase") {
       const row = {
@@ -422,35 +423,48 @@ export async function performancePage(root, me) {
       totalOf: (row) => branchBreakdown(row).total,
     });
   };
-  const renderTreePins = () => {
+  const pinTargetCache = new Map();
+  const renderTreePins = async () => {
     const box = $("treePins");
     if (!box) return;
+    const otherPins = treePins.filter((pin) => pin.id !== plan.topMemberId);
+    await Promise.all(
+      otherPins
+        .filter((pin) => !pinTargetCache.has(pin.id))
+        .map(async (pin) => {
+          const loaded = await loadPlanFor(pin.id);
+          pinTargetCache.set(pin.id, {
+            major: loaded.topMajorTarget,
+            minor: loaded.topMinorTarget,
+          });
+        }),
+    );
     box.innerHTML =
-      treePins
-        .map(
-          (pin) =>
-            `<button class="tree-pin${pin.id === plan.topMemberId ? " active" : ""}" data-pin="${safe(pin.id)}" type="button">${safe(pin.name)} <span data-unpin="${safe(pin.id)}">×</span></button>`,
-        )
+      otherPins
+        .map((pin) => {
+          const target = pinTargetCache.get(pin.id) || { major: 0, minor: 0 };
+          return `<div class="closing-target-row pin-row" data-pin="${safe(pin.id)}"><label>최상위 마감 사업자<span class="pin-name">${safe(pin.name)} (${safe(pin.id)}) <button class="pin-remove" data-unpin="${safe(pin.id)}" type="button">삭제</button></span></label><label>대실적 목표 (NV)<span class="pin-value">${fmt(target.major)}</span></label><label>소실적 목표 (NV)<span class="pin-value">${fmt(target.minor)}</span></label></div>`;
+        })
         .join("") +
-      `<button class="tree-pin add" id="treePinAdd" type="button">+ 추가</button>`;
+      `<button class="secondary compact tree-pin-add" id="treePinAdd" type="button">+ 사업자 추가</button>`;
     box.querySelectorAll("[data-pin]").forEach(
-      (button) =>
-        (button.onclick = (event) => {
+      (row) =>
+        (row.onclick = (event) => {
           if (event.target.closest("[data-unpin]")) return;
-          switchToTopMember(button.dataset.pin);
+          switchToTopMember(row.dataset.pin);
         }),
     );
     box.querySelectorAll("[data-unpin]").forEach(
-      (span) =>
-        (span.onclick = (event) => {
+      (button) =>
+        (button.onclick = (event) => {
           event.stopPropagation();
-          treePins = treePins.filter((pin) => pin.id !== span.dataset.unpin);
+          treePins = treePins.filter((pin) => pin.id !== button.dataset.unpin);
           saveTreePins(treePins);
           renderTreePins();
         }),
     );
     $("treePinAdd").onclick = () => {
-      const query = prompt("고정할 사업자 이름 또는 회원번호를 입력하세요.");
+      const query = prompt("추가할 사업자 이름 또는 회원번호를 입력하세요.");
       if (!query) return;
       const trimmed = query.trim(),
         q = trimmed.toLowerCase();
@@ -468,6 +482,7 @@ export async function performancePage(root, me) {
         treePins = [...treePins, { id, name: match.userName }];
         saveTreePins(treePins);
       }
+      pinTargetCache.delete(id);
       switchToTopMember(id);
     };
   };
