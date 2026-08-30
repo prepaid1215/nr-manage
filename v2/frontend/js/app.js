@@ -816,8 +816,8 @@ async function collection() {
       (button) =>
         (button.onclick = () => settings(button.dataset.settingsJump)),
     );
-  await loadSavedNrc();
-  await Promise.all([loadCloudCredential(), loadSchedules(), loadRecentJobs()]);
+  await loadCloudCredential();
+  await Promise.all([loadSavedNrc(), loadSchedules(), loadRecentJobs()]);
 }
 async function localApi(path, options = {}) {
   const token = localStorage.getItem("nrc-sync-token") || "";
@@ -1143,10 +1143,15 @@ async function runCollection(e) {
 }
 async function loadSavedNrc() {
   try {
-    const [cloud, devices] = await Promise.all([
+    let [cloud, devices] = await Promise.all([
       cloudApi("/credentials").catch(() => null),
       loadSyncDevices().catch(() => []),
     ]);
+    if (!cloud) {
+      // 클라우드 수집기가 잠들어 있다가 방금 깨어난 경우를 대비해 한 번 더 시도
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      cloud = await cloudApi("/credentials").catch(() => null);
+    }
     const select = $("nrcSourceAccount");
     if (!select) return;
     const accounts = [
