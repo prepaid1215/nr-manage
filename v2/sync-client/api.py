@@ -447,16 +447,38 @@ def startup_vbs_path():
     )
 
 
+def ensure_startup_registered(target_exe):
+    """Windows 로그인 시 자동 실행되도록 등록되어 있는지 매번 확인하고,
+    빠져 있으면(사람이 지웠거나, 예전 버전이 등록을 안 했거나) 다시 만든다.
+    이미 올바르게 등록돼 있으면 아무 것도 다시 쓰지 않는다."""
+    startup_path = startup_vbs_path()
+    if not startup_path:
+        return
+    expected = (
+        'Set shell = CreateObject("WScript.Shell")\r\n'
+        f'shell.Run "\\"{target_exe}\\"", 0, False\r\n'
+    )
+    try:
+        if startup_path.exists() and startup_path.read_text(encoding="utf-8") == expected:
+            return
+        startup_path.parent.mkdir(parents=True, exist_ok=True)
+        startup_path.write_text(expected, encoding="utf-8")
+        print("✅ Windows 로그인 시 자동 실행되도록 등록했습니다.")
+    except Exception as exc:
+        print(f"⚠️ 자동 실행 등록 실패(수동 실행은 계속 가능): {exc}")
+
+
 def self_install_and_relaunch():
     """설치 위치가 아닌 곳(다운로드 폴더 등)에서 처음 실행되면, 설치 위치로
-    스스로를 복사하고 Windows 로그인 시 자동 실행되도록 등록한 뒤
-    설치된 위치에서 다시 실행한다. 이미 설치 위치에서 실행 중이면 아무것도
-    하지 않는다. python api.py로 직접 실행할 때는 해당 없음(frozen 아님)."""
+    스스로를 복사한 뒤 설치된 위치에서 다시 실행한다. 이미 설치 위치에서
+    실행 중이면 복사 없이 자동 실행 등록만 확인한다. python api.py로 직접
+    실행할 때는 해당 없음(frozen 아님)."""
     if not getattr(sys, "frozen", False):
         return False
     current_exe = Path(sys.executable).resolve()
     target_exe = install_dir() / "NRCSync.exe"
     if target_exe.exists() and current_exe == target_exe.resolve():
+        ensure_startup_registered(target_exe)
         return False
 
     print("🧩 처음 실행되었습니다. NRC Sync를 설치합니다...")
@@ -466,18 +488,7 @@ def self_install_and_relaunch():
     except shutil.SameFileError:
         pass
 
-    startup_path = startup_vbs_path()
-    if startup_path:
-        try:
-            startup_path.parent.mkdir(parents=True, exist_ok=True)
-            startup_path.write_text(
-                'Set shell = CreateObject("WScript.Shell")\r\n'
-                f'shell.Run "\\"{target_exe}\\"", 0, False\r\n',
-                encoding="utf-8",
-            )
-            print("✅ Windows 로그인 시 자동 실행되도록 등록했습니다.")
-        except Exception as exc:
-            print(f"⚠️ 자동 실행 등록 실패(수동 실행은 계속 가능): {exc}")
+    ensure_startup_registered(target_exe)
 
     print(f"✅ 설치 완료: {target_exe}")
     subprocess.Popen([str(target_exe)], cwd=str(target_exe.parent))
