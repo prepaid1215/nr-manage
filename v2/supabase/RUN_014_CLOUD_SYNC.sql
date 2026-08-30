@@ -1,0 +1,3 @@
+-- Supabase SQL Editor에서 migrations/014_cloud_sync.sql 파일 전체를 실행하세요.
+-- 운영 프로젝트에는 2026-08-30 적용 완료했습니다.
+-- 클라우드 자격증명 테이블은 anon/authenticated 직접 접근을 차단하고 service_role만 사용합니다.

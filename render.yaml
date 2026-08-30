@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: nrc-sync-cloud
+    runtime: docker
+    dockerfilePath: ./v2/cloud-worker/Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: SUPABASE_URL
+        value: https://ymagjzwebshfnjiisrao.supabase.co
+      - key: SUPABASE_ANON_KEY
+        value: sb_publishable_odxxHbBufV-ZSFlVJ8xFiw_18hBVyJf
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: NRC_CREDENTIAL_ENCRYPTION_KEY
+        generateValue: true
+      - key: APP_ORIGIN
+        value: https://prepaid1215.github.io
