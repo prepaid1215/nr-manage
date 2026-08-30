@@ -23,9 +23,35 @@ export async function isAppAdmin() {
 }
 
 export async function adminPage(root) {
-  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>관리자 사용현황</h2><p class="help">가입자별 접속·수집·마감 사용 현황입니다. 비밀번호와 입력 내용은 기록하지 않습니다.</p></div><button id="adminReload" class="secondary compact" type="button">새로고침</button></div><div id="adminSummary" class="admin-summary"></div><label>사용자 검색<input id="adminSearch" type="search" placeholder="이름, 앱 아이디, 회원번호"></label><div id="adminError" class="error"></div></section><section class="card"><h2>가입자 현황</h2><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>사용자</th><th>최근 활동</th><th>최근 화면</th><th>수집</th><th>마감 계획</th></tr></thead><tbody id="adminUsers"></tbody></table></div></section><section class="card"><h2>최근 행동</h2><div id="adminEvents" class="admin-events"></div></section><dialog id="adminGenealogyDialog" class="member-dialog admin-genealogy-dialog"><div class="dialog-head"><h2 id="adminGenealogyTitle">사용자 계보도</h2><button id="adminGenealogyClose" type="button">×</button></div><div class="admin-genealogy-body"><p id="adminGenealogyMeta" class="help"></p><div id="adminPlanSummary" class="admin-plan-summary"></div><div id="adminGenealogyError" class="error"></div><div id="adminGenealogyTree" class="box-tree"><p class="help">계보도를 불러오는 중...</p></div></div></dialog>`;
+  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>관리자 사용현황</h2><p class="help">가입자별 접속·수집·마감 사용 현황입니다. 비밀번호와 입력 내용은 기록하지 않습니다.</p></div><button id="adminReload" class="secondary compact" type="button">새로고침</button></div><div id="adminSummary" class="admin-summary"></div><label>사용자 검색<input id="adminSearch" type="search" placeholder="이름, 앱 아이디, 회원번호"></label><div id="adminError" class="error"></div></section><section class="card"><h2>가입자 현황</h2><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>사용자</th><th>최근 활동</th><th>최근 화면</th><th>수집</th><th>마감 계획</th></tr></thead><tbody id="adminUsers"></tbody></table></div></section><section class="card"><h2>최근 행동</h2><div id="adminEvents" class="admin-events"></div></section><dialog id="adminGenealogyDialog" class="member-dialog admin-genealogy-dialog"><div class="dialog-head"><h2 id="adminGenealogyTitle">사용자 계보도</h2><button id="adminGenealogyClose" type="button">×</button></div><div class="admin-genealogy-body"><p id="adminGenealogyMeta" class="help"></p><div id="adminPlanSummary" class="admin-plan-summary"></div><div id="adminGenealogyError" class="error"></div><div class="tree-focus-bar admin-tree-tools"><span>기준: <b id="adminTreeFocus">-</b></span><div><button class="secondary compact" id="adminTreeHome" type="button">맨 위로</button><button class="secondary compact" id="adminTreeUp" type="button">상위로</button><span class="tree-zoom-controls"><button class="secondary compact" id="adminZoomOut" type="button">−</button><button class="secondary compact" id="adminZoomReset" type="button">100%</button><button class="secondary compact" id="adminZoomIn" type="button">＋</button></span></div></div><p class="help">회원을 클릭하면 그 사람을 맨 위로 놓고 다시 그립니다. 빈 공간을 끌면 계보도가 이동합니다.</p><div id="adminGenealogyTree" class="box-tree pannable-tree"><div class="tree-stage" id="adminGenealogyStage"><p class="help">계보도를 불러오는 중...</p></div></div></div></dialog>`;
   const $ = (id) => document.getElementById(id);
-  let users = [];
+  let users = [], genealogyModel = null, genealogyHomeId = null,
+    genealogyFocusId = null, genealogyZoom = 1;
+  const centerAdminTree = () => {
+    const canvas = $("adminGenealogyTree");
+    requestAnimationFrame(() => {
+      canvas.scrollLeft = Math.max(0, (canvas.scrollWidth - canvas.clientWidth) / 2);
+      canvas.scrollTop = 0;
+    });
+  };
+  const renderAdminTree = () => {
+    if (!genealogyModel || !genealogyFocusId) return;
+    const focus = genealogyModel.byId.get(genealogyFocusId);
+    $("adminTreeFocus").textContent = focus?.userName || genealogyFocusId;
+    $("adminTreeUp").disabled = !focus?.ppId || !genealogyModel.byId.has(String(focus.ppId));
+    $("adminGenealogyStage").style.zoom = genealogyZoom;
+    $("adminGenealogyStage").innerHTML = boxTreeHtml(genealogyModel, genealogyFocusId, {
+      depth: 10, hideDate: true, clickable: true,
+      totalOf: (row) => branchBreakdown(row).total,
+    });
+    centerAdminTree();
+  };
+  const setAdminZoom = (value) => {
+    genealogyZoom = Math.min(1.8, Math.max(0.4, Number(value.toFixed(2))));
+    $("adminGenealogyStage").style.zoom = genealogyZoom;
+    $("adminZoomReset").textContent = `${Math.round(genealogyZoom * 100)}%`;
+    centerAdminTree();
+  };
   const renderUsers = () => {
     const query = $("adminSearch").value.trim().toLowerCase();
     const filtered = users.filter((row) =>
@@ -68,7 +94,7 @@ export async function adminPage(root) {
     $("adminGenealogyMeta").textContent = "최신 수집 데이터와 마감 계획을 불러오는 중...";
     $("adminPlanSummary").innerHTML = "";
     $("adminGenealogyError").textContent = "";
-    $("adminGenealogyTree").innerHTML = '<p class="help">계보도를 불러오는 중...</p>';
+    $("adminGenealogyStage").innerHTML = '<p class="help">계보도를 불러오는 중...</p>';
     $("adminGenealogyDialog").showModal();
     const [snapshotResult, plansResult] = await Promise.all([
       supabase.rpc("admin_user_latest_snapshot", { p_user_id: button.dataset.adminUser }),
@@ -77,13 +103,13 @@ export async function adminPage(root) {
     const error = snapshotResult.error || plansResult.error;
     if (error) {
       $("adminGenealogyError").textContent = friendlyError(error, "계보 데이터를 불러오지 못했습니다. RUN_022를 먼저 실행해 주세요.");
-      $("adminGenealogyTree").innerHTML = "";
+      $("adminGenealogyStage").innerHTML = "";
       return;
     }
     const snapshot = snapshotResult.data?.[0];
     if (!snapshot) {
       $("adminGenealogyMeta").textContent = "수집된 계보 데이터가 없습니다.";
-      $("adminGenealogyTree").innerHTML = "";
+      $("adminGenealogyStage").innerHTML = "";
       return;
     }
     try {
@@ -96,16 +122,60 @@ export async function adminPage(root) {
       $("adminPlanSummary").innerHTML = plans.length
         ? plans.map((plan) => `<article><b>${safe(plan.top_member_id)} · ${plan.status === "DONE" ? "완료" : "진행"}</b><span>목표 대 ${Number(plan.top_major_target || 0).toLocaleString()} / 소 ${Number(plan.top_minor_target || 0).toLocaleString()} NV</span><span>결과 대 ${Number(plan.top_major_nv || 0).toLocaleString()} / 소 ${Number(plan.top_minor_nv || 0).toLocaleString()} NV</span></article>`).join("")
         : '<p class="help">저장된 마감 계획이 없습니다.</p>';
-      $("adminGenealogyTree").innerHTML = boxTreeHtml(model, rootId, {
-        depth: 10,
-        hideDate: true,
-        clickable: false,
-        totalOf: (row) => branchBreakdown(row).total,
-      });
+      genealogyModel = model;
+      genealogyHomeId = rootId;
+      genealogyFocusId = rootId;
+      genealogyZoom = 1;
+      $("adminZoomReset").textContent = "100%";
+      renderAdminTree();
     } catch (parseError) {
       $("adminGenealogyError").textContent = friendlyError(parseError, "계보 데이터 형식을 읽지 못했습니다.");
-      $("adminGenealogyTree").innerHTML = "";
+      $("adminGenealogyStage").innerHTML = "";
     }
   };
+  $("adminTreeHome").onclick = () => { genealogyFocusId = genealogyHomeId; renderAdminTree(); };
+  $("adminTreeUp").onclick = () => {
+    const parentId = genealogyModel?.byId.get(genealogyFocusId)?.ppId;
+    if (parentId && genealogyModel.byId.has(String(parentId))) {
+      genealogyFocusId = String(parentId); renderAdminTree();
+    }
+  };
+  $("adminZoomOut").onclick = () => setAdminZoom(genealogyZoom - 0.1);
+  $("adminZoomIn").onclick = () => setAdminZoom(genealogyZoom + 0.1);
+  $("adminZoomReset").onclick = () => setAdminZoom(1);
+  $("adminGenealogyTree").onclick = (event) => {
+    const node = event.target.closest("[data-member]");
+    if (node && genealogyModel?.byId.has(node.dataset.member)) {
+      genealogyFocusId = node.dataset.member; renderAdminTree();
+    }
+  };
+  const canvas = $("adminGenealogyTree");
+  let panActive = false, panMoved = false, panCaptured = false,
+    panX = 0, panY = 0, panLeft = 0, panTop = 0;
+  canvas.onpointerdown = (event) => {
+    if (event.button !== 0) return;
+    panActive = true; panMoved = false; panX = event.clientX; panY = event.clientY;
+    panLeft = canvas.scrollLeft; panTop = canvas.scrollTop;
+  };
+  canvas.onpointermove = (event) => {
+    if (!panActive) return;
+    const dx = event.clientX - panX, dy = event.clientY - panY;
+    if (!panMoved && Math.abs(dx) + Math.abs(dy) > 6) {
+      panMoved = true; panCaptured = true; canvas.classList.add("dragging");
+      canvas.setPointerCapture(event.pointerId);
+    }
+    if (panMoved) { canvas.scrollLeft = panLeft - dx; canvas.scrollTop = panTop - dy; }
+  };
+  const stopPan = (event) => {
+    panActive = false; canvas.classList.remove("dragging");
+    if (panCaptured && canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+    panCaptured = false;
+  };
+  canvas.onpointerup = stopPan;
+  canvas.onpointercancel = stopPan;
+  canvas.addEventListener("click", (event) => {
+    if (!panMoved) return;
+    event.preventDefault(); event.stopPropagation(); panMoved = false;
+  }, true);
   await load();
 }
