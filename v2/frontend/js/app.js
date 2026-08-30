@@ -16,9 +16,18 @@ import { performancePage } from "./performance.js?v=20260829-73";
 import { teamPage } from "./team.js?v=20260829-35";
 import { localDate, monthRange } from "./date.js?v=20260829-25";
 import { friendlyError } from "./errors.js?v=20260830-1";
+import { adminPage, isAppAdmin } from "./admin.js?v=20260830-1";
+import {
+  installInteractionTracking,
+  setTelemetryPage,
+  setTelemetryUser,
+  trackEvent,
+} from "./telemetry.js?v=20260830-1";
 const $ = (id) => document.getElementById(id);
 let me = null,
-  authMode = "login";
+  authMode = "login",
+  appAdmin = false,
+  trackingInstalled = false;
 const menus = [
   ["home", "홈"],
   ["customers", "고객"],
@@ -30,9 +39,11 @@ const menus = [
   ["closing", "마감"],
   ["team", "팀"],
   ["settings", "설정"],
+  ["admin", "관리자"],
 ];
+const visibleMenus = () => menus.filter(([id]) => id !== "admin" || appAdmin);
 function nav() {
-  const html = menus
+  const html = visibleMenus()
     .map(([id, label]) => `<button data-page="${id}">${label}</button>`)
     .join("");
   $("topNav").innerHTML = html;
@@ -199,6 +210,9 @@ async function home() {
     : '<p class="help">현재 긴급한 알림이 없습니다.</p>';
 }
 async function show(page, options) {
+  if (page === "admin" && !appAdmin) page = "home";
+  setTelemetryPage(page);
+  trackEvent("page_view", page);
   document
     .querySelectorAll("[data-page]")
     .forEach((b) => b.classList.toggle("active", b.dataset.page === page));
@@ -212,8 +226,9 @@ async function show(page, options) {
   if (page === "closing") return closingPage($("content"), me);
   if (page === "team") return teamPage($("content"), me);
   if (page === "settings") return settings();
+  if (page === "admin") return adminPage($("content"));
   $("content").innerHTML =
-    `<section class="card"><h2>더보기</h2><p class="help">전체 메뉴가 아래에 있습니다. PC와 모바일 어디서나 똑같이 사용할 수 있습니다.</p><div class="more-menu">${menus
+    `<section class="card"><h2>더보기</h2><p class="help">전체 메뉴가 아래에 있습니다. PC와 모바일 어디서나 똑같이 사용할 수 있습니다.</p><div class="more-menu">${visibleMenus()
       .slice(4)
       .map(([id, label]) => `<button data-page="${id}" type="button">${label}</button>`)
       .join("")}</div></section>`;
@@ -1269,6 +1284,12 @@ async function start() {
   const username = session.user.user_metadata?.username || "사용자";
   const profile = await currentProfile().catch(() => null);
   me = profile || { id: session.user.id, name: username, status: "ACTIVE" };
+  setTelemetryUser(me.id);
+  appAdmin = await isAppAdmin();
+  if (!trackingInstalled) {
+    installInteractionTracking();
+    trackingInstalled = true;
+  }
   $("loginView").hidden = true;
   $("appView").hidden = false;
   $("userName").textContent = `${me.name || username}님`;
