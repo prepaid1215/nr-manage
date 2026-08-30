@@ -3,6 +3,7 @@
 import json
 import os
 import socket
+import sys
 import threading
 import time
 import urllib.error
@@ -20,7 +21,11 @@ from scraper import run_combined
 SUPABASE_URL = "https://ymagjzwebshfnjiisrao.supabase.co"
 SUPABASE_KEY = "sb_publishable_odxxHbBufV-ZSFlVJ8xFiw_18hBVyJf"
 CLOUD_COORDINATOR = "https://nrc-sync-cloud-sg.onrender.com"
-DATA_DIR = Path(__file__).parent / "data"
+DATA_DIR = (
+    Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "NRCSync" / "data"
+    if getattr(sys, "frozen", False)
+    else Path(__file__).parent / "data"
+)
 DEVICE_FILE = DATA_DIR / "worker_device.json"
 SESSION_SERVICE = "NRC-Management-Worker-Session"
 CREDENTIAL_SERVICE = "NRC-Management-Manual"

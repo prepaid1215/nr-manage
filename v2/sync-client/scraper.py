@@ -26,8 +26,12 @@ load_dotenv()
 BASE_URL = "https://www.nrcom.com:447"
 USER_ID = os.getenv("NRC_USER_ID")
 USER_PW = os.getenv("NRC_USER_PW")
-DATA_DIR = Path(__file__).parent / "data"
-DATA_DIR.mkdir(exist_ok=True)
+DATA_DIR = (
+    Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "NRCSync" / "data"
+    if getattr(sys, "frozen", False)
+    else Path(__file__).parent / "data"
+)
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 NAVIGATION_TIMEOUT_MS = int(os.getenv("NRC_NAVIGATION_TIMEOUT_MS", "90000"))
 
 

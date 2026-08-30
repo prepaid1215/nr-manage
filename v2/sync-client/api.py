@@ -11,6 +11,7 @@ import json
 import hmac
 import html
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -47,7 +48,11 @@ def require_sync_token():
         return jsonify({"ok": False, "message": "내 컴퓨터 연결 코드가 맞지 않습니다."}), 401
 
 
-DATA_DIR = Path(__file__).parent / "data"
+DATA_DIR = (
+    Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "NRCSync" / "data"
+    if getattr(sys, "frozen", False)
+    else Path(__file__).parent / "data"
+)
 sync_state = {"running": False, "completed": False, "error": None, "message": "대기 중"}
 SCHEDULES_FILE = DATA_DIR / "sync_schedules.json"
 KEYRING_SERVICE = "NRC-Management-Scheduler"
@@ -423,6 +428,62 @@ def status():
     })
 
 
+def install_dir():
+    return Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "NRCSync"
+
+
+def startup_vbs_path():
+    appdata = os.environ.get("APPDATA")
+    if not appdata:
+        return None
+    return (
+        Path(appdata)
+        / "Microsoft"
+        / "Windows"
+        / "Start Menu"
+        / "Programs"
+        / "Startup"
+        / "NRCSync.vbs"
+    )
+
+
+def self_install_and_relaunch():
+    """설치 위치가 아닌 곳(다운로드 폴더 등)에서 처음 실행되면, 설치 위치로
+    스스로를 복사하고 Windows 로그인 시 자동 실행되도록 등록한 뒤
+    설치된 위치에서 다시 실행한다. 이미 설치 위치에서 실행 중이면 아무것도
+    하지 않는다. python api.py로 직접 실행할 때는 해당 없음(frozen 아님)."""
+    if not getattr(sys, "frozen", False):
+        return False
+    current_exe = Path(sys.executable).resolve()
+    target_exe = install_dir() / "NRCSync.exe"
+    if target_exe.exists() and current_exe == target_exe.resolve():
+        return False
+
+    print("🧩 처음 실행되었습니다. NRC Sync를 설치합니다...")
+    target_exe.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        shutil.copy2(current_exe, target_exe)
+    except shutil.SameFileError:
+        pass
+
+    startup_path = startup_vbs_path()
+    if startup_path:
+        try:
+            startup_path.parent.mkdir(parents=True, exist_ok=True)
+            startup_path.write_text(
+                'Set shell = CreateObject("WScript.Shell")\r\n'
+                f'shell.Run "\\"{target_exe}\\"", 0, False\r\n',
+                encoding="utf-8",
+            )
+            print("✅ Windows 로그인 시 자동 실행되도록 등록했습니다.")
+        except Exception as exc:
+            print(f"⚠️ 자동 실행 등록 실패(수동 실행은 계속 가능): {exc}")
+
+    print(f"✅ 설치 완료: {target_exe}")
+    subprocess.Popen([str(target_exe)], cwd=str(target_exe.parent))
+    return True
+
+
 def ensure_chromium_installed():
     """설치 파일로 처음 실행될 때 Playwright 브라우저를 한 번 자동 설치한다."""
     marker = DATA_DIR / ".chromium_installed"
@@ -464,6 +525,9 @@ if __name__ == "__main__":
 
         sys.argv = ["playwright", "install", "chromium"]
         playwright_main()
+        sys.exit(0)
+
+    if self_install_and_relaunch():
         sys.exit(0)
 
     print("🚀 NRC Sync API 서버 시작")
