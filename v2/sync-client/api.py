@@ -454,9 +454,11 @@ def ensure_startup_registered(target_exe):
     startup_path = startup_vbs_path()
     if not startup_path:
         return
+    # VBScript는 문자열 안의 큰따옴표를 ""(두 번)로 이스케이프한다.
+    # \" 같은 백슬래시 이스케이프는 VBScript에 없어서 구문 오류가 난다.
     expected = (
         'Set shell = CreateObject("WScript.Shell")\r\n'
-        f'shell.Run "\\"{target_exe}\\"", 0, False\r\n'
+        f'shell.Run """{target_exe}""", 0, False\r\n'
     )
     try:
         if startup_path.exists() and startup_path.read_text(encoding="utf-8") == expected:
