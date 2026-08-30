@@ -97,6 +97,18 @@ def admin_request(path, method="GET", body=None, prefer=None):
     return response.json() if response.text else None
 
 
+def user_rest_request(path):
+    authorization = request.headers.get("Authorization", "")
+    response = requests.get(
+        f"{SUPABASE_URL}/rest/v1/{path}",
+        headers={"apikey": SUPABASE_ANON_KEY, "Authorization": authorization},
+        timeout=20,
+    )
+    if response.status_code >= 300:
+        raise RuntimeError(f"PC 등록 확인 실패({response.status_code}): {response.text}")
+    return response.json() if response.text else None
+
+
 def cipher():
     try:
         derived = base64.urlsafe_b64encode(hashlib.sha256(ENCRYPTION_KEY.encode("utf-8")).digest())
@@ -200,7 +212,7 @@ def worker_claim():
         body = request.get_json(silent=True) or {}
         device_id = str(body.get("deviceId", "")).strip()
         worker_id = pc_worker_id(user["id"], device_id)
-        devices = admin_request(
+        devices = user_rest_request(
             f"nrc_sync_devices?id=eq.{device_id}&owner_id=eq.{user['id']}&select=id"
         ) or []
         if not devices:
