@@ -28,6 +28,25 @@ USER_ID = os.getenv("NRC_USER_ID")
 USER_PW = os.getenv("NRC_USER_PW")
 DATA_DIR = Path(__file__).parent / "data"
 DATA_DIR.mkdir(exist_ok=True)
+NAVIGATION_TIMEOUT_MS = int(os.getenv("NRC_NAVIGATION_TIMEOUT_MS", "90000"))
+
+
+def wait_for_page(page, timeout=12000):
+    """동적 리소스가 계속 연결된 NRC 페이지에서도 본문 로드를 우선합니다."""
+    try:
+        page.wait_for_load_state("networkidle", timeout=timeout)
+    except Exception:
+        # NRC 페이지는 광고/알림 리소스가 연결된 채로 남을 수 있다.
+        page.wait_for_load_state("domcontentloaded", timeout=NAVIGATION_TIMEOUT_MS)
+
+
+def open_page(page, path):
+    page.goto(
+        f"{BASE_URL}{path}",
+        wait_until="domcontentloaded",
+        timeout=NAVIGATION_TIMEOUT_MS,
+    )
+    wait_for_page(page)
 
 
 def save_json(filename, data):
@@ -40,8 +59,7 @@ def save_json(filename, data):
 
 def login(page):
     print("🔐 로그인 중...")
-    page.goto(f"{BASE_URL}/myofficePlus/os/2/user/osLogin")
-    page.wait_for_load_state("networkidle")
+    open_page(page, "/myofficePlus/os/2/user/osLogin")
 
     page.fill('input[type="text"]', USER_ID)
     page.fill('input[type="password"]', USER_PW)
@@ -53,8 +71,7 @@ def login(page):
     except Exception:
         # 비밀번호 변경 페이지로 리다이렉트되는 경우 처리
         if "osPassWdChange" in page.url:
-            page.goto(f"{BASE_URL}/myofficePlus/os/2/main/osMain")
-            page.wait_for_load_state("networkidle")
+            open_page(page, "/myofficePlus/os/2/main/osMain")
             print("✅ 로그인 성공 (비번변경 페이지 우회)")
         else:
             raise Exception(f"로그인 실패. 현재 URL: {page.url}")
@@ -73,8 +90,7 @@ def parse_table(html, headers):
 
 def scrape_consumer_lines(page):
     print("📱 소비자 회선현황 수집 중...")
-    page.goto(f"{BASE_URL}/myofficePlus/os/2/mybiz/osLinePresent")
-    page.wait_for_load_state("networkidle")
+    open_page(page, "/myofficePlus/os/2/mybiz/osLinePresent")
 
     html = page.content()
     soup = BeautifulSoup(html, "html.parser")
@@ -132,8 +148,7 @@ def scrape_sales(page, period="당월"):
     period: '당월' | '전월' | '전체' | {'start': 'YYYY-MM-DD', 'end': 'YYYY-MM-DD'}
     """
     print(f"💰 본인매출내역 수집 중... ({period})")
-    page.goto(f"{BASE_URL}/myofficePlus/os/2/order/osOrdProdSearch")
-    page.wait_for_load_state("networkidle")
+    open_page(page, "/myofficePlus/os/2/order/osOrdProdSearch")
 
     # 기간 버튼 클릭
     if period == "당월":
@@ -155,12 +170,12 @@ def scrape_sales(page, period="당월"):
         page.select_option("select[name='schEndDd'], select:nth-of-type(6)", end[2])
         page.click("text=검색")
 
-    page.wait_for_load_state("networkidle")
+    wait_for_page(page)
 
     # 100건씩 표시
     try:
         page.select_option("select", "100")
-        page.wait_for_load_state("networkidle")
+        wait_for_page(page)
     except Exception:
         pass
 
@@ -202,8 +217,7 @@ def scrape_sales(page, period="당월"):
 def scrape_main_stats(page):
     """메인 페이지의 실적 요약 (대실적, 소실적, 소비자 현황 총계)"""
     print("📊 메인 실적 요약 수집 중...")
-    page.goto(f"{BASE_URL}/myofficePlus/os/2/main/osMain")
-    page.wait_for_load_state("networkidle")
+    open_page(page, "/myofficePlus/os/2/main/osMain")
 
     html = page.content()
     soup = BeautifulSoup(html, "html.parser")
@@ -466,8 +480,7 @@ def scrape_genealogy(page, depth=10):
     JSON API(osRankBoxFamTreeData.json) 우선, 실패시 HTML 파싱 폴백
     """
     print(f"🌳 계보도 수집 중... (표시단계={depth})")
-    page.goto(f"{BASE_URL}/myofficePlus/os/2/member/osRankBoxFamTree")
-    page.wait_for_load_state("networkidle")
+    open_page(page, "/myofficePlus/os/2/member/osRankBoxFamTree")
 
     # ── JSON API 시도 ──────────────────────────────────────────────────────────
     try:
@@ -528,8 +541,7 @@ def scrape_member_nv(page, rstLst, pay_date=None):
     schGubun=2: 확장프로그램과 동일한 방식 (하위 회원 조회용)
     """
     print("💹 회원별 NV 데이터 수집 중...")
-    page.goto(f"{BASE_URL}/myofficePlus/os/2/member/osFolderTree")
-    page.wait_for_load_state("networkidle")
+    open_page(page, "/myofficePlus/os/2/member/osFolderTree")
 
     # 정산기준일 추출
     pay_date = pay_date or page.evaluate('() => { var el = document.querySelector("#payDate"); return el ? el.value : ""; }')
@@ -599,8 +611,7 @@ def scrape_member_nv(page, rstLst, pay_date=None):
 
 def get_closing_periods(page, year, month, rounds=(1, 2, 3, 4)):
     """NRC 선택 목록에서 해당 연월의 마감차수와 정산기준일을 찾는다."""
-    page.goto(f"{BASE_URL}/myofficePlus/os/2/member/osFolderTree")
-    page.wait_for_load_state("networkidle")
+    open_page(page, "/myofficePlus/os/2/member/osFolderTree")
     options = page.eval_on_selector_all(
         "#selectEndCnt option",
         "els => els.map(e => ({value: e.value, text: e.textContent.trim()}))",
