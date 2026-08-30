@@ -11,7 +11,7 @@ import {
   checklistPage,
 } from "./checklist.js?v=20260829-29";
 import { closingPage, commissionPage } from "./finance.js?v=20260829-28";
-import { performancePage } from "./performance.js?v=20260829-54";
+import { performancePage } from "./performance.js?v=20260829-55";
 import { teamPage } from "./team.js?v=20260829-35";
 import { localDate, monthRange } from "./date.js?v=20260829-25";
 const $ = (id) => document.getElementById(id);
@@ -977,11 +977,15 @@ async function runHomeCollection() {
     button.textContent = "매출받기";
   }
 }
+let lastSharedDevicesError = "";
 async function loadSharedDevices() {
   try {
     const data = await cloudApi("/devices");
+    lastSharedDevicesError = "";
     return data.devices || [];
-  } catch {
+  } catch (err) {
+    lastSharedDevicesError = err.message || String(err);
+    console.warn("공유 PC 상태 조회 실패:", err);
     return loadSyncDevices();
   }
 }
@@ -1019,7 +1023,9 @@ async function loadLocalStatus() {
             )
             .join("")
         : "";
-    $("nrcError").textContent = "";
+    $("nrcError").textContent = lastSharedDevicesError
+      ? `(진단) 공유 PC 상태 조회 실패: ${lastSharedDevicesError}`
+      : "";
   } catch (err) {
     box.textContent = "수집 PC 정보를 불러오지 못했습니다.";
     $("nrcError").textContent = /nrc_sync_devices|schema cache/i.test(err.message)

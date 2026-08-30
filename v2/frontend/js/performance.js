@@ -51,7 +51,7 @@ const flattenAllocation = (node, out = []) => {
 };
 
 export async function performancePage(root) {
-  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>마감 실적 계산기</h2><p class="help">기준이 되는 최상위 마감 사업자와 목표만 정하면, 아래 사업자에게는 &quot;라인 합계&quot; 목표로 내려갑니다. 대·소를 각각 채우지 않으므로 매출이 덜 들어갑니다.</p></div></div><p id="perfSource" class="help"></p><p id="perfStorage" class="help"></p><div class="closing-target-row"><label>최상위 마감 사업자<select id="topMemberSelect"></select></label><label>대실적 목표 (NV)<input id="topMajor" type="number" min="1" step="1000"></label><label>소실적 목표 (NV)<input id="topMinor" type="number" min="1" step="1000"></label></div><details class="closing-member-picker" open><summary>마감할 하위 사업자 선택 <b id="closingCount">0명</b></summary><p class="help">체크하지 않은 회원의 라인은 라인 합계만 맞으면 그대로 통과합니다. 체크한 사업자는 라인 합계를 맞추면서 소실적이 인증직급 지급 기준선(DT 3만 · GD 이상 6만 NV) 이상이 되게 채웁니다.</p><div id="closingOptions" class="closing-member-options"></div></details><button id="perfRun" class="primary">자동 배분 계산</button><p id="perfNotice" class="help"></p><div id="perfError" class="error"></div></section><section id="perfSummary"></section><section id="perfResult"></section>`;
+  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>마감 실적 계산기</h2><p class="help">기준이 되는 최상위 마감 사업자와 목표만 정하면, 아래 사업자에게는 &quot;라인 합계&quot; 목표로 내려갑니다. 대·소를 각각 채우지 않으므로 매출이 덜 들어갑니다.</p></div></div><p id="perfSource" class="help"></p><p id="perfStorage" class="help"></p><div class="closing-target-row"><label>최상위 마감 사업자<select id="topMemberSelect"></select></label><label>대실적 목표 (NV)<input id="topMajor" type="number" min="1" step="1000"></label><label>소실적 목표 (NV)<input id="topMinor" type="number" min="1" step="1000"></label></div><details class="closing-member-picker" open><summary>마감할 하위 사업자 선택 <b id="closingCount">0명</b></summary><p class="help">체크하지 않은 회원의 라인은 라인 합계만 맞으면 그대로 통과합니다. 체크한 사업자는 라인 합계를 맞추면서 소실적이 인증직급 지급 기준선(DT 3만 · GD 이상 6만 NV) 이상이 되게 채웁니다.</p><div class="closing-picker-tools"><input id="closingFilter" type="search" placeholder="이름 또는 회원번호 검색"><button class="secondary compact" id="closingSelectAll" type="button">전체 선택</button><button class="secondary compact" id="closingSelectNone" type="button">전체 해제</button></div><div id="closingOptions" class="closing-member-options"></div></details><button id="perfRun" class="primary">자동 배분 계산</button><p id="perfNotice" class="help"></p><div id="perfError" class="error"></div></section><section id="perfSummary"></section><section id="perfResult"></section>`;
   const $ = (id) => document.getElementById(id);
   const { data, error } = await supabase
     .from("nrc_sync_snapshots")
@@ -616,7 +616,7 @@ export async function performancePage(root) {
     }
     renderClosers();
   };
-  $("closingOptions").onchange = () => {
+  const syncClosingSelection = () => {
     plan.closingMemberIds = [
       ...$("closingOptions").querySelectorAll("input:checked"),
     ].map((input) => input.value);
@@ -625,6 +625,27 @@ export async function performancePage(root) {
     }
     $("closingCount").textContent =
       `${plan.closingMemberIds.filter((id) => id !== plan.topMemberId).length}명`;
+  };
+  $("closingOptions").onchange = syncClosingSelection;
+  $("closingFilter").oninput = () => {
+    const query = $("closingFilter").value.trim().toLowerCase();
+    $("closingOptions")
+      .querySelectorAll("label")
+      .forEach((label) => {
+        label.hidden = query && !label.textContent.toLowerCase().includes(query);
+      });
+  };
+  $("closingSelectAll").onclick = () => {
+    $("closingOptions")
+      .querySelectorAll("label:not([hidden]) input")
+      .forEach((input) => (input.checked = true));
+    syncClosingSelection();
+  };
+  $("closingSelectNone").onclick = () => {
+    $("closingOptions")
+      .querySelectorAll("label:not([hidden]) input")
+      .forEach((input) => (input.checked = false));
+    syncClosingSelection();
   };
   $("perfRun").onclick = async () => {
     runPlan();
