@@ -423,7 +423,26 @@ export async function performancePage(root, me) {
       totalOf: (row) => branchBreakdown(row).total,
     });
     box.scrollTop = 0;
-    fitTrees();
+    fitMainTree();
+  };
+  const fitMainTree = () => {
+    const box = $("closingMainTree");
+    const list = box?.firstElementChild;
+    if (!box || !list) return;
+    const MIN_ZOOM = 0.3;
+    const attempt = (round) => {
+      if (!box.clientWidth) return;
+      if (round === 0) list.style.zoom = 1;
+      const available = box.clientWidth - 12;
+      const needed = list.scrollWidth;
+      if (needed > available) {
+        const current = Number(list.style.zoom) || 1;
+        list.style.zoom = Math.max(MIN_ZOOM, current * (available / needed));
+      }
+      box.scrollLeft = Math.max(0, (box.scrollWidth - box.clientWidth) / 2);
+      if (round < 5) requestAnimationFrame(() => attempt(round + 1));
+    };
+    requestAnimationFrame(() => attempt(0));
   };
   const pinTargetCache = new Map();
   const renderTreePins = async () => {
@@ -643,7 +662,6 @@ export async function performancePage(root, me) {
   const fitTrees = () => {
     const boxes = [
       ...$("perfResult").querySelectorAll(".closing-tree[open] .box-tree"),
-      ...(($("closingMainTree") && [$("closingMainTree")]) || []),
     ];
     const pass = (round) => {
       boxes.forEach((box) => {
