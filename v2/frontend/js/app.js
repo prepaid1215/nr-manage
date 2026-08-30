@@ -5,7 +5,7 @@ import {
   currentProfile,
   setRememberLogin,
 } from "./supabase.js?v=20260829-34";
-import { customersPage } from "./customers.js?v=20260829-22";
+import { customersPage } from "./customers.js?v=20260829-23";
 import { activityPage } from "./activity.js?v=20260829-25";
 import {
   checklistItemCount,
@@ -44,12 +44,36 @@ function nav() {
     .querySelectorAll("[data-page]")
     .forEach((b) => (b.onclick = () => show(b.dataset.page)));
 }
+async function quickAmountEntry(field, label) {
+  const raw = prompt(`${label} 금액(원)을 입력하세요.`, "");
+  if (raw === null) return;
+  const amount = Number(String(raw).replace(/[^0-9]/g, ""));
+  if (!amount) return;
+  const date = localDate();
+  const { data: existing } = await supabase
+    .from("daily_activities")
+    .select(field)
+    .eq("owner_id", me.id)
+    .eq("activity_date", date)
+    .maybeSingle();
+  const next = Number(existing?.[field] || 0) + amount;
+  await supabase.from("daily_activities").upsert(
+    {
+      owner_id: me.id,
+      activity_date: date,
+      [field]: next,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "owner_id,activity_date" },
+  );
+  await home();
+}
 async function home() {
   const frag = $("homeTemplate").content.cloneNode(true);
   $("content").replaceChildren(frag);
   $("content").insertAdjacentHTML(
     "afterbegin",
-    `<section class="card home-actions"><button class="primary" id="homeAddCustomer" type="button">+ 고객 등록</button></section>`,
+    `<section class="card home-actions"><button class="primary" id="homeAddCustomer" type="button">+ 고객 등록</button><div class="customer-quick-actions"><button class="secondary compact" id="homeQuickTransfer" type="button">+ 신규개통양도</button><button class="secondary compact" id="homeQuickRepurchase" type="button">+ 재구매양도</button></div></section>`,
   );
   $("content").querySelector(".kpis").insertAdjacentHTML(
     "afterend",
@@ -62,6 +86,10 @@ async function home() {
   );
   $("homeCollect").onclick = runHomeCollection;
   $("homeAddCustomer").onclick = () => show("customers", { openAdd: true });
+  $("homeQuickTransfer").onclick = () =>
+    quickAmountEntry("new_transfer", "신규개통양도");
+  $("homeQuickRepurchase").onclick = () =>
+    quickAmountEntry("repurchase", "재구매양도");
   const date = new Date(),
     today = localDate(date),
     month = today.slice(0, 7),
@@ -110,10 +138,7 @@ async function home() {
     todayAct = acts.find((r) => r.activity_date === today),
     monthActivation = cs.filter((c) =>
       c.activation_date?.startsWith(month),
-    ).length,
-    newMoney = acts.reduce((s, r) => s + Number(r.new_transfer || 0), 0),
-    repurchase = acts.reduce((s, r) => s + Number(r.repurchase || 0), 0),
-    balance = acts.at(-1)?.balance || 0;
+    ).length;
   if (snapshot.data) {
     const payload =
         typeof snapshot.data.payload === "string"
@@ -143,11 +168,13 @@ async function home() {
   }
   $("todayActivations").textContent =
     `${cs.filter((c) => c.activation_date === today).length}건`;
-  $("newTransfer").textContent = `${newMoney.toLocaleString()}원`;
-  $("repurchase").textContent = `${repurchase.toLocaleString()}원`;
-  $("balance").textContent = `${Number(balance).toLocaleString()}원`;
-  $("attendance").textContent =
-    `${acts.reduce((s, r) => s + Number(r.attendance || 0), 0)}명`;
+  $("newTransfer").textContent =
+    `${Number(todayAct?.new_transfer || 0).toLocaleString()}원`;
+  $("repurchase").textContent =
+    `${Number(todayAct?.repurchase || 0).toLocaleString()}원`;
+  $("balance").textContent =
+    `${Number(todayAct?.balance || 0).toLocaleString()}원`;
+  $("attendance").textContent = `${Number(todayAct?.attendance || 0)}명`;
   $("monthlySummary").textContent =
     `개통 ${monthActivation}건 · 포스팅 ${acts.reduce((s, r) => s + Object.values(r.content?.postings || {}).reduce((a, b) => a + Number(b || 0), 0), 0)}건 · 마감매출 ${(closing.data || []).reduce((s, r) => s + Number(r.closing_sales || 0), 0).toLocaleString()}원 · 수당 ${(commissions.data || []).reduce((s, r) => s + Number(r.amount || 0), 0).toLocaleString()}원`;
   const tasks = (todayAct?.tasks || []).filter(Boolean);
@@ -185,7 +212,13 @@ async function show(page, options) {
   if (page === "team") return teamPage($("content"), me);
   if (page === "settings") return settings();
   $("content").innerHTML =
-    `<section class="card"><h2>${menus.find((x) => x[0] === page)?.[1] || "더보기"}</h2><p>기획서 기준 모듈을 순서대로 연결 중입니다.</p></section>`;
+    `<section class="card"><h2>더보기</h2><p class="help">전체 메뉴가 아래에 있습니다. PC와 모바일 어디서나 똑같이 사용할 수 있습니다.</p><div class="more-menu">${menus
+      .slice(4)
+      .map(([id, label]) => `<button data-page="${id}" type="button">${label}</button>`)
+      .join("")}</div></section>`;
+  $("content")
+    .querySelectorAll("[data-page]")
+    .forEach((b) => (b.onclick = () => show(b.dataset.page)));
 }
 async function organization() {
   $("content").innerHTML =
