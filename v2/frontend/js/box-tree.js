@@ -85,14 +85,21 @@ export function boxTreeHtml(ctx, rootId, options = {}) {
   const node = (row, level, path) => {
     const id = String(row.userId);
     if (path.has(id)) return "";
-    // 최상위(level 1)는 숨김 목록에 있어도 항상 보여준다 — 안 그러면
-    // 지금 보고 있는 기준 사업자 자체가 숨겨져서 트리가 통째로 사라진다.
-    if (level > 1 && hiddenIds.has(id) && !showHidden) return "";
     const nextPath = new Set(path);
     nextPath.add(id);
     const kids = kidsOf(id);
     const showKids = level < depth && kids.length;
     const hiddenCount = !showKids && kids.length ? descendantCount(id) : 0;
+    const childrenHtml = showKids
+      ? `<ul>${kids.map((kid) => node(kid, level + 1, nextPath)).join("")}</ul>`
+      : "";
+    // 최상위(level 1)는 숨김 목록에 있어도 카드 자체는 항상 보여준다 —
+    // 안 그러면 지금 보고 있는 기준 사업자 자체가 숨겨져서 트리가
+    // 통째로 사라진다. 숨긴 카드는 그 사람만 작은 자리표시자로 접고,
+    // 그 아래 라인(하위)은 구조/연결선 그대로 계속 보여준다.
+    if (level > 1 && hiddenIds.has(id) && !showHidden) {
+      return `<li><div class="box-node box-node-collapsed"><small>${safe(row?.userName || "이름 없음")}</small><span class="box-hide restore" data-restore-member="${safe(id)}" role="button" tabindex="0" title="다시 보기">↺ 숨김</span></div>${childrenHtml}</li>`;
+    }
     return `<li>${boxCardHtml(row, {
       badge: badges[id],
       note: notes[id],
@@ -104,11 +111,7 @@ export function boxTreeHtml(ctx, rootId, options = {}) {
       marked: Boolean(badges[id]),
       hideable,
       hidden: hiddenIds.has(id),
-    })}${hiddenCount ? `<div class="box-more">아래 ${hiddenCount}명 더 있음</div>` : ""}${
-      showKids
-        ? `<ul>${kids.map((kid) => node(kid, level + 1, nextPath)).join("")}</ul>`
-        : ""
-    }</li>`;
+    })}${hiddenCount ? `<div class="box-more">아래 ${hiddenCount}명 더 있음</div>` : ""}${childrenHtml}</li>`;
   };
 
   return `<ul>${node(root, 1, new Set())}</ul>`;

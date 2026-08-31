@@ -16,9 +16,9 @@ import {
   salesTopUpForDeficit,
   sortMembersDeepestFirst,
 } from "./performance-calculator.js?v=20260831-60";
-import { boxTreeHtml } from "./box-tree.js?v=20260831-57";
+import { boxTreeHtml } from "./box-tree.js?v=20260831-58";
 import { friendlyError } from "./errors.js?v=20260830-1";
-import { isAppAdmin } from "./admin.js?v=20260831-13";
+import { isAppAdmin } from "./admin.js?v=20260831-14";
 
 const PLAN_TABLE = "nrc_closing_plans";
 const MIN_TREE_ZOOM = 0.72;
