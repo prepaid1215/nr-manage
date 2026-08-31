@@ -23,10 +23,10 @@ export async function isAppAdmin() {
 }
 
 export async function adminPage(root) {
-  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>관리자 사용현황</h2><p class="help">가입자별 접속·수집·마감 사용 현황입니다. 비밀번호와 입력 내용은 기록하지 않습니다.</p></div><button id="adminReload" class="secondary compact" type="button">새로고침</button></div><div id="adminSummary" class="admin-summary"></div><label>사용자 검색<input id="adminSearch" type="search" placeholder="이름, 앱 아이디, 회원번호"></label><div id="adminError" class="error"></div></section><section class="card"><h2>가입자 현황</h2><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>사용자</th><th>최근 활동</th><th>최근 화면</th><th>수집 (성공/실패)</th><th>마감 계획</th></tr></thead><tbody id="adminUsers"></tbody></table></div></section><section class="card"><h2>최근 행동</h2><div id="adminEvents" class="admin-events"></div></section><dialog id="adminGenealogyDialog" class="member-dialog admin-genealogy-dialog"><div class="dialog-head"><h2 id="adminGenealogyTitle">사용자 계보도</h2><button id="adminGenealogyClose" type="button">×</button></div><div class="admin-genealogy-body"><p id="adminGenealogyMeta" class="help"></p><div id="adminPlanSummary" class="admin-plan-summary"></div><div id="adminGenealogyError" class="error"></div><div class="tree-focus-bar admin-tree-tools"><span>기준: <b id="adminTreeFocus">-</b></span><div><button class="secondary compact" id="adminTreeHome" type="button">맨 위로</button><button class="secondary compact" id="adminTreeUp" type="button">상위로</button><span class="tree-zoom-controls"><button class="secondary compact" id="adminZoomOut" type="button">−</button><button class="secondary compact" id="adminZoomReset" type="button">100%</button><button class="secondary compact" id="adminZoomIn" type="button">＋</button></span></div></div><p class="help">회원을 클릭하면 그 사람을 맨 위로 놓고 다시 그립니다. 빈 공간을 끌면 계보도가 이동합니다.</p><div id="adminGenealogyTree" class="box-tree pannable-tree"><div class="tree-stage" id="adminGenealogyStage"><p class="help">계보도를 불러오는 중...</p></div></div></div></dialog>`;
+  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>관리자 사용현황</h2><p class="help">가입자별 접속·수집·마감 사용 현황입니다. 비밀번호와 입력 내용은 기록하지 않습니다.</p></div><button id="adminReload" class="secondary compact" type="button">새로고침</button></div><div id="adminSummary" class="admin-summary"></div><label>사용자 검색<input id="adminSearch" type="search" placeholder="이름, 앱 아이디, 회원번호"></label><div id="adminError" class="error"></div></section><section class="card"><h2>가입자 현황</h2><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>사용자</th><th>최근 활동</th><th>최근 화면</th><th>수집 (성공/실패)</th><th>마감 계획</th></tr></thead><tbody id="adminUsers"></tbody></table></div></section><section class="card"><h2>최근 행동</h2><div id="adminEvents" class="admin-events"></div></section><dialog id="adminGenealogyDialog" class="member-dialog admin-genealogy-dialog"><div class="dialog-head"><h2 id="adminGenealogyTitle">사용자 계보도</h2><button class="secondary compact" id="adminGenealogyDownload" type="button" hidden>💾 JSON 다운로드</button><button id="adminGenealogyClose" type="button">×</button></div><div class="admin-genealogy-body"><p id="adminGenealogyMeta" class="help"></p><div id="adminPlanSummary" class="admin-plan-summary"></div><div id="adminGenealogyError" class="error"></div><div class="tree-focus-bar admin-tree-tools"><span>기준: <b id="adminTreeFocus">-</b></span><div><button class="secondary compact" id="adminTreeHome" type="button">맨 위로</button><button class="secondary compact" id="adminTreeUp" type="button">상위로</button><span class="tree-zoom-controls"><button class="secondary compact" id="adminZoomOut" type="button">−</button><button class="secondary compact" id="adminZoomReset" type="button">100%</button><button class="secondary compact" id="adminZoomIn" type="button">＋</button></span></div></div><p class="help">회원을 클릭하면 그 사람을 맨 위로 놓고 다시 그립니다. 빈 공간을 끌면 계보도가 이동합니다.</p><div id="adminGenealogyTree" class="box-tree pannable-tree"><div class="tree-stage" id="adminGenealogyStage"><p class="help">계보도를 불러오는 중...</p></div></div></div></dialog>`;
   const $ = (id) => document.getElementById(id);
   let users = [], genealogyModel = null, genealogyHomeId = null,
-    genealogyFocusId = null, genealogyZoom = 1;
+    genealogyFocusId = null, genealogyZoom = 1, genealogyPayload = null, genealogyPayloadName = "";
   const centerAdminTree = () => {
     const canvas = $("adminGenealogyTree");
     requestAnimationFrame(() => {
@@ -92,6 +92,17 @@ export async function adminPage(root) {
   $("adminSearch").oninput = renderUsers;
   $("adminReload").onclick = load;
   $("adminGenealogyClose").onclick = () => $("adminGenealogyDialog").close();
+  $("adminGenealogyDownload").onclick = () => {
+    if (!genealogyPayload) return;
+    const url = URL.createObjectURL(
+      new Blob([JSON.stringify(genealogyPayload, null, 2)], { type: "application/json;charset=utf-8" }),
+    );
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${genealogyPayloadName || "collected-data"}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
   $("adminUsers").onclick = async (event) => {
     const button = event.target.closest("[data-admin-user]");
     if (!button) return;
@@ -101,6 +112,8 @@ export async function adminPage(root) {
     $("adminPlanSummary").innerHTML = "";
     $("adminGenealogyError").textContent = "";
     $("adminGenealogyStage").innerHTML = '<p class="help">계보도를 불러오는 중...</p>';
+    $("adminGenealogyDownload").hidden = true;
+    genealogyPayload = null;
     $("adminGenealogyDialog").showModal();
     const [snapshotResult, plansResult] = await Promise.all([
       supabase.rpc("admin_user_latest_snapshot", { p_user_id: button.dataset.adminUser }),
@@ -120,6 +133,9 @@ export async function adminPage(root) {
     }
     try {
       const payload = typeof snapshot.payload === "string" ? JSON.parse(snapshot.payload) : snapshot.payload;
+      genealogyPayload = payload;
+      genealogyPayloadName = `${user?.name || "사용자"}-${(user?.username || snapshot.source_account_id || "data")}-${String(snapshot.collected_at || "").slice(0, 10)}`;
+      $("adminGenealogyDownload").hidden = false;
       const model = buildPerformanceModel(payload);
       const rootId = [user?.member_no, snapshot.source_account_id, model.rows[0]?.userId]
         .map(String).find((id) => model.byId.has(id));
