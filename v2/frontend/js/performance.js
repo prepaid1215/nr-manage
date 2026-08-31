@@ -54,7 +54,7 @@ const flattenAllocation = (node, out = []) => {
 };
 
 export async function performancePage(root, me) {
-  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>마감 실적 계산기</h2><p class="help">기준이 되는 최상위 마감 사업자와 목표만 정하면, 아래 사업자에게는 &quot;라인 합계&quot; 목표로 내려갑니다. 대·소를 각각 채우지 않으므로 매출이 덜 들어갑니다.</p></div></div><p id="perfSource" class="help"></p><p id="perfStorage" class="help"></p><button class="secondary compact" id="linkOtherAccounts" type="button" hidden>🔗 다른 계정 자동 연결</button><p id="linkOtherAccountsStatus" class="help" hidden></p><div class="closing-target-row"><label>최상위 마감 사업자<select id="topMemberSelect"></select></label><label>대실적 목표 (NV)<input id="topMajor" type="number" min="1" step="10000"></label><label>소실적 목표 (NV)<input id="topMinor" type="number" min="1" step="10000"></label></div><div id="treePins" class="tree-pins"></div><section class="card closing-main-tree"><div class="section-head"><div><h2>계보도에서 목표 설정</h2><p class="help">클릭하면 그 사람 기준으로 계보도가 이동하고, 더블클릭하면 대실적·소실적 목표를 입력합니다.</p></div><div class="tree-nav"><button class="secondary compact" id="treeBack" type="button">← 뒤로</button><button class="secondary compact" id="treeHome" type="button">맨 위로</button><span class="tree-zoom-controls"><button class="secondary compact" id="treeZoomOut" type="button" aria-label="축소">−</button><button class="secondary compact" id="treeZoomReset" type="button">100%</button><button class="secondary compact" id="treeZoomIn" type="button" aria-label="확대">＋</button></span></div></div><div id="closingMainTree" class="box-tree pannable-tree"><div class="tree-stage" id="closingMainTreeStage"><ul></ul></div></div></section><dialog id="treeTargetDialog" class="customer-dialog small"><form id="treeTargetForm"><div class="dialog-head"><h2 id="treeTargetTitle">목표 설정</h2><button id="treeTargetClose" type="button">×</button></div><label>대실적 목표 (NV)<input id="treeTargetMajor" type="number" min="0" step="10000" required></label><label>소실적 목표 (NV)<input id="treeTargetMinor" type="number" min="0" step="10000" required></label><p id="treeTargetAuto" class="help"></p><div class="customer-actions"><button class="secondary" id="treeTargetReset" type="button">자동값으로</button><button class="primary" type="submit">저장</button></div></form></dialog><details class="closing-member-picker" open><summary>마감할 하위 사업자 선택 <b id="closingCount">0명</b></summary><p class="help">체크하지 않은 회원의 라인은 라인 합계만 맞으면 그대로 통과합니다. 체크한 사업자는 라인 합계를 맞추면서 소실적이 인증직급 지급 기준선(DT 3만 · GD 이상 6만 NV) 이상이 되게 채웁니다.</p><div class="closing-picker-tools"><input id="closingFilter" type="search" placeholder="이름 또는 회원번호 검색"><button class="secondary compact" id="closingShowSingles" type="button">단독 계정 보기</button><button class="secondary compact" id="closingSelectAll" type="button">전체 선택</button><button class="secondary compact" id="closingSelectNone" type="button">전체 해제</button></div><div id="closingCollapsedGroups" class="closing-collapsed-groups"></div><div id="closingOptions" class="closing-member-options"></div></details><button id="perfRun" class="primary">자동 배분 계산</button><p id="perfNotice" class="help"></p><div id="perfError" class="error"></div></section><section id="perfSummary"></section><div id="stepTabs" class="business-tabs" hidden></div><section id="perfResult"></section>`;
+  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>마감 실적 계산기</h2><p class="help">기준이 되는 최상위 마감 사업자와 목표만 정하면, 아래 사업자에게는 &quot;라인 합계&quot; 목표로 내려갑니다. 대·소를 각각 채우지 않으므로 매출이 덜 들어갑니다.</p></div></div><p id="perfSource" class="help"></p><p id="perfStorage" class="help"></p><button class="secondary compact" id="linkOtherAccounts" type="button" hidden>🔗 다른 계정 자동 연결</button><p id="linkOtherAccountsStatus" class="help" hidden></p><select id="topMemberSelect" hidden></select><section class="card"><div class="section-head"><div><span class="step">STEP 1 · 마감 사업자 등록</span><h2>사업자별 목표 대·소실적</h2><p class="help">최상위는 항상 포함됩니다. 자주 마감하는 하위 사업자를 미리 등록하고 목표를 입력하세요.</p></div><button class="secondary compact" id="addBusinessBtn" type="button">+ 사업자 등록</button></div><div id="businessGrid" class="business-grid"></div></section><section class="card closing-main-tree"><div class="section-head"><div><span class="step">STEP 2 · 계보도 확인</span><h2>사업자를 눌러 계보도를 전환하세요</h2><p class="help">클릭하면 그 사람 기준으로 계보도가 바뀌고, 계보도 안의 사람을 누르면 그 사람 기준으로 다시 펼쳐집니다.</p></div><div id="businessTabs" class="business-tabs"></div><div class="tree-nav"><button class="secondary compact" id="treeBack" type="button">← 뒤로</button><button class="secondary compact" id="treeHome" type="button">맨 위로</button><span class="tree-zoom-controls"><button class="secondary compact" id="treeZoomOut" type="button" aria-label="축소">−</button><button class="secondary compact" id="treeZoomReset" type="button">100%</button><button class="secondary compact" id="treeZoomIn" type="button" aria-label="확대">＋</button></span></div></div><div id="closingMainTree" class="box-tree pannable-tree"><div class="tree-stage" id="closingMainTreeStage"><ul></ul></div></div><p id="focusSummary" class="help closing-focus-summary"></p></section><dialog id="treeTargetDialog" class="customer-dialog small"><form id="treeTargetForm"><div class="dialog-head"><h2 id="treeTargetTitle">목표 설정</h2><button id="treeTargetClose" type="button">×</button></div><label>대실적 목표 (NV)<input id="treeTargetMajor" type="number" min="0" step="10000" required></label><label>소실적 목표 (NV)<input id="treeTargetMinor" type="number" min="0" step="10000" required></label><p id="treeTargetAuto" class="help"></p><div class="customer-actions"><button class="secondary" id="treeTargetReset" type="button">자동값으로</button><button class="primary" type="submit">저장</button></div></form></dialog><details class="closing-member-picker" open><summary>마감할 하위 사업자 선택 <b id="closingCount">0명</b></summary><p class="help">체크하지 않은 회원의 라인은 라인 합계만 맞으면 그대로 통과합니다. 체크한 사업자는 라인 합계를 맞추면서 소실적이 인증직급 지급 기준선(DT 3만 · GD 이상 6만 NV) 이상이 되게 채웁니다.</p><div class="closing-picker-tools"><input id="closingFilter" type="search" placeholder="이름 또는 회원번호 검색"><button class="secondary compact" id="closingShowSingles" type="button">단독 계정 보기</button><button class="secondary compact" id="closingSelectAll" type="button">전체 선택</button><button class="secondary compact" id="closingSelectNone" type="button">전체 해제</button></div><div id="closingCollapsedGroups" class="closing-collapsed-groups"></div><div id="closingOptions" class="closing-member-options"></div></details><button id="perfRun" class="primary">자동 배분 계산</button><p id="perfNotice" class="help"></p><div id="perfError" class="error"></div></section><section id="perfSummary"></section><div id="stepTabs" class="business-tabs" hidden></div><section id="perfResult"></section>`;
   const $ = (id) => document.getElementById(id);
   const { data, error } = await supabase
     .from("nrc_sync_snapshots")
@@ -136,7 +136,6 @@ export async function performancePage(root, me) {
         model.children = children;
         renderControls();
         renderMainTree();
-        renderTreePins();
         status.textContent = `${linkedNames.length}개 계정에서 회원 ${addedRows.toLocaleString()}명을 이어붙였습니다 (${linkedNames.join(", ")}).`;
       } else {
         status.textContent = "겹치는 회원이 있는 다른 계정을 찾지 못했습니다.";
@@ -184,7 +183,7 @@ export async function performancePage(root, me) {
     if (treeFocusId && treeFocusId !== newId) treeFocusHistory.push(treeFocusId);
     treeFocusId = newId;
     renderMainTree();
-    renderTreePins();
+    renderBusinessTabs();
   };
 
   const legacyPlan = () => {
@@ -528,6 +527,50 @@ export async function performancePage(root, me) {
     });
     if (!treeFocusId || !model.byId.has(treeFocusId))
       treeFocusId = plan.topMemberId;
+    const focusTargets = businessCardTargets().find(
+      (card) => card.id === treeFocusId,
+    );
+    let focusResult = null,
+      focusProjection = null;
+    if (focusTargets?.major && focusTargets?.minor) {
+      try {
+        focusResult = calculatePerformance(model, treeFocusId, {
+          majorTarget: focusTargets.major,
+          minorTarget: focusTargets.minor,
+        });
+        focusProjection = projectClosingCompletion(focusResult);
+        (focusProjection.sales || []).forEach((sale) => {
+          if (!sale.memberId || sale.salesWon <= 0) return;
+          if (sales[sale.memberId]) return;
+          const isSelf =
+            focusResult.placements[sale.lineIndex]?.kind === "self" ||
+            sale.memberId === treeFocusId;
+          sales[sale.memberId] =
+            `${fmt(sale.salesWon)}원 → +${fmt(sale.addedNv)} NV${isSelf ? " (본인 코드)" : ""}`;
+        });
+      } catch {
+        focusResult = null;
+      }
+    }
+    const focusName = model.byId.get(treeFocusId)?.userName || "이름 없음";
+    const focusSummary = $("focusSummary");
+    if (focusSummary) {
+      if (!focusTargets?.major || !focusTargets?.minor) {
+        focusSummary.textContent = "";
+      } else if (focusResult && focusProjection?.feasible !== false) {
+        const currentMajor = fmt(focusResult.effectiveTotals[focusResult.majorIndex]);
+        const currentMinor = fmt(focusResult.effectiveTotals[focusResult.minorIndex]);
+        const saleTotal = (focusProjection.sales || []).reduce(
+          (sum, sale) => sum + sale.salesWon,
+          0,
+        );
+        focusSummary.textContent = saleTotal > 0
+          ? `${focusName} 마감안 · 현재 대/소 ${currentMajor} / ${currentMinor} · 목표 대/소 ${fmt(focusTargets.major)} / ${fmt(focusTargets.minor)} · 추천 매출 ${fmt(saleTotal)}원`
+          : `${focusName} 마감안 · 이미 목표를 채웠습니다 (현재 대/소 ${currentMajor} / ${currentMinor})`;
+      } else {
+        focusSummary.textContent = `${focusName} 마감안 · 부족한 라인에 배치 가능한 코드가 없어 마감할 수 없습니다.`;
+      }
+    }
     stage.style.zoom = treeZoom;
     stage.innerHTML = boxTreeHtml(model, treeFocusId, {
       depth: 8,
@@ -551,10 +594,94 @@ export async function performancePage(root, me) {
     $("treeZoomReset").textContent = `${Math.round(treeZoom * 100)}%`;
   };
   const pinTargetCache = new Map();
-  const renderTreePins = async () => {
-    const box = $("treePins");
+  const depthOf = (id) => {
+    let depth = 0,
+      current = model.byId.get(String(id));
+    const visited = new Set();
+    while (current?.ppId && !visited.has(String(current.ppId))) {
+      visited.add(String(current.ppId));
+      current = model.byId.get(String(current.ppId));
+      if (!current) break;
+      depth += 1;
+    }
+    return depth;
+  };
+  const businessCardTargets = () => {
+    const topId = plan.topMemberId;
+    const otherPins = treePins.filter((pin) => pin.id !== topId);
+    return [
+      { id: topId, isTop: true, major: plan.topMajorTarget, minor: plan.topMinorTarget },
+      ...otherPins.map((pin) => ({
+        id: pin.id,
+        isTop: false,
+        major: pinTargetCache.get(pin.id)?.major || 0,
+        minor: pinTargetCache.get(pin.id)?.minor || 0,
+      })),
+    ].filter((card) => model.byId.has(card.id));
+  };
+  const cardStatusHtml = (id, major, minor) => {
+    if (!major || !minor)
+      return `<div class="business-status"><span>계산 상태</span><b>목표를 입력하세요</b></div>`;
+    try {
+      const result = calculatePerformance(model, id, {
+        majorTarget: major,
+        minorTarget: minor,
+      });
+      const projection = projectClosingCompletion(result);
+      const currentMajor = fmt(result.effectiveTotals[result.majorIndex]);
+      const currentMinor = fmt(result.effectiveTotals[result.minorIndex]);
+      if (projection.feasible === false)
+        return `<div class="business-status need"><span>계산 상태</span><b>마감 위치 부족</b><small>빈 라인 또는 배치 가능한 코드 확인 필요</small></div>`;
+      const saleTotal = (projection.sales || []).reduce(
+        (sum, sale) => sum + sale.salesWon,
+        0,
+      );
+      if (saleTotal > 0)
+        return `<div class="business-status need"><span>추천 매출</span><b>${fmt(saleTotal)}원</b><small>현재 대 ${currentMajor} · 소 ${currentMinor}</small></div>`;
+      return `<div class="business-status"><span>계산 상태</span><b>목표 달성</b><small>현재 대 ${currentMajor} · 소 ${currentMinor}</small></div>`;
+    } catch (err) {
+      return `<div class="business-status need"><span>계산 상태</span><b>계산 불가</b><small>${safe(err.message)}</small></div>`;
+    }
+  };
+  const focusBusiness = (id) => {
+    navigateTree(id);
+    const box = $("closingMainTree");
+    if (box) box.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+  const renderBusinessTabs = () => {
+    const box = $("businessTabs");
     if (!box) return;
-    const otherPins = treePins.filter((pin) => pin.id !== plan.topMemberId);
+    box.innerHTML = businessCardTargets()
+      .map((card) => {
+        const row = model.byId.get(card.id);
+        let saleTotal = 0,
+          achieved = false;
+        if (card.major && card.minor) {
+          try {
+            const result = calculatePerformance(model, card.id, {
+              majorTarget: card.major,
+              minorTarget: card.minor,
+            });
+            const projection = projectClosingCompletion(result);
+            saleTotal = (projection.sales || []).reduce(
+              (sum, sale) => sum + sale.salesWon,
+              0,
+            );
+            achieved = projection.feasible !== false && saleTotal === 0;
+          } catch {}
+        }
+        return `<button class="business-tab${saleTotal > 0 ? " sale" : ""}${card.id === treeFocusId ? " active" : ""}" data-business-tab="${safe(card.id)}" type="button">${safe(row?.userName || "이름 없음")}${saleTotal > 0 ? ` · ${fmt(saleTotal)}원` : achieved ? " · 달성" : ""}</button>`;
+      })
+      .join("");
+    box.querySelectorAll("[data-business-tab]").forEach(
+      (tab) => (tab.onclick = () => focusBusiness(tab.dataset.businessTab)),
+    );
+  };
+  const renderBusinessGrid = async () => {
+    const box = $("businessGrid");
+    if (!box) return;
+    const topId = plan.topMemberId;
+    const otherPins = treePins.filter((pin) => pin.id !== topId);
     await Promise.all(
       otherPins
         .filter((pin) => !pinTargetCache.has(pin.id))
@@ -566,59 +693,73 @@ export async function performancePage(root, me) {
           });
         }),
     );
-    box.innerHTML =
-      otherPins
-        .map((pin) => {
-          const target = pinTargetCache.get(pin.id) || { major: 0, minor: 0 };
-          return `<div class="closing-target-row pin-row" data-pin="${safe(pin.id)}"><label>최상위 마감 사업자<span class="pin-name">${safe(pin.name)} (${safe(pin.id)}) <button class="pin-remove" data-unpin="${safe(pin.id)}" type="button">삭제</button></span></label><label>대실적 목표 (NV)<input class="pin-major" data-pin-major="${safe(pin.id)}" type="number" min="0" step="10000" value="${target.major}"></label><label>소실적 목표 (NV)<input class="pin-minor" data-pin-minor="${safe(pin.id)}" type="number" min="0" step="10000" value="${target.minor}"></label><button class="secondary compact pin-save" data-pin-save="${safe(pin.id)}" type="button">저장</button></div>`;
-        })
-        .join("") +
-      `<button class="secondary compact tree-pin-add" id="treePinAdd" type="button">+ 사업자 추가</button>`;
-    box.querySelectorAll("[data-pin-save]").forEach(
-      (button) =>
-        (button.onclick = async () => {
-          const id = button.dataset.pinSave,
-            row = button.closest("[data-pin]"),
-            major = Number(row.querySelector("[data-pin-major]").value || 0),
-            minor = Number(row.querySelector("[data-pin-minor]").value || 0);
-          button.disabled = true;
-          const ok = await saveGoalOnly(id, major, minor);
-          button.disabled = false;
-          button.textContent = ok ? "저장됨" : "저장";
-          if (ok) setTimeout(() => (button.textContent = "저장"), 1500);
-        }),
+    const cards = businessCardTargets();
+    box.innerHTML = cards
+      .map((card) => {
+        const row = model.byId.get(card.id);
+        return `<article class="business-card${card.isTop ? " root" : ""}" data-business="${safe(card.id)}"><div class="business-name"><b>${safe(row.userName || "이름 없음")}${card.isTop ? " · 최상위" : ""}</b><span>*${safe(card.id)} · ${safe(row.rankMaxName || "회원")} · ${depthOf(card.id)}단계</span></div><label class="field"><span>목표 대실적</span><div class="input-unit"><input data-goal="major" ${card.isTop ? 'id="topMajor"' : ""} type="number" min="1" step="10000" value="${card.major || ""}"><b>NV</b></div></label><label class="field"><span>목표 소실적</span><div class="input-unit"><input data-goal="minor" ${card.isTop ? 'id="topMinor"' : ""} type="number" min="1" step="10000" value="${card.minor || ""}"><b>NV</b></div></label>${cardStatusHtml(card.id, card.major, card.minor)}<div class="business-actions"><button class="secondary compact" data-view-business="${safe(card.id)}" type="button">계보도 보기</button>${card.isTop ? "" : `<button class="secondary compact danger" data-remove-business="${safe(card.id)}" type="button">등록 해제</button>`}</div></article>`;
+      })
+      .join("");
+    box.querySelectorAll("[data-business]").forEach((card) => {
+      const id = card.dataset.business;
+      const refresh = () => {
+        const major = Number(card.querySelector('[data-goal="major"]').value || 0);
+        const minor = Number(card.querySelector('[data-goal="minor"]').value || 0);
+        card.querySelector(".business-status").outerHTML = cardStatusHtml(id, major, minor);
+        renderBusinessTabs();
+        if (id === treeFocusId) renderMainTree();
+      };
+      card.querySelectorAll("[data-goal]").forEach((input) => {
+        input.oninput = refresh;
+        input.onchange = async () => {
+          const major = Number(card.querySelector('[data-goal="major"]').value || 0);
+          const minor = Number(card.querySelector('[data-goal="minor"]').value || 0);
+          if (id === topId) {
+            plan.topMajorTarget = major;
+            plan.topMinorTarget = minor;
+          } else {
+            pinTargetCache.set(id, { major, minor });
+            await saveGoalOnly(id, major, minor);
+          }
+        };
+      });
+    });
+    box.querySelectorAll("[data-view-business]").forEach(
+      (button) => (button.onclick = () => focusBusiness(button.dataset.viewBusiness)),
     );
-    box.querySelectorAll("[data-unpin]").forEach(
+    box.querySelectorAll("[data-remove-business]").forEach(
       (button) =>
-        (button.onclick = (event) => {
-          event.stopPropagation();
-          treePins = treePins.filter((pin) => pin.id !== button.dataset.unpin);
+        (button.onclick = () => {
+          treePins = treePins.filter((pin) => pin.id !== button.dataset.removeBusiness);
           saveTreePins(treePins);
-          renderTreePins();
+          pinTargetCache.delete(button.dataset.removeBusiness);
+          renderBusinessGrid();
+          renderBusinessTabs();
         }),
     );
-    $("treePinAdd").onclick = () => {
-      const query = prompt("추가할 사업자 이름 또는 회원번호를 입력하세요.");
-      if (!query) return;
-      const trimmed = query.trim(),
-        q = trimmed.toLowerCase();
-      const match = model.rows.find(
-        (row) =>
-          String(row.userId) === trimmed ||
-          String(row.userName || "").toLowerCase().includes(q),
-      );
-      if (!match) {
-        alert("일치하는 회원을 찾지 못했습니다.");
-        return;
-      }
-      const id = String(match.userId);
-      if (!treePins.some((pin) => pin.id === id)) {
-        treePins = [...treePins, { id, name: match.userName }];
-        saveTreePins(treePins);
-      }
-      pinTargetCache.delete(id);
-      switchToTopMember(id);
-    };
+    renderBusinessTabs();
+  };
+  $("addBusinessBtn").onclick = () => {
+    const query = prompt("추가할 사업자 이름 또는 회원번호를 입력하세요.");
+    if (!query) return;
+    const trimmed = query.trim(),
+      q = trimmed.toLowerCase();
+    const match = model.rows.find(
+      (row) =>
+        String(row.userId) === trimmed ||
+        String(row.userName || "").toLowerCase().includes(q),
+    );
+    if (!match) {
+      alert("일치하는 회원을 찾지 못했습니다.");
+      return;
+    }
+    const id = String(match.userId);
+    if (!treePins.some((pin) => pin.id === id)) {
+      treePins = [...treePins, { id, name: match.userName }];
+      saveTreePins(treePins);
+    }
+    pinTargetCache.delete(id);
+    renderBusinessGrid();
   };
 
   const renderControls = () => {
@@ -628,8 +769,7 @@ export async function performancePage(root, me) {
           `<option value="${safe(row.userId)}" ${String(row.userId) === plan.topMemberId ? "selected" : ""}>${safe(row.userName)} (${safe(row.userId)})</option>`,
       )
       .join("");
-    $("topMajor").value = plan.topMajorTarget;
-    $("topMinor").value = plan.topMinorTarget;
+    renderBusinessGrid();
     renderClosers();
   };
 
@@ -1028,7 +1168,7 @@ export async function performancePage(root, me) {
       fitTrees();
       renderClosers();
       renderMainTree();
-      renderTreePins();
+      renderBusinessTabs();
     } catch (calculationError) {
       $("perfError").textContent = calculationError.message;
       $("perfSummary").replaceChildren();
@@ -1040,7 +1180,7 @@ export async function performancePage(root, me) {
     if (!treeFocusHistory.length) return;
     treeFocusId = treeFocusHistory.pop();
     renderMainTree();
-    renderTreePins();
+    renderBusinessTabs();
   };
   $("treeHome").onclick = () => {
     treeFocusHistory = [];

@@ -257,6 +257,31 @@ button:active{transform:translateY(1px)}button:disabled{cursor:not-allowed;opaci
 .box-node.sale{border-color:#d9564c;box-shadow:0 0 0 2px #f5b8b2;background:#fff5f4}
 .box-sale{display:block;margin-top:4px;padding:4px 5px;border-radius:7px;background:#fdeceb;font-size:10px;font-weight:800;color:#c0392b}
 .business-tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;margin:10px 0}.business-tab{flex:0 0 auto;padding:9px 12px;border:1px solid var(--line);border-radius:10px;color:var(--muted);background:#fafbf8;cursor:pointer;font-size:11px;font-weight:700;white-space:nowrap}.business-tab.sale{border-color:#e6a19c;color:#c0392b;background:#fff5f4}.business-tab.active{border-color:var(--brand);color:#fff;background:var(--brand)}
+.step{display:block;margin-bottom:4px;color:var(--brand2);font-size:11px;font-weight:800;letter-spacing:.03em}
+.business-grid{display:grid;gap:10px}
+.business-card{display:grid;grid-template-columns:minmax(170px,1.1fr) repeat(2,minmax(130px,.7fr)) minmax(180px,1fr) auto;gap:10px;align-items:end;padding:14px;border:1px solid var(--line);border-radius:14px;background:#fbfcfe}
+.business-card.root{border-color:#b7c88b;background:#fafde4}
+.business-name{align-self:center;min-width:0}
+.business-name b,.business-name span{display:block}
+.business-name b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.business-name span{margin-top:4px;color:var(--muted);font-size:11px}
+.field{display:grid;gap:5px;margin:0}
+.field>span{color:var(--muted);font-size:11px;font-weight:700}
+.field .input-unit{position:relative}
+.field .input-unit input{padding-right:34px}
+.field .input-unit b{position:absolute;right:9px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:10px;font-weight:700}
+.business-status{align-self:stretch;display:grid;align-content:center;padding:10px 11px;border-radius:10px;background:#f2f5fa}
+.business-status span,.business-status b,.business-status small{display:block}
+.business-status span{color:var(--muted);font-size:10px}
+.business-status b{margin-top:4px;font-size:14px}
+.business-status small{margin-top:4px;color:var(--muted);font-size:10px;line-height:1.45}
+.business-status.need{background:#fdf0ee}
+.business-status.need b{color:#c0392b}
+.business-status.need small{color:#a45a52}
+.business-actions{display:grid;gap:5px}
+.business-actions .danger{color:var(--danger);border-color:#f0c9cf}
+.closing-focus-summary{margin:0;padding:10px 12px;border-top:1px solid var(--line);background:#f7f9fc;font-size:12px}
+@media(max-width:800px){.business-card{grid-template-columns:1fr 1fr}.business-name,.business-status,.business-actions{grid-column:1/-1}}
 .admin-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0}.admin-summary article{padding:14px;border-radius:12px;background:#f5f8ff}.admin-summary span,.admin-table small{display:block;color:var(--muted);font-size:11px}.admin-summary b{display:block;margin-top:5px;color:var(--brand);font-size:20px}.admin-table-wrap{overflow:auto}.admin-table{width:100%;border-collapse:collapse;min-width:760px}.admin-table th,.admin-table td{padding:11px;border-bottom:1px solid var(--line);text-align:left;font-size:12px}.admin-table th{background:#f7f9fc;color:var(--muted)}.admin-table td b{display:block;margin-bottom:3px}.admin-events{display:grid;gap:7px;max-height:520px;overflow:auto}.admin-events article{display:grid;grid-template-columns:150px 120px 1fr;gap:10px;padding:10px;border:1px solid var(--line);border-radius:10px;font-size:12px}.admin-events time{color:var(--muted)}.admin-events article.admin-event-error{background:#fdf2f2;border-color:#f2c6c6}.admin-events article.admin-event-error small.error{grid-column:1/-1;margin-top:2px}@media(max-width:700px){.admin-summary{grid-template-columns:1fr 1fr}.admin-events article{grid-template-columns:1fr}.admin-events time{font-size:10px}}
 .admin-tree-button{display:block;margin-top:6px}.admin-genealogy-dialog{width:min(1180px,calc(100% - 20px))}.admin-genealogy-body{padding:16px}.admin-genealogy-body>.box-tree{max-height:68vh}.admin-tree-tools{margin:10px 0}.admin-plan-summary{display:flex;gap:8px;overflow:auto;margin:10px 0}.admin-plan-summary article{min-width:260px;padding:10px;border:1px solid var(--line);border-radius:10px;background:#f7f9fc;font-size:11px}.admin-plan-summary b,.admin-plan-summary span{display:block}.admin-plan-summary span{margin-top:4px;color:var(--muted)}
 
