@@ -718,6 +718,8 @@ export async function performancePage(root, me) {
             plan.topMajorTarget = major;
             plan.topMinorTarget = minor;
             await saveGoalOnly(id, major, minor);
+            runPlan();
+            await persistPlan();
           } else {
             pinTargetCache.set(id, { major, minor });
             await saveGoalOnly(id, major, minor);
@@ -1021,8 +1023,14 @@ export async function performancePage(root, me) {
   const runPlan = () => {
     $("perfError").textContent = "";
     plan.topMemberId = $("topMemberSelect").value;
-    plan.topMajorTarget = Number($("topMajor").value);
-    plan.topMinorTarget = Number($("topMinor").value);
+    const topMajorInput = $("topMajor"),
+      topMinorInput = $("topMinor");
+    plan.topMajorTarget = Number(
+      topMajorInput ? topMajorInput.value : plan.topMajorTarget,
+    );
+    plan.topMinorTarget = Number(
+      topMinorInput ? topMinorInput.value : plan.topMinorTarget,
+    );
     plan.closingMemberIds = [
       ...$("closingOptions").querySelectorAll("input:checked"),
     ].map((input) => input.value);
@@ -1346,10 +1354,6 @@ export async function performancePage(root, me) {
     syncClosingSelection();
   };
   $("perfRun").onclick = async () => {
-    runPlan();
-    await persistPlan();
-  };
-  $("topMajor").onchange = $("topMinor").onchange = async () => {
     runPlan();
     await persistPlan();
   };
