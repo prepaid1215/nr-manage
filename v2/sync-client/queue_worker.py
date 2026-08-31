@@ -4,6 +4,7 @@ import json
 import os
 import socket
 import sys
+import tempfile
 import threading
 import time
 import urllib.error
@@ -16,15 +17,20 @@ from pathlib import Path
 import keyring
 import scraper as scraper_module
 from scraper import run_combined
+from runtime_mode import TEMP_MODE
 
 
 SUPABASE_URL = "https://ymagjzwebshfnjiisrao.supabase.co"
 SUPABASE_KEY = "sb_publishable_odxxHbBufV-ZSFlVJ8xFiw_18hBVyJf"
 CLOUD_COORDINATOR = "https://nrc-sync-cloud-sg.onrender.com"
 DATA_DIR = (
-    Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "NRCSync" / "data"
-    if getattr(sys, "frozen", False)
-    else Path(__file__).parent / "data"
+    Path(tempfile.mkdtemp(prefix="NRCSync-Temp-"))
+    if TEMP_MODE
+    else (
+        Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "NRCSync" / "data"
+        if getattr(sys, "frozen", False)
+        else Path(__file__).parent / "data"
+    )
 )
 DEVICE_FILE = DATA_DIR / "worker_device.json"
 SESSION_SERVICE = "NRC-Management-Worker-Session"
@@ -76,6 +82,36 @@ def _session_key(device_id):
     return f"device:{device_id}"
 
 
+def _finish_configure(user_id, access_token, refresh_token, expires_in, nrc_login_id, nrc_password, device_name=None):
+    existing = _load_device() or {}
+    device = {
+        "id": existing.get("id") if existing.get("owner_id") == user_id else str(uuid.uuid4()),
+        "owner_id": user_id,
+        "device_name": str(device_name or socket.gethostname()).strip() or socket.gethostname(),
+        "source_account_id": nrc_login_id,
+    }
+    _save_device(device)
+    keyring.set_password(
+        SESSION_SERVICE,
+        _session_key(device["id"]),
+        json.dumps({"userId": user_id, "refreshToken": refresh_token}),
+    )
+    keyring.set_password(
+        CREDENTIAL_SERVICE,
+        user_id,
+        json.dumps({"loginId": nrc_login_id, "password": nrc_password}),
+    )
+    with _auth_lock:
+        _cached_auth.clear()
+        _cached_auth.update(
+            accessToken=access_token,
+            expiresAt=time.time() + int(expires_in or 3600) - 60,
+            userId=user_id,
+        )
+    heartbeat("ONLINE", None)
+    return device
+
+
 def configure_worker(app_username, app_password, nrc_login_id, nrc_password, device_name=None):
     username = str(app_username).strip().lower()
     nrc_login_id = str(nrc_login_id).strip()
@@ -90,34 +126,35 @@ def configure_worker(app_username, app_password, nrc_login_id, nrc_password, dev
         body={"email": f"app-{username}@nrc-members.com", "password": app_password},
         headers={"apikey": SUPABASE_KEY},
     )
-    user_id = auth["user"]["id"]
-    existing = _load_device() or {}
-    device = {
-        "id": existing.get("id") if existing.get("owner_id") == user_id else str(uuid.uuid4()),
-        "owner_id": user_id,
-        "device_name": str(device_name or socket.gethostname()).strip() or socket.gethostname(),
-        "source_account_id": nrc_login_id,
-    }
-    _save_device(device)
-    keyring.set_password(
-        SESSION_SERVICE,
-        _session_key(device["id"]),
-        json.dumps({"userId": user_id, "refreshToken": auth["refresh_token"]}),
+    return _finish_configure(
+        auth["user"]["id"], auth["access_token"], auth["refresh_token"], auth.get("expires_in"),
+        nrc_login_id, nrc_password, device_name,
     )
-    keyring.set_password(
-        CREDENTIAL_SERVICE,
-        user_id,
-        json.dumps({"loginId": nrc_login_id, "password": nrc_password}),
+
+
+def configure_worker_from_session(access_token, refresh_token, device_name=None, expires_in=None):
+    """이미 웹 앱에 로그인된 브라우저 세션을 그대로 넘겨받아, 클라우드에 저장된
+    본인의 NRC 로그인정보(공유 PC 수집 승인 시 저장됨)까지 자동으로 가져와
+    입력창 없이 이 PC를 등록한다."""
+    if not access_token or not refresh_token:
+        raise ValueError("로그인 세션 정보가 없습니다. 웹 앱에 다시 로그인한 뒤 시도해 주세요.")
+    user = _json_request(
+        f"{SUPABASE_URL}/auth/v1/user",
+        headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {access_token}"},
     )
-    with _auth_lock:
-        _cached_auth.clear()
-        _cached_auth.update(
-            accessToken=auth["access_token"],
-            expiresAt=time.time() + int(auth.get("expires_in", 3600)) - 60,
-            userId=user_id,
-        )
-    heartbeat("ONLINE", None)
-    return device
+    user_id = user["id"]
+    creds = _json_request(
+        f"{CLOUD_COORDINATOR}/credentials/reveal",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    rows = (creds or {}).get("credentials") or []
+    if not rows:
+        raise ValueError("먼저 앱의 설정 > 수집 탭에서 '공유 PC 수집 승인'을 진행한 뒤 다시 시도해 주세요.")
+    chosen = rows[0]
+    return _finish_configure(
+        user_id, access_token, refresh_token, expires_in or 3600,
+        chosen["loginId"], chosen["password"], device_name,
+    )
 
 
 def worker_configuration():
@@ -194,6 +231,17 @@ def heartbeat(status="ONLINE", error=None):
         },
         "resolution=merge-duplicates,return=minimal",
     )
+
+
+def deregister_device():
+    """임시 연결 모드에서 프로그램을 끌 때, 등록해뒀던 이 PC를 서버에서도 지운다."""
+    device = _load_device()
+    if not device:
+        return
+    try:
+        _rest(f"nrc_sync_devices?id=eq.{device['id']}", "DELETE")
+    except Exception:
+        pass
 
 
 def _patch_job(job_id, values):

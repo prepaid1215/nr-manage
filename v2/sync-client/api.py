@@ -27,7 +27,8 @@ from flask_cors import CORS
 import keyring
 import scraper as scraper_module
 from scraper import run_daily, run_sales_now, run_closings, run_combined
-from queue_worker import configure_worker, worker_configuration, worker_loop
+from queue_worker import configure_worker, configure_worker_from_session, worker_configuration, worker_loop, deregister_device
+from runtime_mode import TEMP_MODE
 
 if getattr(sys, "frozen", False) and (sys.stdout is None or not hasattr(sys.stdout, "write")):
     # --windowed 빌드는 콘솔이 없어 sys.stdout/stderr가 None이라 print()가 죽는다.
@@ -58,9 +59,19 @@ def require_sync_token():
 
 
 DATA_DIR = (
+    Path(tempfile.mkdtemp(prefix="NRCSync-Temp-"))
+    if TEMP_MODE
+    else (
+        Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "NRCSync" / "data"
+        if getattr(sys, "frozen", False)
+        else Path(__file__).parent / "data"
+    )
+)
+# 크로미움 설치 여부 표시는 임시 모드에서도 재설치를 반복하지 않도록 항상 고정 경로를 쓴다.
+CHROMIUM_MARKER_DIR = (
     Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "NRCSync" / "data"
     if getattr(sys, "frozen", False)
-    else Path(__file__).parent / "data"
+    else DATA_DIR
 )
 sync_state = {"running": False, "completed": False, "error": None, "message": "대기 중"}
 SCHEDULES_FILE = DATA_DIR / "sync_schedules.json"
@@ -120,6 +131,24 @@ def worker_setup_save():
         )
     except Exception as exc:
         return Response(setup_page(str(exc), True), status=400, content_type="text/html; charset=utf-8")
+
+
+@app.route("/register-device-auto", methods=["POST", "OPTIONS"])
+def register_device_auto():
+    """웹 앱에 이미 로그인된 세션을 그대로 받아 입력창 없이 이 PC를 등록한다."""
+    if request.method == "OPTIONS":
+        return "", 204
+    body = request.get_json(silent=True) or {}
+    try:
+        device = configure_worker_from_session(
+            body.get("accessToken", ""),
+            body.get("refreshToken", ""),
+            body.get("deviceName") or None,
+            body.get("expiresIn"),
+        )
+        return jsonify({"ok": True, "device": device})
+    except Exception as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 400
 
 
 def load_schedules():
@@ -484,7 +513,7 @@ def self_install_and_relaunch():
     스스로를 복사한 뒤 설치된 위치에서 다시 실행한다. 이미 설치 위치에서
     실행 중이면 복사 없이 자동 실행 등록만 확인한다. python api.py로 직접
     실행할 때는 해당 없음(frozen 아님)."""
-    if not getattr(sys, "frozen", False):
+    if not getattr(sys, "frozen", False) or TEMP_MODE:
         return False
     current_exe = Path(sys.executable).resolve()
     target_exe = install_dir() / "NRCSync.exe"
@@ -508,10 +537,10 @@ def self_install_and_relaunch():
 
 def ensure_chromium_installed():
     """설치 파일로 처음 실행될 때 Playwright 브라우저를 한 번 자동 설치한다."""
-    marker = DATA_DIR / ".chromium_installed"
+    marker = CHROMIUM_MARKER_DIR / ".chromium_installed"
     if marker.exists():
         return
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    CHROMIUM_MARKER_DIR.mkdir(parents=True, exist_ok=True)
     print("🧩 처음 실행 중입니다. NRC 수집용 브라우저를 설치합니다 (1~2분 소요)...")
     try:
         python_exe = sys.executable
@@ -527,8 +556,23 @@ def ensure_chromium_installed():
         print(f"⚠️ 브라우저 자동 설치 실패, 수동으로 설치가 필요할 수 있습니다: {exc}")
 
 
+APP_URL = "https://prepaid1215.github.io/nr-manage/v2/frontend/"
+
+
 def open_setup_page_if_needed():
     def _open():
+        if TEMP_MODE:
+            # 임시 연결 모드는 부팅 자동실행이 아니라 방금 사람이 직접 켠 것이므로
+            # DPAPI 대기 없이 바로 확인하고, 로컬 등록폼 대신 이미 로그인돼 있을
+            # 웹 앱을 열어 '이 PC 자동 등록' 버튼으로 이어지게 한다.
+            time.sleep(1.5)
+            if worker_configuration().get("configured"):
+                return
+            try:
+                webbrowser.open(APP_URL)
+            except Exception:
+                pass
+            return
         # Windows 로그인 직후에는 자격 증명 저장소(DPAPI)가 아직 준비되지 않아
         # keyring 조회가 일시적으로 실패할 수 있다. 즉시 판단하지 않고
         # 여유를 두고 여러 번 재확인한 뒤에도 미등록이면 그때 설정 화면을 연다.
@@ -575,17 +619,23 @@ def run_with_tray():
     server_thread.start()
 
     def open_setup(icon_obj=None, item=None):
-        webbrowser.open("http://127.0.0.1:5050/setup")
+        webbrowser.open(APP_URL if TEMP_MODE else "http://127.0.0.1:5050/setup")
 
     def quit_app(icon_obj=None, item=None):
+        if TEMP_MODE:
+            # 임시 연결 모드는 끄는 순간 서버 쪽 PC 등록도 같이 지워서 흔적을 안 남긴다.
+            deregister_device()
         icon_obj.stop()
         os._exit(0)
 
+    menu_label = "이 PC 연결(임시)" if TEMP_MODE else "설정 열기"
+    quit_label = "연결 끊기" if TEMP_MODE else "종료"
     menu = pystray.Menu(
-        pystray.MenuItem("설정 열기", open_setup, default=True),
-        pystray.MenuItem("종료", quit_app),
+        pystray.MenuItem(menu_label, open_setup, default=True),
+        pystray.MenuItem(quit_label, quit_app),
     )
-    icon = pystray.Icon("NRCSync", _tray_icon_image(), "NRC Sync 실행 중", menu)
+    tooltip = "NRC Sync 임시 연결 중" if TEMP_MODE else "NRC Sync 실행 중"
+    icon = pystray.Icon("NRCSync", _tray_icon_image(), tooltip, menu)
     icon.run()
 
 

@@ -160,6 +160,37 @@ def credentials():
         return jsonify({"ok": False, "message": str(exc)}), 500
 
 
+@app.route("/credentials/reveal", methods=["GET", "OPTIONS"])
+def credentials_reveal():
+    """이미 저장된 본인의 NRC 로그인정보를 복호화해 반환한다.
+    로컬 NRC Sync 프로그램이 PC를 원클릭으로 자동 등록할 때만 쓰는 용도로,
+    항상 요청자 본인(owner_id=본인)의 자격증명만 돌려준다."""
+    if request.method == "OPTIONS":
+        return "", 204
+    try:
+        user = user_from_request()
+        owner_id = user["id"]
+        rows = admin_request(
+            f"nrc_cloud_credentials?owner_id=eq.{owner_id}&select=source_account_id,encrypted_credentials&order=updated_at.desc"
+        ) or []
+        result = []
+        for row in rows:
+            try:
+                data = json.loads(cipher().decrypt(row["encrypted_credentials"].encode("ascii")))
+                result.append({
+                    "sourceAccountId": row["source_account_id"],
+                    "loginId": data.get("loginId", row["source_account_id"]),
+                    "password": data.get("password", ""),
+                })
+            except InvalidToken:
+                continue
+        return jsonify({"ok": True, "credentials": result})
+    except PermissionError as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 401
+    except Exception as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 500
+
+
 def is_app_admin(user_id):
     rows = admin_request(f"app_admins?user_id=eq.{user_id}&select=user_id") or []
     return bool(rows)

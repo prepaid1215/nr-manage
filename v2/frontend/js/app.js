@@ -740,6 +740,8 @@ async function organizationDashboard(targetOwner) {
   }
 }
 const LOCAL_SYNC = "http://127.0.0.1:5050";
+const TEMP_SYNC_DOWNLOAD =
+  "https://raw.githubusercontent.com/prepaid1215/nr-manage/main/v2/sync-client/installer/NRCSync-Temp.exe";
 const CLOUD_SYNC = "https://nrc-sync-cloud-sg.onrender.com";
 function setupAdminToggle() {
   const heading = $("accountHeading");
@@ -777,7 +779,7 @@ function setupAdminToggle() {
 }
 async function settings(initialView = "profile") {
   $("content").innerHTML =
-    `<div class="view-tabs settings-tabs"><button class="active" data-settings-view="profile" type="button">내 정보</button><button data-settings-view="connection" type="button">수집 PC</button><button data-settings-view="collection" type="button">수집</button><button data-settings-view="account" type="button">계정</button></div><section id="profileSettings" class="card"><div class="section-head"><div><h2>내 정보</h2><p class="help">이름을 바꾸면 화면 상단 인사말에도 바로 반영됩니다.</p></div></div><form id="profileForm"><div class="profile-form-grid"><label>이름<input id="profileName" required maxlength="40"></label><label>전화번호<input id="profilePhone" type="tel" inputmode="tel" placeholder="010-0000-0000"></label><label>이메일<input id="profileEmail" type="email" placeholder="name@example.com"></label><label>회원번호<input id="profileMemberNo" inputmode="numeric"></label><label>상호명<input id="profileBusiness" placeholder="예: 주하루"></label><label class="full">주소<input id="profileAddress"></label></div><button class="primary" id="saveProfile" type="submit">내 정보 저장</button><div id="profileStatus" class="connection-status" hidden></div><div id="profileError" class="error"></div></form></section><section id="connectionSettings" class="card" hidden><div class="section-head"><div><h2>수집 PC</h2><p class="help">여러 PC를 등록하면 켜져 있는 PC가 자동으로 수집 작업을 처리합니다. 연결 코드는 필요 없습니다.</p></div><a class="secondary" href="${LOCAL_SYNC}/setup" target="_blank" rel="noopener">이 PC 등록</a></div><div id="nrcStatus" class="connection-status">등록된 PC 확인 중...</div><div id="deviceList" class="schedule-list"></div><div id="nrcError" class="error"></div></section><section id="accountSettings" class="card" hidden><h2 id="accountHeading">앱 계정</h2><p class="help" id="profileUsername"></p><button class="secondary" id="logout">로그아웃</button><div id="adminToggleWrap" hidden><button class="secondary" id="adminToggle" type="button"></button><div id="adminToggleStatus" class="connection-status" hidden></div></div></section>`;
+    `<div class="view-tabs settings-tabs"><button class="active" data-settings-view="profile" type="button">내 정보</button><button data-settings-view="connection" type="button">수집 PC</button><button data-settings-view="collection" type="button">수집</button><button data-settings-view="account" type="button">계정</button></div><section id="profileSettings" class="card"><div class="section-head"><div><h2>내 정보</h2><p class="help">이름을 바꾸면 화면 상단 인사말에도 바로 반영됩니다.</p></div></div><form id="profileForm"><div class="profile-form-grid"><label>이름<input id="profileName" required maxlength="40"></label><label>전화번호<input id="profilePhone" type="tel" inputmode="tel" placeholder="010-0000-0000"></label><label>이메일<input id="profileEmail" type="email" placeholder="name@example.com"></label><label>회원번호<input id="profileMemberNo" inputmode="numeric"></label><label>상호명<input id="profileBusiness" placeholder="예: 주하루"></label><label class="full">주소<input id="profileAddress"></label></div><button class="primary" id="saveProfile" type="submit">내 정보 저장</button><div id="profileStatus" class="connection-status" hidden></div><div id="profileError" class="error"></div></form></section><section id="connectionSettings" class="card" hidden><div class="section-head"><div><h2>수집 PC</h2><p class="help">여러 PC를 등록하면 켜져 있는 PC가 자동으로 수집 작업을 처리합니다. 연결 코드는 필요 없습니다.</p></div><div class="connection-actions"><button class="primary compact" id="autoRegisterPc" type="button">이 PC 자동 등록</button><a class="secondary compact" href="${LOCAL_SYNC}/setup" target="_blank" rel="noopener">수동 등록</a></div></div><p class="help">자동 등록은 NRC Sync 프로그램이 이 컴퓨터에 설치·실행 중이고, 미리 '공유 PC 수집 승인'을 해둔 경우에만 됩니다.</p><div id="autoRegisterStatus" class="connection-status" hidden></div><details class="temp-connect"><summary>노트북 등을 잠깐만 연결하고 싶다면</summary><p class="help">설치·시작프로그램 등록 없이 켜져 있는 동안만 수집 PC로 참여합니다. 트레이 아이콘에서 '연결 끊기'를 누르면 등록도 같이 지워집니다.</p><a class="secondary compact" href="${TEMP_SYNC_DOWNLOAD}" target="_blank" rel="noopener">임시 연결 프로그램 받기</a></details><div id="nrcStatus" class="connection-status">등록된 PC 확인 중...</div><div id="deviceList" class="schedule-list"></div><div id="nrcError" class="error"></div></section><section id="accountSettings" class="card" hidden><h2 id="accountHeading">앱 계정</h2><p class="help" id="profileUsername"></p><button class="secondary" id="logout">로그아웃</button><div id="adminToggleWrap" hidden><button class="secondary" id="adminToggle" type="button"></button><div id="adminToggleStatus" class="connection-status" hidden></div></div></section>`;
   const profile = await currentProfile();
   if (profile) {
     $("profileName").value = profile.name || "";
@@ -808,6 +810,44 @@ async function settings(initialView = "profile") {
         if (view === "connection") loadLocalStatus();
       }),
   );
+  $("autoRegisterPc").onclick = async () => {
+    const button = $("autoRegisterPc"),
+      status = $("autoRegisterStatus");
+    button.disabled = true;
+    status.hidden = false;
+    status.classList.remove("error");
+    status.textContent = "등록하는 중...";
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) throw Error("로그인 세션이 없습니다. 다시 로그인해 주세요.");
+      const response = await fetch(`${LOCAL_SYNC}/register-device-auto`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accessToken: session.access_token,
+          refreshToken: session.refresh_token,
+          expiresIn: session.expires_in,
+        }),
+        targetAddressSpace: "local",
+      }).catch(() => {
+        throw Error(
+          "NRC Sync 프로그램에 연결할 수 없습니다. 이 컴퓨터에 설치·실행 중인지 확인해 주세요.",
+        );
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok)
+        throw Error(data.message || "자동 등록에 실패했습니다.");
+      status.textContent = `${data.device?.device_name || "이 PC"} 등록 완료`;
+      await loadLocalStatus();
+    } catch (err) {
+      status.classList.add("error");
+      status.textContent = friendlyError(err);
+    } finally {
+      button.disabled = false;
+    }
+  };
   $("profileForm").onsubmit = async (event) => {
     event.preventDefault();
     const name = $("profileName").value.trim();
