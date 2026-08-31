@@ -203,6 +203,56 @@ export async function performancePage(root, me) {
   };
   let hiddenTreeIds = loadHiddenTreeIds();
   let showHiddenTree = false;
+  // 숨긴 카드는 계보도에만 안 보이는 게 아니라 계산에서도 빠져야 한다.
+  // 숨긴 사람은 대·소 두 줄로 나누는 계산에서 자기 자리를 차지하지 않고,
+  // 그 사람의 하위(자녀)는 마치 그 사람이 없는 것처럼 곧바로 부모의
+  // 자녀로 승격된다. 숨긴 사람의 "본인" 매출만은 사라지지 않게 그 위
+  // 사람(부모)의 본인 매출에 더해서 위로 올라간다("위로 통과"). 실제
+  // genealogy(model.children/ordPv)는 그대로 두고, 계산 함수에 넘길
+  // 때만 이렇게 다시 만든 모델을 쓴다.
+  const buildEffectiveModel = () => {
+    const resolved = new Map();
+    const resolve = (id) => {
+      if (resolved.has(id)) return resolved.get(id);
+      resolved.set(id, null); // 순환 참조 방지용 임시값
+      const original = model.byId.get(id);
+      const rawKids = model.children.get(id) || [];
+      let extraOwn = 0;
+      const outChildren = [];
+      rawKids.forEach((kid) => {
+        const kidId = String(kid.userId);
+        const sub = resolve(kidId);
+        if (!sub) return;
+        if (hiddenTreeIds.has(kidId)) {
+          extraOwn += Math.max(0, Number(sub.row?.ordPv) || 0);
+          outChildren.push(...sub.children);
+        } else {
+          outChildren.push(sub.row);
+        }
+      });
+      const row =
+        extraOwn > 0 && original
+          ? { ...original, ordPv: Number(original.ordPv || 0) + extraOwn }
+          : original;
+      const result = { row, children: outChildren };
+      resolved.set(id, result);
+      return result;
+    };
+    model.rows.forEach((row) => resolve(String(row.userId)));
+    const children = new Map();
+    const byId = new Map(model.byId);
+    resolved.forEach((entry, id) => {
+      if (!entry) return;
+      children.set(id, entry.children);
+      if (entry.row) byId.set(id, entry.row);
+    });
+    return { ...model, children, byId };
+  };
+  let calcModel = model;
+  const rebuildCalcModel = () => {
+    calcModel = hiddenTreeIds.size ? buildEffectiveModel() : model;
+  };
+  rebuildCalcModel();
   let treeFocusId = null;
   let treeFocusHistory = [];
   let treeZoom = 1;
@@ -578,7 +628,7 @@ export async function performancePage(root, me) {
     if (focusTargets?.major && focusTargets?.minor) {
       try {
         withCleanCompletionState(() => {
-          focusResult = calculatePerformance(model, treeFocusId, {
+          focusResult = calculatePerformance(calcModel, treeFocusId, {
             majorTarget: focusTargets.major,
             minorTarget: focusTargets.minor,
           });
@@ -748,7 +798,7 @@ export async function performancePage(root, me) {
       return `<div class="business-status"><span>계산 상태</span><b>목표를 입력하세요</b></div>`;
     try {
       const { result, projection } = withCleanCompletionState(() => {
-        const result = calculatePerformance(model, id, {
+        const result = calculatePerformance(calcModel, id, {
           majorTarget: major,
           minorTarget: minor,
         });
@@ -785,7 +835,7 @@ export async function performancePage(root, me) {
         if (card.major && card.minor) {
           try {
             const projection = withCleanCompletionState(() => {
-              const result = calculatePerformance(model, card.id, {
+              const result = calculatePerformance(calcModel, card.id, {
                 majorTarget: card.major,
                 minorTarget: card.minor,
               });
@@ -1213,8 +1263,9 @@ export async function performancePage(root, me) {
         delete row.completedClosingPreviousTotal;
         delete row.closingDescendantDeltaNv;
       });
+      rebuildCalcModel();
       const allocation = allocateClosingTargets(
-        model,
+        calcModel,
         plan.topMemberId,
         { majorTarget: plan.topMajorTarget, minorTarget: plan.topMinorTarget },
         plan.closingMemberIds,
@@ -1228,7 +1279,7 @@ export async function performancePage(root, me) {
           return { node, skipped: true, completion: null };
         }
         const result = calculatePerformance(
-          model,
+          calcModel,
           node.memberId,
           nodeTargets(node),
         );
@@ -1403,14 +1454,18 @@ export async function performancePage(root, me) {
     if (hideTarget) {
       hiddenTreeIds.add(hideTarget.dataset.hideMember);
       saveHiddenTreeIds();
+      rebuildCalcModel();
       renderMainTree({ preserveScroll: true });
+      renderBusinessGrid();
       return;
     }
     const restoreTarget = event.target.closest("[data-restore-member]");
     if (restoreTarget) {
       hiddenTreeIds.delete(restoreTarget.dataset.restoreMember);
       saveHiddenTreeIds();
+      rebuildCalcModel();
       renderMainTree({ preserveScroll: true });
+      renderBusinessGrid();
       return;
     }
     const button = event.target.closest("[data-member]");
