@@ -1,7 +1,7 @@
 import { supabase } from "./supabase.js?v=20260829-34";
 import { friendlyError } from "./errors.js?v=20260830-1";
 import { branchBreakdown, buildPerformanceModel } from "./performance-calculator.js?v=20260831-56";
-import { boxTreeHtml } from "./box-tree.js?v=20260829-53";
+import { boxTreeHtml } from "./box-tree.js?v=20260831-54";
 
 const safe = (value) =>
   String(value ?? "").replace(

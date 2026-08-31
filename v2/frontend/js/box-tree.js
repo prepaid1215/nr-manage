@@ -26,13 +26,16 @@ export function boxCardHtml(row, options = {}) {
   const note = options.note
     ? `<span class="box-note">${safe(options.note)}</span>`
     : "";
+  const sale = options.sale
+    ? `<span class="box-sale">💰 추천 매출 ${safe(options.sale)}</span>`
+    : "";
   const total = (options.totalOf || defaultTotal)(row);
   const tag = options.clickable === false ? "div" : "button";
   const attrs =
     options.clickable === false
       ? ""
       : ` data-member="${safe(id)}" type="button"`;
-  return `<${tag} class="box-node ${boxRankTone(row)}${options.selected ? " selected" : ""}${options.marked ? " marked" : ""}"${attrs}><b>${safe(row?.userName || "이름 없음")}</b><small>*${safe(id)}</small><small>${safe(row?.rankName || "회원")}/${safe(row?.rankMaxName || "회원")}</small>${options.hideDate ? "" : `<small>${safe(row?.regDate || "-")}</small>`}<em>본인 ${number(row?.ordPv)} NV</em><span class="box-line-total">라인 전체 ${number(total)}</span>${note}${badge}</${tag}>`;
+  return `<${tag} class="box-node ${boxRankTone(row)}${options.selected ? " selected" : ""}${options.marked ? " marked" : ""}${options.sale ? " sale" : ""}"${attrs}><b>${safe(row?.userName || "이름 없음")}</b><small>*${safe(id)}</small><small>${safe(row?.rankName || "회원")}/${safe(row?.rankMaxName || "회원")}</small>${options.hideDate ? "" : `<small>${safe(row?.regDate || "-")}</small>`}<em>본인 ${number(row?.ordPv)} NV</em><span class="box-line-total">라인 전체 ${number(total)}</span>${note}${badge}${sale}</${tag}>`;
 }
 
 // ctx: { byId: Map, children: Map } — buildPerformanceModel 결과나 동일 구조
@@ -42,6 +45,7 @@ export function boxTreeHtml(ctx, rootId, options = {}) {
   const depth = options.depth ?? 3;
   const badges = options.badges || {};
   const notes = options.notes || {};
+  const sales = options.sales || {};
   const totalOf = options.totalOf || defaultTotal;
   const clickable = options.clickable !== false;
   const selectedId = options.selectedId ? String(options.selectedId) : "";
@@ -73,6 +77,7 @@ export function boxTreeHtml(ctx, rootId, options = {}) {
     return `<li>${boxCardHtml(row, {
       badge: badges[id],
       note: notes[id],
+      sale: sales[id],
       totalOf,
       clickable,
       hideDate: options.hideDate,

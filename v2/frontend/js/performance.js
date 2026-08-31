@@ -16,9 +16,9 @@ import {
   salesTopUpForDeficit,
   sortMembersDeepestFirst,
 } from "./performance-calculator.js?v=20260831-56";
-import { boxTreeHtml } from "./box-tree.js?v=20260829-53";
+import { boxTreeHtml } from "./box-tree.js?v=20260831-54";
 import { friendlyError } from "./errors.js?v=20260830-1";
-import { isAppAdmin } from "./admin.js?v=20260831-7";
+import { isAppAdmin } from "./admin.js?v=20260831-8";
 
 const PLAN_TABLE = "nrc_closing_plans";
 const MIN_TREE_ZOOM = 0.72;
@@ -54,7 +54,7 @@ const flattenAllocation = (node, out = []) => {
 };
 
 export async function performancePage(root, me) {
-  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>마감 실적 계산기</h2><p class="help">기준이 되는 최상위 마감 사업자와 목표만 정하면, 아래 사업자에게는 &quot;라인 합계&quot; 목표로 내려갑니다. 대·소를 각각 채우지 않으므로 매출이 덜 들어갑니다.</p></div></div><p id="perfSource" class="help"></p><p id="perfStorage" class="help"></p><button class="secondary compact" id="linkOtherAccounts" type="button" hidden>🔗 다른 계정 자동 연결</button><p id="linkOtherAccountsStatus" class="help" hidden></p><div class="closing-target-row"><label>최상위 마감 사업자<select id="topMemberSelect"></select></label><label>대실적 목표 (NV)<input id="topMajor" type="number" min="1" step="10000"></label><label>소실적 목표 (NV)<input id="topMinor" type="number" min="1" step="10000"></label></div><div id="treePins" class="tree-pins"></div><section class="card closing-main-tree"><div class="section-head"><div><h2>계보도에서 목표 설정</h2><p class="help">클릭하면 그 사람 기준으로 계보도가 이동하고, 더블클릭하면 대실적·소실적 목표를 입력합니다.</p></div><div class="tree-nav"><button class="secondary compact" id="treeBack" type="button">← 뒤로</button><button class="secondary compact" id="treeHome" type="button">맨 위로</button><span class="tree-zoom-controls"><button class="secondary compact" id="treeZoomOut" type="button" aria-label="축소">−</button><button class="secondary compact" id="treeZoomReset" type="button">100%</button><button class="secondary compact" id="treeZoomIn" type="button" aria-label="확대">＋</button></span></div></div><div id="closingMainTree" class="box-tree pannable-tree"><div class="tree-stage" id="closingMainTreeStage"><ul></ul></div></div></section><dialog id="treeTargetDialog" class="customer-dialog small"><form id="treeTargetForm"><div class="dialog-head"><h2 id="treeTargetTitle">목표 설정</h2><button id="treeTargetClose" type="button">×</button></div><label>대실적 목표 (NV)<input id="treeTargetMajor" type="number" min="0" step="10000" required></label><label>소실적 목표 (NV)<input id="treeTargetMinor" type="number" min="0" step="10000" required></label><p id="treeTargetAuto" class="help"></p><div class="customer-actions"><button class="secondary" id="treeTargetReset" type="button">자동값으로</button><button class="primary" type="submit">저장</button></div></form></dialog><details class="closing-member-picker" open><summary>마감할 하위 사업자 선택 <b id="closingCount">0명</b></summary><p class="help">체크하지 않은 회원의 라인은 라인 합계만 맞으면 그대로 통과합니다. 체크한 사업자는 라인 합계를 맞추면서 소실적이 인증직급 지급 기준선(DT 3만 · GD 이상 6만 NV) 이상이 되게 채웁니다.</p><div class="closing-picker-tools"><input id="closingFilter" type="search" placeholder="이름 또는 회원번호 검색"><button class="secondary compact" id="closingShowSingles" type="button">단독 계정 보기</button><button class="secondary compact" id="closingSelectAll" type="button">전체 선택</button><button class="secondary compact" id="closingSelectNone" type="button">전체 해제</button></div><div id="closingCollapsedGroups" class="closing-collapsed-groups"></div><div id="closingOptions" class="closing-member-options"></div></details><button id="perfRun" class="primary">자동 배분 계산</button><p id="perfNotice" class="help"></p><div id="perfError" class="error"></div></section><section id="perfSummary"></section><section id="perfResult"></section>`;
+  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>마감 실적 계산기</h2><p class="help">기준이 되는 최상위 마감 사업자와 목표만 정하면, 아래 사업자에게는 &quot;라인 합계&quot; 목표로 내려갑니다. 대·소를 각각 채우지 않으므로 매출이 덜 들어갑니다.</p></div></div><p id="perfSource" class="help"></p><p id="perfStorage" class="help"></p><button class="secondary compact" id="linkOtherAccounts" type="button" hidden>🔗 다른 계정 자동 연결</button><p id="linkOtherAccountsStatus" class="help" hidden></p><div class="closing-target-row"><label>최상위 마감 사업자<select id="topMemberSelect"></select></label><label>대실적 목표 (NV)<input id="topMajor" type="number" min="1" step="10000"></label><label>소실적 목표 (NV)<input id="topMinor" type="number" min="1" step="10000"></label></div><div id="treePins" class="tree-pins"></div><section class="card closing-main-tree"><div class="section-head"><div><h2>계보도에서 목표 설정</h2><p class="help">클릭하면 그 사람 기준으로 계보도가 이동하고, 더블클릭하면 대실적·소실적 목표를 입력합니다.</p></div><div class="tree-nav"><button class="secondary compact" id="treeBack" type="button">← 뒤로</button><button class="secondary compact" id="treeHome" type="button">맨 위로</button><span class="tree-zoom-controls"><button class="secondary compact" id="treeZoomOut" type="button" aria-label="축소">−</button><button class="secondary compact" id="treeZoomReset" type="button">100%</button><button class="secondary compact" id="treeZoomIn" type="button" aria-label="확대">＋</button></span></div></div><div id="closingMainTree" class="box-tree pannable-tree"><div class="tree-stage" id="closingMainTreeStage"><ul></ul></div></div></section><dialog id="treeTargetDialog" class="customer-dialog small"><form id="treeTargetForm"><div class="dialog-head"><h2 id="treeTargetTitle">목표 설정</h2><button id="treeTargetClose" type="button">×</button></div><label>대실적 목표 (NV)<input id="treeTargetMajor" type="number" min="0" step="10000" required></label><label>소실적 목표 (NV)<input id="treeTargetMinor" type="number" min="0" step="10000" required></label><p id="treeTargetAuto" class="help"></p><div class="customer-actions"><button class="secondary" id="treeTargetReset" type="button">자동값으로</button><button class="primary" type="submit">저장</button></div></form></dialog><details class="closing-member-picker" open><summary>마감할 하위 사업자 선택 <b id="closingCount">0명</b></summary><p class="help">체크하지 않은 회원의 라인은 라인 합계만 맞으면 그대로 통과합니다. 체크한 사업자는 라인 합계를 맞추면서 소실적이 인증직급 지급 기준선(DT 3만 · GD 이상 6만 NV) 이상이 되게 채웁니다.</p><div class="closing-picker-tools"><input id="closingFilter" type="search" placeholder="이름 또는 회원번호 검색"><button class="secondary compact" id="closingShowSingles" type="button">단독 계정 보기</button><button class="secondary compact" id="closingSelectAll" type="button">전체 선택</button><button class="secondary compact" id="closingSelectNone" type="button">전체 해제</button></div><div id="closingCollapsedGroups" class="closing-collapsed-groups"></div><div id="closingOptions" class="closing-member-options"></div></details><button id="perfRun" class="primary">자동 배분 계산</button><p id="perfNotice" class="help"></p><div id="perfError" class="error"></div></section><section id="perfSummary"></section><div id="stepTabs" class="business-tabs" hidden></div><section id="perfResult"></section>`;
   const $ = (id) => document.getElementById(id);
   const { data, error } = await supabase
     .from("nrc_sync_snapshots")
@@ -507,15 +507,24 @@ export async function performancePage(root, me) {
       stage = $("closingMainTreeStage");
     if (!box || !stage) return;
     const badges = {},
-      notes = {};
+      notes = {},
+      sales = {};
     items.forEach((item) => {
       if (item.skipped) return;
-      const { node, completion } = item;
+      const { node, completion, projection, result } = item;
       badges[node.memberId] =
         node.mode === "sides"
           ? `대 ${fmt(node.majorTarget)} / 소 ${fmt(node.minorTarget)}`
           : `목표 ${fmt(node.lineTarget)}`;
       notes[node.memberId] = completion ? "마감 완료" : "진행 예정";
+      (projection?.sales || []).forEach((sale) => {
+        if (!sale.memberId || sale.salesWon <= 0) return;
+        const isSelf =
+          result?.placements[sale.lineIndex]?.kind === "self" ||
+          sale.memberId === node.memberId;
+        sales[sale.memberId] =
+          `${fmt(sale.salesWon)}원 → +${fmt(sale.addedNv)} NV${isSelf ? " (본인 코드)" : ""}`;
+      });
     });
     if (!treeFocusId || !model.byId.has(treeFocusId))
       treeFocusId = plan.topMemberId;
@@ -524,6 +533,7 @@ export async function performancePage(root, me) {
       depth: 8,
       badges,
       notes,
+      sales,
       hideDate: true,
       clickable: true,
       selectedId: plan.topMemberId,
@@ -731,14 +741,15 @@ export async function performancePage(root, me) {
     const { node, result, projection } = item;
     const badges = {};
     const notes = {};
+    const sales = {};
     const majorIndex = projection.projectedMajorIndex ?? result.majorIndex;
     (projection.sales || []).forEach((sale) => {
       if (!sale.memberId || sale.salesWon <= 0) return;
       const isSelf =
         result.placements[sale.lineIndex]?.kind === "self" ||
         sale.memberId === node.memberId;
-      badges[sale.memberId] =
-        `매출 ${fmt(sale.salesWon)}원 → +${fmt(sale.addedNv)} NV${isSelf ? " (본인 코드)" : ""}`;
+      sales[sale.memberId] =
+        `${fmt(sale.salesWon)}원 → +${fmt(sale.addedNv)} NV${isSelf ? " (본인 코드)" : ""}`;
     });
     result.subMembers.forEach((subMember, index) => {
       if (!subMember) return;
@@ -756,6 +767,7 @@ export async function performancePage(root, me) {
       depth: 3,
       badges,
       notes,
+      sales,
       hideDate: true,
       clickable: false,
       totalOf: (row) => branchBreakdown(row).total,
@@ -823,7 +835,7 @@ export async function performancePage(root, me) {
       : `<p class="closing-breadcrumb">계보 최상위 사업자</p>`;
     const title = `${order}/${total} · ${safe(member?.userName || "이름 없음")} <small>(${safe(item.node.memberId)})</small>`;
     if (item.skipped) {
-      return `<section class="card closing-step"><div class="section-head"><h2>${title}</h2><b>추가 마감 불필요</b></div>${breadcrumb}<p class="help">위에서 내려온 목표가 이미 라인 실적으로 채워져 추가 마감이 필요 없습니다.</p></section>`;
+      return `<section class="card closing-step" data-step-member="${safe(item.node.memberId)}"><div class="section-head"><h2>${title}</h2><b>추가 마감 불필요</b></div>${breadcrumb}<p class="help">위에서 내려온 목표가 이미 라인 실적으로 채워져 추가 마감이 필요 없습니다.</p></section>`;
     }
     const { node, result, projection, completion } = item;
     const todoSales = (projection.sales || []).filter(
@@ -860,7 +872,7 @@ export async function performancePage(root, me) {
       node.depth === 0
         ? `<p class="help">최상위 목표 · 대 ${fmt(node.majorTarget)} / 소 ${fmt(node.minorTarget)} (위에서 직접 입력한 값)</p>`
         : `<div class="closing-target-edit" data-target-member="${safe(node.memberId)}"><span>이 사업자 마감 목표 ${node.overridden ? "<em>직접 입력함</em>" : "<em>자동 배분값</em>"}</span><label>라인 합계<input data-sub-target="line" type="number" min="0" step="10000" value="${node.lineTarget}" ${completion ? "disabled" : ""}></label><label>소실적 최소<input data-sub-target="floor" type="number" min="0" step="10000" value="${node.minorFloor}" ${completion ? "disabled" : ""}></label><button class="secondary compact" data-reset-target="${safe(node.memberId)}" type="button" ${node.overridden && !completion ? "" : "disabled"}>자동값으로</button><small>자동 배분값 라인 합계 ${fmt(node.autoLineTarget)} · 소실적 기준선 ${fmt(node.autoMinorFloor)}${node.autoMinorFloor > 0 ? " (인증직급 기준)" : " (인증직급이 없어 기준선 없음)"}${completion ? " · 마감을 취소해야 수정할 수 있습니다" : ""}</small></div>`;
-    return `<section class="card closing-step"><div class="section-head"><h2>${title}</h2><b>${state}</b></div>${breadcrumb}${todoHtml}${targetBox}<div class="closing-lines">${lineHtml(item, 0)}${lineHtml(item, 1)}</div>${treeHtml(item)}${final}${payoutHtml(item, finalMinorNv, Boolean(completion))}${warn}${button}</section>`;
+    return `<section class="card closing-step" data-step-member="${safe(item.node.memberId)}"><div class="section-head"><h2>${title}</h2><b>${state}</b></div>${breadcrumb}${todoHtml}${targetBox}<div class="closing-lines">${lineHtml(item, 0)}${lineHtml(item, 1)}</div>${treeHtml(item)}${final}${payoutHtml(item, finalMinorNv, Boolean(completion))}${warn}${button}</section>`;
   };
 
   const runPlan = () => {
@@ -986,6 +998,33 @@ export async function performancePage(root, me) {
       $("perfResult").innerHTML = items
         .map((item, index) => stepHtml(item, index + 1, items.length))
         .join("");
+      const activeItems = items.filter((item) => !item.skipped);
+      $("stepTabs").hidden = !activeItems.length;
+      $("stepTabs").innerHTML = activeItems
+        .map((item) => {
+          const memberName = model.byId.get(item.node.memberId)?.userName || "이름 없음";
+          const saleTotal = (item.projection.sales || []).reduce(
+            (sum, sale) => sum + Number(sale.salesWon || 0),
+            0,
+          );
+          return `<button class="business-tab${saleTotal > 0 ? " sale" : ""}" data-step-tab="${safe(item.node.memberId)}" type="button">${safe(memberName)}${saleTotal > 0 ? ` · ${fmt(saleTotal)}원` : " · 달성"}</button>`;
+        })
+        .join("");
+      $("stepTabs").querySelectorAll("[data-step-tab]").forEach(
+        (tab) =>
+          (tab.onclick = () => {
+            $("stepTabs")
+              .querySelectorAll("[data-step-tab]")
+              .forEach((item) =>
+                item.classList.toggle("active", item === tab),
+              );
+            navigateTree(tab.dataset.stepTab);
+            $("closingMainTree").scrollIntoView({
+              behavior: "smooth",
+              block: "start",
+            });
+          }),
+      );
       fitTrees();
       renderClosers();
       renderMainTree();
