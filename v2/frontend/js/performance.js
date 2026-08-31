@@ -934,12 +934,12 @@ export async function performancePage(root, me) {
           if (id === topId) {
             plan.topMajorTarget = major;
             plan.topMinorTarget = minor;
-            await saveGoalOnly(id, major, minor);
+            if (storage === "supabase") await saveGoalOnly(id, major, minor);
             runPlan();
             await persistPlan();
           } else {
             pinTargetCache.set(id, { major, minor });
-            await saveGoalOnly(id, major, minor);
+            if (storage === "supabase") await saveGoalOnly(id, major, minor);
           }
         };
       });
@@ -1583,7 +1583,7 @@ export async function performancePage(root, me) {
         saveTreePins(treePins);
       }
       pinTargetCache.set(memberId, { major, minor });
-      await saveGoalOnly(memberId, major, minor);
+      if (storage === "supabase") await saveGoalOnly(memberId, major, minor);
     }
     $("treeTargetDialog").close();
     // runPlan()이 체크박스 DOM 상태로 closingMemberIds를 덮어쓰기 때문에,
