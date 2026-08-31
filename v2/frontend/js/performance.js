@@ -15,10 +15,10 @@ import {
   pruneInvalidCompletions,
   salesTopUpForDeficit,
   sortMembersDeepestFirst,
-} from "./performance-calculator.js?v=20260831-59";
+} from "./performance-calculator.js?v=20260831-60";
 import { boxTreeHtml } from "./box-tree.js?v=20260831-56";
 import { friendlyError } from "./errors.js?v=20260830-1";
-import { isAppAdmin } from "./admin.js?v=20260831-11";
+import { isAppAdmin } from "./admin.js?v=20260831-12";
 
 const PLAN_TABLE = "nrc_closing_plans";
 const MIN_TREE_ZOOM = 0.72;

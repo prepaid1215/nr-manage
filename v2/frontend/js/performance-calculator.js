@@ -248,16 +248,41 @@ export function distributeLineDeficit(
 // 총 매출과 총 NV는 한 곳에 넣을 때와 정확히 같다. (144,000원 = 72,000원 두 번)
 const splitLineSales = (topUp, codes) => {
   if (!topUp || topUp.salesWon <= 0 || !codes.length) return [];
+  const single = (target) => [
+    { target, salesWon: topUp.salesWon, addedNv: topUp.addedNv, excessNv: topUp.excessNv },
+  ];
+  if (codes.length < 2) return single(codes[0]);
   const units = topUp.salesWon / SALE_UNIT_WON;
-  // codes[1]이 소실적 지급 기준선을 가진 상위 본인 코드인 경우, 반으로
-  // 나눴을 때 두 코드 다 그 기준선을 넘을 만큼 매출이 클 때만 나눈다.
-  // 안 그러면 상위 쪽이 기준선을 못 채워 나누는 의미가 없다.
-  const payoutFloor = codes.length >= 2 ? minorPayoutFloor(codes[1]) : 0;
-  const splitThreshold =
-    payoutFloor > 0
-      ? salesTopUpForDeficit(payoutFloor).salesWon * 2
-      : SPLIT_SALE_WON;
-  if (topUp.salesWon >= splitThreshold && codes.length >= 2) {
+  // codes[1]이 소실적 지급 기준선을 가진 코드(상위 본인 코드 또는 그 라인의
+  // 얕은 코드)면, 그 코드가 자기 기준선을 채우는 데 필요한 만큼만 먼저
+  // 배정하고, 남는 매출만 가장 깊은 코드(codes[0])로 몰아준다. 기준선을
+  // 이미 채웠으면 codes[1]에는 아무것도 배정하지 않는다. 이번 매출로도
+  // 기준선을 못 채우면 전액을 codes[1]에 넣는다(더 깊이 내려갈 필요 없음).
+  const payoutFloor = minorPayoutFloor(codes[1]);
+  if (payoutFloor > 0) {
+    const ownNeedNv = Math.max(0, payoutFloor - branchBreakdown(codes[1]).total);
+    const ownTopUp = salesTopUpForDeficit(ownNeedNv);
+    if (ownTopUp.salesWon <= 0) return single(codes[0]);
+    if (ownTopUp.salesWon >= topUp.salesWon) return single(codes[1]);
+    const restWon = topUp.salesWon - ownTopUp.salesWon;
+    if (restWon < MIN_SALE_WON) return single(codes[1]);
+    return [
+      {
+        target: codes[1],
+        salesWon: ownTopUp.salesWon,
+        addedNv: ownTopUp.addedNv,
+        excessNv: 0,
+      },
+      {
+        target: codes[0],
+        salesWon: restWon,
+        addedNv: restWon * NV_PER_WON,
+        excessNv: topUp.excessNv,
+      },
+    ];
+  }
+  // codes[1]에 기준선이 없으면 기존처럼 매출 규모가 클 때만 반반 나눈다.
+  if (topUp.salesWon >= SPLIT_SALE_WON) {
     const firstUnits = Math.ceil(units / 2);
     const secondUnits = units - firstUnits;
     if (secondUnits * SALE_UNIT_WON >= MIN_SALE_WON) {
@@ -277,14 +302,7 @@ const splitLineSales = (topUp, codes) => {
       ];
     }
   }
-  return [
-    {
-      target: codes[0],
-      salesWon: topUp.salesWon,
-      addedNv: topUp.addedNv,
-      excessNv: topUp.excessNv,
-    },
-  ];
+  return single(codes[0]);
 };
 
 export function projectClosingCompletion(result) {
