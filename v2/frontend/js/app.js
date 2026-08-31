@@ -11,12 +11,12 @@ import {
   checklistItemCount,
   checklistPage,
 } from "./checklist.js?v=20260829-29";
-import { closingPage, commissionPage } from "./finance.js?v=20260831-39";
-import { performancePage } from "./performance.js?v=20260831-94";
+import { closingPage, commissionPage } from "./finance.js?v=20260831-40";
+import { performancePage } from "./performance.js?v=20260831-95";
 import { teamPage } from "./team.js?v=20260829-35";
 import { localDate, monthRange } from "./date.js?v=20260829-25";
 import { friendlyError } from "./errors.js?v=20260830-1";
-import { adminPage, isAppAdmin } from "./admin.js?v=20260831-14";
+import { adminPage, isAppAdmin } from "./admin.js?v=20260831-15";
 import {
   loadManualLinks,
   mergeManualLinks,

@@ -48,7 +48,12 @@ export function boxCardHtml(row, options = {}) {
       ? `<span class="box-hide restore" data-restore-member="${safe(id)}" role="button" tabindex="0" title="다시 보기">↺</span>`
       : `<span class="box-hide" data-hide-member="${safe(id)}" role="button" tabindex="0" title="숨기기">×</span>`
     : "";
-  return `<${tag} class="box-node ${boxRankTone(row)}${options.selected ? " selected" : ""}${options.marked ? " marked" : ""}${options.sale ? " sale" : ""}${options.hidden ? " box-hidden-card" : ""}"${attrs}><b>${safe(row?.userName || "이름 없음")}</b><small>*${safe(id)}</small><small>${safe(row?.rankName || "회원")}/${safe(row?.rankMaxName || "회원")}</small>${options.hideDate ? "" : `<small>${safe(row?.regDate || "-")}</small>`}<em>본인 ${number(row?.ordPv)} NV</em><span class="box-line-total">라인 전체 ${number(lineOnly)}</span><span class="box-line-total box-grand-total">총(본인+전체) ${number(grandTotal)}</span>${note}${badge}${sale}${hideBtn}</${tag}>`;
+  // "위부터" 우선 배치 토글 — 켜면 이 사람 라인은 부족분을 하위로 안 내려
+  // 보내고 본인 코드로 바로 채운다.
+  const priorityBtn = options.hideable
+    ? `<span class="box-priority${options.priority ? " on" : ""}" data-toggle-priority="${safe(id)}" role="button" tabindex="0" title="${options.priority ? "위부터 우선 배치 켜짐 (누르면 끄기)" : "위부터 우선 배치로 전환"}">⇧</span>`
+    : "";
+  return `<${tag} class="box-node ${boxRankTone(row)}${options.selected ? " selected" : ""}${options.marked ? " marked" : ""}${options.sale ? " sale" : ""}${options.hidden ? " box-hidden-card" : ""}${options.priority ? " box-priority-card" : ""}"${attrs}><b>${safe(row?.userName || "이름 없음")}</b><small>*${safe(id)}</small><small>${safe(row?.rankName || "회원")}/${safe(row?.rankMaxName || "회원")}</small>${options.hideDate ? "" : `<small>${safe(row?.regDate || "-")}</small>`}<em>본인 ${number(row?.ordPv)} NV</em><span class="box-line-total">라인 전체 ${number(lineOnly)}</span><span class="box-line-total box-grand-total">총(본인+전체) ${number(grandTotal)}</span>${note}${badge}${sale}${hideBtn}${priorityBtn}</${tag}>`;
 }
 
 // ctx: { byId: Map, children: Map } — buildPerformanceModel 결과나 동일 구조
@@ -65,6 +70,7 @@ export function boxTreeHtml(ctx, rootId, options = {}) {
   const hiddenIds = options.hiddenIds || new Set();
   const showHidden = Boolean(options.showHidden);
   const hideable = Boolean(options.hideable);
+  const priorityIds = options.priorityIds || new Set();
   const kidsOf = (id) => ctx.children.get(String(id)) || [];
 
   const descendantCount = (id) => {
@@ -111,6 +117,7 @@ export function boxTreeHtml(ctx, rootId, options = {}) {
       marked: Boolean(badges[id]),
       hideable,
       hidden: hiddenIds.has(id),
+      priority: priorityIds.has(id),
     })}${hiddenCount ? `<div class="box-more">아래 ${hiddenCount}명 더 있음</div>` : ""}${childrenHtml}</li>`;
   };
 

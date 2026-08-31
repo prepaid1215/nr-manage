@@ -574,7 +574,9 @@ export function calculatePerformance(
   model,
   selectedMemberId,
   requestedTargets,
+  options = {},
 ) {
+  const preferSelfPlacement = Boolean(options.preferSelfPlacement);
   const targets = normalizeTargets(requestedTargets);
   if (
     targets.mode === "sides" &&
@@ -618,7 +620,15 @@ export function calculatePerformance(
   const ancestorEligible =
     ancestorPayoutFloor > 0 && numeric(member.completedClosingNv) <= 0;
   let ancestorUsed = false;
+  // "위부터" 우선 배치: 이 사업자(member)를 켜두면, 부족분을 하위로 내려
+  // 보내지 않고 이 사람 본인 코드로 바로 채운다. 이미 마감 완료된 코드면
+  // (더 배치할 수 없으니) 평소처럼 하위에서 찾는다.
+  const selfPlaceable =
+    preferSelfPlacement && numeric(member.completedClosingNv) <= 0;
   const placements = [0, 1].map((index) => {
+    if (selfPlaceable) {
+      return { kind: "self", target: member, codes: [member] };
+    }
     const subMember = subMembers[index];
     if (subMember) {
       let codes = placeableCodes(subMember, model.children);

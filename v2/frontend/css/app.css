@@ -240,6 +240,10 @@ button:active{transform:translateY(1px)}button:disabled{cursor:not-allowed;opaci
 .box-hide.restore{color:#2e7d32;font-size:12px}
 .box-hide.restore:hover{border-color:#2e7d32;background:#eaf6ea}
 .box-node.box-hidden-card{opacity:.55;border-style:dashed}
+.box-priority{position:absolute;top:-8px;left:-8px;display:flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#fff;border:1px solid var(--line);color:var(--muted);font-size:12px;font-weight:800;line-height:1;cursor:pointer;box-shadow:0 1px 3px #00000022}
+.box-priority:hover{border-color:var(--brand);color:var(--brand)}
+.box-priority.on{border-color:var(--brand);background:var(--brand);color:#fff}
+.box-node.box-priority-card{border-color:var(--brand);box-shadow:0 0 0 2px #d9d6f5}
 .box-node-collapsed{min-width:auto;width:max-content;padding:4px 8px;display:flex;align-items:center;gap:6px;border-style:dashed;background:#f4f4f4;box-shadow:none}
 .box-node-collapsed small{color:var(--muted);font-size:10px}
 .box-node-collapsed .box-hide{position:static;width:auto;height:auto;border-radius:8px;padding:2px 6px;font-size:10px;font-weight:700}

@@ -15,10 +15,10 @@ import {
   pruneInvalidCompletions,
   salesTopUpForDeficit,
   sortMembersDeepestFirst,
-} from "./performance-calculator.js?v=20260831-60";
-import { boxTreeHtml } from "./box-tree.js?v=20260831-58";
+} from "./performance-calculator.js?v=20260831-61";
+import { boxTreeHtml } from "./box-tree.js?v=20260831-59";
 import { friendlyError } from "./errors.js?v=20260830-1";
-import { isAppAdmin } from "./admin.js?v=20260831-14";
+import { isAppAdmin } from "./admin.js?v=20260831-15";
 
 const PLAN_TABLE = "nrc_closing_plans";
 const MIN_TREE_ZOOM = 0.72;
@@ -201,6 +201,22 @@ export async function performancePage(root, me) {
       localStorage.setItem(TREE_HIDDEN_KEY, JSON.stringify([...hiddenTreeIds]));
     } catch {}
   };
+  // "위부터" 우선 배치 — 켜둔 사업자는 부족분이 하위로 안 내려가고 본인
+  // 코드로 바로 채워진다(마감 완료된 코드면 평소처럼 하위에서 찾음).
+  const PRIORITY_KEY = "nrc-perf-tree-priority";
+  const loadPriorityIds = () => {
+    try {
+      return new Set(JSON.parse(localStorage.getItem(PRIORITY_KEY)) || []);
+    } catch {
+      return new Set();
+    }
+  };
+  const savePriorityIds = () => {
+    try {
+      localStorage.setItem(PRIORITY_KEY, JSON.stringify([...priorityIds]));
+    } catch {}
+  };
+  let priorityIds = loadPriorityIds();
   let hiddenTreeIds = loadHiddenTreeIds();
   let showHiddenTree = false;
   // 숨긴 카드는 계보도에만 안 보이는 게 아니라 계산에서도 빠져야 한다.
@@ -600,7 +616,16 @@ export async function performancePage(root, me) {
       prevScrollLeft = box.scrollLeft;
     const badges = {},
       notes = {},
-      sales = {};
+      salesAgg = {};
+    // 같은 코드에 두 줄(대·소) 매출이 동시에 배치될 수 있어(예: "위부터"
+    // 우선 배치) 마지막 값으로 덮어쓰지 않고 더한다.
+    const addSale = (id, salesWon, addedNv, isSelf) => {
+      const entry = salesAgg[id] || { salesWon: 0, addedNv: 0, isSelf: false };
+      entry.salesWon += salesWon;
+      entry.addedNv += addedNv;
+      entry.isSelf = entry.isSelf || isSelf;
+      salesAgg[id] = entry;
+    };
     items.forEach((item) => {
       if (item.skipped) return;
       const { node, completion, projection, result } = item;
@@ -614,8 +639,7 @@ export async function performancePage(root, me) {
         const isSelf =
           result?.placements[sale.lineIndex]?.kind === "self" ||
           sale.memberId === node.memberId;
-        sales[sale.memberId] =
-          `${fmt(sale.salesWon)}원 → +${fmt(sale.addedNv)} NV${isSelf ? " (본인 코드)" : ""}`;
+        addSale(sale.memberId, sale.salesWon, sale.addedNv, isSelf);
       });
     });
     if (!treeFocusId || !model.byId.has(treeFocusId))
@@ -628,20 +652,24 @@ export async function performancePage(root, me) {
     if (focusTargets?.major && focusTargets?.minor) {
       try {
         withCleanCompletionState(() => {
-          focusResult = calculatePerformance(calcModel, treeFocusId, {
-            majorTarget: focusTargets.major,
-            minorTarget: focusTargets.minor,
-          });
+          focusResult = calculatePerformance(
+            calcModel,
+            treeFocusId,
+            {
+              majorTarget: focusTargets.major,
+              minorTarget: focusTargets.minor,
+            },
+            { preferSelfPlacement: priorityIds.has(treeFocusId) },
+          );
           focusProjection = projectClosingCompletion(focusResult);
         });
         (focusProjection.sales || []).forEach((sale) => {
           if (!sale.memberId || sale.salesWon <= 0) return;
-          if (sales[sale.memberId]) return;
+          if (salesAgg[sale.memberId]) return;
           const isSelf =
             focusResult.placements[sale.lineIndex]?.kind === "self" ||
             sale.memberId === treeFocusId;
-          sales[sale.memberId] =
-            `${fmt(sale.salesWon)}원 → +${fmt(sale.addedNv)} NV${isSelf ? " (본인 코드)" : ""}`;
+          addSale(sale.memberId, sale.salesWon, sale.addedNv, isSelf);
         });
       } catch {
         focusResult = null;
@@ -666,6 +694,12 @@ export async function performancePage(root, me) {
         focusSummary.textContent = `${focusName} 마감안 · 부족한 라인에 배치 가능한 코드가 없어 마감할 수 없습니다.`;
       }
     }
+    const sales = Object.fromEntries(
+      Object.entries(salesAgg).map(([id, entry]) => [
+        id,
+        `${fmt(entry.salesWon)}원 → +${fmt(entry.addedNv)} NV${entry.isSelf ? " (본인 코드)" : ""}`,
+      ]),
+    );
     stage.style.zoom = treeZoom;
     stage.innerHTML = boxTreeHtml(model, treeFocusId, {
       depth: 8,
@@ -679,6 +713,7 @@ export async function performancePage(root, me) {
       hideable: true,
       hiddenIds: hiddenTreeIds,
       showHidden: showHiddenTree,
+      priorityIds,
     });
     const hiddenBtn = $("treeToggleHidden");
     if (hiddenBtn) {
@@ -798,10 +833,12 @@ export async function performancePage(root, me) {
       return `<div class="business-status"><span>계산 상태</span><b>목표를 입력하세요</b></div>`;
     try {
       const { result, projection } = withCleanCompletionState(() => {
-        const result = calculatePerformance(calcModel, id, {
-          majorTarget: major,
-          minorTarget: minor,
-        });
+        const result = calculatePerformance(
+          calcModel,
+          id,
+          { majorTarget: major, minorTarget: minor },
+          { preferSelfPlacement: priorityIds.has(id) },
+        );
         return { result, projection: projectClosingCompletion(result) };
       });
       const currentMajor = fmt(result.effectiveTotals[result.majorIndex]);
@@ -835,10 +872,12 @@ export async function performancePage(root, me) {
         if (card.major && card.minor) {
           try {
             const projection = withCleanCompletionState(() => {
-              const result = calculatePerformance(calcModel, card.id, {
-                majorTarget: card.major,
-                minorTarget: card.minor,
-              });
+              const result = calculatePerformance(
+                calcModel,
+                card.id,
+                { majorTarget: card.major, minorTarget: card.minor },
+                { preferSelfPlacement: priorityIds.has(card.id) },
+              );
               return projectClosingCompletion(result);
             });
             saleTotal = (projection.sales || []).reduce(
@@ -1080,16 +1119,29 @@ export async function performancePage(root, me) {
     const { node, result, projection } = item;
     const badges = {};
     const notes = {};
-    const sales = {};
+    const salesAgg = {};
     const majorIndex = projection.projectedMajorIndex ?? result.majorIndex;
     (projection.sales || []).forEach((sale) => {
       if (!sale.memberId || sale.salesWon <= 0) return;
       const isSelf =
         result.placements[sale.lineIndex]?.kind === "self" ||
         sale.memberId === node.memberId;
-      sales[sale.memberId] =
-        `${fmt(sale.salesWon)}원 → +${fmt(sale.addedNv)} NV${isSelf ? " (본인 코드)" : ""}`;
+      const entry = salesAgg[sale.memberId] || {
+        salesWon: 0,
+        addedNv: 0,
+        isSelf: false,
+      };
+      entry.salesWon += sale.salesWon;
+      entry.addedNv += sale.addedNv;
+      entry.isSelf = entry.isSelf || isSelf;
+      salesAgg[sale.memberId] = entry;
     });
+    const sales = Object.fromEntries(
+      Object.entries(salesAgg).map(([id, entry]) => [
+        id,
+        `${fmt(entry.salesWon)}원 → +${fmt(entry.addedNv)} NV${entry.isSelf ? " (본인 코드)" : ""}`,
+      ]),
+    );
     result.subMembers.forEach((group, index) => {
       if (!group?.length) return;
       const side = index === majorIndex ? "대실적" : "소실적";
@@ -1282,6 +1334,7 @@ export async function performancePage(root, me) {
           calcModel,
           node.memberId,
           nodeTargets(node),
+          { preferSelfPlacement: priorityIds.has(node.memberId) },
         );
         const projection = projectClosingCompletion(result);
         const completion = effectiveCompletion(node.memberId);
@@ -1468,6 +1521,16 @@ export async function performancePage(root, me) {
       renderBusinessGrid();
       return;
     }
+    const priorityTarget = event.target.closest("[data-toggle-priority]");
+    if (priorityTarget) {
+      const id = priorityTarget.dataset.togglePriority;
+      if (priorityIds.has(id)) priorityIds.delete(id);
+      else priorityIds.add(id);
+      savePriorityIds();
+      renderMainTree({ preserveScroll: true });
+      renderBusinessGrid();
+      return;
+    }
     const button = event.target.closest("[data-member]");
     if (!button) return;
     if (treeClickTimer) {
@@ -1481,7 +1544,11 @@ export async function performancePage(root, me) {
     }, 260);
   });
   $("closingMainTree").addEventListener("dblclick", (event) => {
-    if (event.target.closest("[data-hide-member], [data-restore-member]"))
+    if (
+      event.target.closest(
+        "[data-hide-member], [data-restore-member], [data-toggle-priority]",
+      )
+    )
       return;
     const button = event.target.closest("[data-member]");
     if (!button) return;
