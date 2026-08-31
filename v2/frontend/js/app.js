@@ -11,7 +11,7 @@ import {
   checklistItemCount,
   checklistPage,
 } from "./checklist.js?v=20260829-29";
-import { closingPage, commissionPage } from "./finance.js?v=20260831-30";
+import { closingPage, commissionPage } from "./finance.js?v=20260831-31";
 import { performancePage } from "./performance.js?v=20260829-73";
 import { teamPage } from "./team.js?v=20260829-35";
 import { localDate, monthRange } from "./date.js?v=20260829-25";
@@ -188,7 +188,7 @@ async function home() {
     `${Number(todayAct?.balance || 0).toLocaleString()}원`;
   $("attendance").textContent = `${Number(todayAct?.attendance || 0)}명`;
   $("monthlySummary").textContent =
-    `개통 ${monthActivation}건 · 포스팅 ${acts.reduce((s, r) => s + Object.values(r.content?.postings || {}).reduce((a, b) => a + Number(b || 0), 0), 0)}건 · 마감매출 ${(closing.data || []).reduce((s, r) => s + Number(r.closing_sales || 0), 0).toLocaleString()}원 · 수당 ${(commissions.data || []).reduce((s, r) => s + Number(r.amount || 0), 0).toLocaleString()}원`;
+    `개통 ${monthActivation}건 · 포스팅 ${acts.reduce((s, r) => s + Object.values(r.content?.postings || {}).reduce((a, b) => a + Number(b || 0), 0), 0)}건 · 마감매출 ${(closing.data || []).reduce((s, r) => s + Number(r.closing_sales_a || 0) + Number(r.closing_sales_b || 0), 0).toLocaleString()}원 · 수당 ${(commissions.data || []).reduce((s, r) => s + Number(r.amount || 0), 0).toLocaleString()}원`;
   const tasks = (todayAct?.tasks || []).filter(Boolean);
   $("todayTasks").innerHTML = tasks.length
     ? tasks.map((t) => `<li>${safe(t)}</li>`).join("")
