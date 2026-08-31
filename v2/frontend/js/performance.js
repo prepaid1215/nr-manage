@@ -1574,11 +1574,23 @@ export async function performancePage(root, me) {
       ...plan.targetOverrides,
       [memberId]: { majorTarget: major, minorTarget: minor },
     };
+    // 트리 카드에서 목표를 설정하면 STEP1 "사업자별 목표"에도 그 사업자를
+    // 최상위 아래에 카드로 하나 추가한다(이미 있으면 그대로 두고 값만 갱신).
+    if (memberId !== plan.topMemberId) {
+      if (!treePins.some((pin) => pin.id === memberId)) {
+        const row = model.byId.get(memberId);
+        treePins = [...treePins, { id: memberId, name: row?.userName }];
+        saveTreePins(treePins);
+      }
+      pinTargetCache.set(memberId, { major, minor });
+      await saveGoalOnly(memberId, major, minor);
+    }
     $("treeTargetDialog").close();
     // runPlan()이 체크박스 DOM 상태로 closingMemberIds를 덮어쓰기 때문에,
     // 방금 추가한 멤버의 체크박스를 먼저 다시 그려서 체크된 상태로
     // 만들어야 runPlan()에서 그대로 유지되고 방금 입력한 목표가 지워지지 않는다.
     renderClosers();
+    renderBusinessGrid();
     runPlan();
     await persistPlan();
   };
