@@ -159,14 +159,32 @@ def credentials():
         return jsonify({"ok": False, "message": str(exc)}), 500
 
 
+def visible_owner_ids(user_id):
+    """같은 팀(활성 멤버)에 속한 사용자만 서로의 수집 PC를 볼 수 있게 owner_id 집합을 계산한다."""
+    my_teams = admin_request(
+        f"team_members?user_id=eq.{user_id}&active=eq.true&select=team_id"
+    ) or []
+    team_ids = [row["team_id"] for row in my_teams]
+    owner_ids = {user_id}
+    if team_ids:
+        in_list = ",".join(team_ids)
+        co_members = admin_request(
+            f"team_members?team_id=in.({in_list})&active=eq.true&select=user_id"
+        ) or []
+        owner_ids.update(row["user_id"] for row in co_members)
+    return owner_ids
+
+
 @app.route("/devices", methods=["GET", "OPTIONS"])
 def devices():
     if request.method == "OPTIONS":
         return "", 204
     try:
-        user_from_request()
+        user = user_from_request()
+        owner_ids = visible_owner_ids(user["id"])
+        in_list = ",".join(owner_ids)
         rows = admin_request(
-            "nrc_sync_devices?select=device_name,status,last_seen_at&order=last_seen_at.desc"
+            f"nrc_sync_devices?owner_id=in.({in_list})&select=device_name,status,last_seen_at&order=last_seen_at.desc"
         ) or []
         return jsonify({"ok": True, "devices": rows})
     except PermissionError as exc:

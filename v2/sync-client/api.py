@@ -528,11 +528,14 @@ def ensure_chromium_installed():
 
 
 def open_setup_page_if_needed():
-    if worker_configuration().get("configured"):
-        return
-
     def _open():
-        time.sleep(1.5)
+        # Windows 로그인 직후에는 자격 증명 저장소(DPAPI)가 아직 준비되지 않아
+        # keyring 조회가 일시적으로 실패할 수 있다. 즉시 판단하지 않고
+        # 여유를 두고 여러 번 재확인한 뒤에도 미등록이면 그때 설정 화면을 연다.
+        for attempt in range(5):
+            time.sleep(3 if attempt == 0 else 5)
+            if worker_configuration().get("configured"):
+                return
         try:
             webbrowser.open("http://127.0.0.1:5050/setup")
         except Exception:
