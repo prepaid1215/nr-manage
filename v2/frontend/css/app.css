@@ -258,6 +258,11 @@ button:active{transform:translateY(1px)}button:disabled{cursor:not-allowed;opaci
 .box-more{margin-top:5px;font-size:10px;color:var(--muted)}
 .box-search-hits{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
 @media(max-width:700px){.box-tools{display:grid;grid-template-columns:1fr 1fr}.box-tools>button,.box-zoom{grid-column:1/-1}.box-tree{max-height:66vh}.box-node{min-width:118px}}
+.closing-candidates{border-color:#e2a45f}
+#closingCandidates{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.closing-candidate{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border:1px solid #f6d9b6;border-radius:10px;background:#fdf6ec}
+.closing-candidate b{display:block;font-size:12px}
+.closing-candidate small{color:var(--muted);font-size:11px}
 /* Genealogy check inside a closing step */
 .closing-tree{margin:10px 0;border:1px solid var(--line);border-radius:11px;background:#fff;overflow:hidden}
 .closing-tree>summary{padding:11px 13px;cursor:pointer;font-size:12px;font-weight:800;color:var(--brand);background:#f5f8ff}
