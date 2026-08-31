@@ -541,10 +541,13 @@ export async function performancePage(root, me) {
     $("treeTargetDialog").dataset.member = memberId;
     $("treeTargetDialog").showModal();
   };
-  const renderMainTree = () => {
+  const renderMainTree = (options = {}) => {
     const box = $("closingMainTree"),
       stage = $("closingMainTreeStage");
     if (!box || !stage) return;
+    const preserveScroll = Boolean(options.preserveScroll);
+    const prevScrollTop = box.scrollTop,
+      prevScrollLeft = box.scrollLeft;
     const badges = {},
       notes = {},
       sales = {};
@@ -632,10 +635,17 @@ export async function performancePage(root, me) {
         : `숨긴 카드 보기${hiddenTreeIds.size ? ` (${hiddenTreeIds.size})` : ""}`;
       hiddenBtn.disabled = !showHiddenTree && hiddenTreeIds.size === 0;
     }
-    box.scrollTop = 0;
-    requestAnimationFrame(() => {
-      box.scrollLeft = Math.max(0, (box.scrollWidth - box.clientWidth) / 2);
-    });
+    if (preserveScroll) {
+      box.scrollTop = prevScrollTop;
+      requestAnimationFrame(() => {
+        box.scrollLeft = prevScrollLeft;
+      });
+    } else {
+      box.scrollTop = 0;
+      requestAnimationFrame(() => {
+        box.scrollLeft = Math.max(0, (box.scrollWidth - box.clientWidth) / 2);
+      });
+    }
   };
   const setTreeZoom = (value) => {
     treeZoom = Math.min(1.8, Math.max(0.3, value));
@@ -1325,14 +1335,14 @@ export async function performancePage(root, me) {
     if (hideTarget) {
       hiddenTreeIds.add(hideTarget.dataset.hideMember);
       saveHiddenTreeIds();
-      renderMainTree();
+      renderMainTree({ preserveScroll: true });
       return;
     }
     const restoreTarget = event.target.closest("[data-restore-member]");
     if (restoreTarget) {
       hiddenTreeIds.delete(restoreTarget.dataset.restoreMember);
       saveHiddenTreeIds();
-      renderMainTree();
+      renderMainTree({ preserveScroll: true });
       return;
     }
     const button = event.target.closest("[data-member]");
@@ -1360,7 +1370,7 @@ export async function performancePage(root, me) {
   });
   $("treeToggleHidden").onclick = () => {
     showHiddenTree = !showHiddenTree;
-    renderMainTree();
+    renderMainTree({ preserveScroll: true });
   };
   $("treeTargetClose").onclick = () => $("treeTargetDialog").close();
   $("treeTargetForm").onsubmit = async (event) => {
