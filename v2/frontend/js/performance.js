@@ -275,8 +275,9 @@ export async function performancePage(root, me) {
       alert(`목표 저장에 실패했습니다: ${loadError.message}`);
       return false;
     }
+    const { id: _existingId, ...existingFields } = existingRow || {};
     const row = {
-      ...(existingRow || {}),
+      ...existingFields,
       owner_id: ownerId,
       top_member_id: topMemberId,
       top_major_target: major,
