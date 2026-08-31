@@ -159,20 +159,9 @@ def credentials():
         return jsonify({"ok": False, "message": str(exc)}), 500
 
 
-def visible_owner_ids(user_id):
-    """같은 팀(활성 멤버)에 속한 사용자만 서로의 수집 PC를 볼 수 있게 owner_id 집합을 계산한다."""
-    my_teams = admin_request(
-        f"team_members?user_id=eq.{user_id}&active=eq.true&select=team_id"
-    ) or []
-    team_ids = [row["team_id"] for row in my_teams]
-    owner_ids = {user_id}
-    if team_ids:
-        in_list = ",".join(team_ids)
-        co_members = admin_request(
-            f"team_members?team_id=in.({in_list})&active=eq.true&select=user_id"
-        ) or []
-        owner_ids.update(row["user_id"] for row in co_members)
-    return owner_ids
+def is_app_admin(user_id):
+    rows = admin_request(f"app_admins?user_id=eq.{user_id}&select=user_id") or []
+    return bool(rows)
 
 
 @app.route("/devices", methods=["GET", "OPTIONS"])
@@ -181,10 +170,10 @@ def devices():
         return "", 204
     try:
         user = user_from_request()
-        owner_ids = visible_owner_ids(user["id"])
-        in_list = ",".join(owner_ids)
+        if not is_app_admin(user["id"]):
+            raise PermissionError("전체 수집 PC 목록은 관리자만 볼 수 있습니다.")
         rows = admin_request(
-            f"nrc_sync_devices?owner_id=in.({in_list})&select=device_name,status,last_seen_at&order=last_seen_at.desc"
+            "nrc_sync_devices?select=device_name,status,last_seen_at&order=last_seen_at.desc"
         ) or []
         return jsonify({"ok": True, "devices": rows})
     except PermissionError as exc:
