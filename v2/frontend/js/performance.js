@@ -23,6 +23,19 @@ import { isAppAdmin } from "./admin.js?v=20260831-12";
 const PLAN_TABLE = "nrc_closing_plans";
 const MIN_TREE_ZOOM = 0.72;
 const LOCAL_PLAN_KEY = "nrc-closing-plan-backup";
+const TOP_MEMBER_KEY = "nrc-perf-top-member-id";
+const loadStoredTopMemberId = () => {
+  try {
+    return localStorage.getItem(TOP_MEMBER_KEY) || null;
+  } catch {
+    return null;
+  }
+};
+const saveStoredTopMemberId = (id) => {
+  try {
+    if (id) localStorage.setItem(TOP_MEMBER_KEY, String(id));
+  } catch {}
+};
 const fmt = (value) => Number(value || 0).toLocaleString("ko-KR");
 const safe = (value) =>
   String(value ?? "").replace(
@@ -299,6 +312,7 @@ export async function performancePage(root, me) {
   async function switchToTopMember(topMemberId) {
     if (!model.byId.has(String(topMemberId))) return;
     plan = await loadPlanFor(topMemberId);
+    saveStoredTopMemberId(plan.topMemberId);
     plan.closingMemberIds = (plan.closingMemberIds || [])
       .map(String)
       .filter((id) => model.byId.has(id));
@@ -407,12 +421,15 @@ export async function performancePage(root, me) {
   }
 
   if (storage === "supabase") {
-    const { data: planRow, error: planError } = await supabase
-      .from(PLAN_TABLE)
-      .select("*")
-      .order("updated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    // 여러 사업자(핀)를 등록하면 nrc_closing_plans에 사업자별로 행이 여러 개
+    // 생긴다. "가장 최근에 수정된 행"을 최상위로 오해하면, 핀 목표만 바꿔도
+    // 새로고침 때 최상위가 그 핀으로 바뀌어버린다. 그래서 이 브라우저가
+    // 마지막으로 최상위로 쓰던 사업자를 기억해뒀다가 그 행을 정확히 찾는다.
+    const storedTopId = loadStoredTopMemberId();
+    const query = supabase.from(PLAN_TABLE).select("*").eq("owner_id", ownerId);
+    const { data: planRow, error: planError } = storedTopId
+      ? await query.eq("top_member_id", storedTopId).maybeSingle()
+      : await query.order("updated_at", { ascending: false }).limit(1).maybeSingle();
     if (planError) {
       storage = "local";
       storageNote = /does not exist|schema cache|relation/i.test(
@@ -422,6 +439,12 @@ export async function performancePage(root, me) {
         : `Supabase 조회 오류: ${planError.message}`;
     } else if (planRow) {
       plan = rowToPlan(planRow);
+    } else if (storedTopId && model.byId.has(storedTopId)) {
+      // 기억해둔 최상위 사업자는 아직 목표를 저장한 적이 없는 상태 —
+      // 다른 사업자 행으로 잘못 대체하지 말고 그 사람 기준의 새 계획으로 시작한다.
+      plan = defaultPlan();
+      plan.topMemberId = storedTopId;
+      plan.closingMemberIds = [storedTopId];
     } else {
       const migrated = legacyPlan();
       if (migrated) {
@@ -437,6 +460,7 @@ export async function performancePage(root, me) {
       defaultPlan();
   }
   if (!model.byId.has(String(plan.topMemberId))) plan = defaultPlan();
+  saveStoredTopMemberId(plan.topMemberId);
   plan.closingMemberIds = (plan.closingMemberIds || [])
     .map(String)
     .filter((id) => model.byId.has(id));
