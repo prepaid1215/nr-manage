@@ -48,10 +48,13 @@ export function boxCardHtml(row, options = {}) {
       ? `<span class="box-hide restore" data-restore-member="${safe(id)}" role="button" tabindex="0" title="다시 보기">↺</span>`
       : `<span class="box-hide" data-hide-member="${safe(id)}" role="button" tabindex="0" title="숨기기">×</span>`
     : "";
-  // "위부터" 우선 배치 토글 — 켜면 이 사람 라인은 부족분을 하위로 안 내려
-  // 보내고 본인 코드로 바로 채운다.
+  // "위부터" 우선 배치 토글 — 켜면(▼, 상위부터 아래로) 이 사람 라인은
+  // 부족분을 하위로 안 내려 보내고 본인 코드로 바로 채운다. 꺼져 있으면
+  // (▲, 아래서 위로) 기존처럼 가장 깊은 하위부터 채워 위로 올라온다.
   const priorityBtn = options.hideable
-    ? `<span class="box-priority${options.priority ? " on" : ""}" data-toggle-priority="${safe(id)}" role="button" tabindex="0" title="${options.priority ? "위부터 우선 배치 켜짐 (누르면 끄기)" : "위부터 우선 배치로 전환"}">⇧</span>`
+    ? options.priority
+      ? `<span class="box-priority on" data-toggle-priority="${safe(id)}" role="button" tabindex="0" title="상위부터 아래로 채우는 중 (누르면 끄기)">▼</span>`
+      : `<span class="box-priority" data-toggle-priority="${safe(id)}" role="button" tabindex="0" title="아래에서 위로 채우는 중 (누르면 상위부터 채우기로 전환)">▲</span>`
     : "";
   return `<${tag} class="box-node ${boxRankTone(row)}${options.selected ? " selected" : ""}${options.marked ? " marked" : ""}${options.sale ? " sale" : ""}${options.hidden ? " box-hidden-card" : ""}${options.priority ? " box-priority-card" : ""}"${attrs}><b>${safe(row?.userName || "이름 없음")}</b><small>*${safe(id)}</small><small>${safe(row?.rankName || "회원")}/${safe(row?.rankMaxName || "회원")}</small>${options.hideDate ? "" : `<small>${safe(row?.regDate || "-")}</small>`}<em>본인 ${number(row?.ordPv)} NV</em><span class="box-line-total">라인 전체 ${number(lineOnly)}</span><span class="box-line-total box-grand-total">총(본인+전체) ${number(grandTotal)}</span>${note}${badge}${sale}${hideBtn}${priorityBtn}</${tag}>`;
 }
