@@ -18,6 +18,12 @@ import { localDate, monthRange } from "./date.js?v=20260829-25";
 import { friendlyError } from "./errors.js?v=20260830-1";
 import { adminPage, isAppAdmin } from "./admin.js?v=20260831-5";
 import {
+  loadManualLinks,
+  mergeManualLinks,
+  addManualLink,
+  removeManualLink,
+} from "./genealogy-links.js?v=20260831-1";
+import {
   installInteractionTracking,
   setTelemetryPage,
   setTelemetryUser,
@@ -409,7 +415,7 @@ async function organizationTree() {
 }
 async function organizationDashboard(targetOwner) {
   $("content").innerHTML =
-    `<section class="card"><div class="section-head"><div><h2>${targetOwner ? `${safe(targetOwner.name)}의 조직 현황` : "조직 현황"}</h2><p class="help" id="orgCollected">최신 데이터를 불러오는 중...</p></div><button class="secondary compact" id="orgReload" type="button">새로고침</button></div>${targetOwner ? `<button class="secondary compact" id="orgBack" type="button">← 내 조직으로</button>` : ""}<div class="view-tabs"><button class="active" data-view="list" type="button">하위 매출 현황</button><button data-view="tree" type="button">계보도</button></div><div class="org-summary" id="orgSummary"></div><label>회원 검색<input id="orgSearch" type="search" placeholder="이름 또는 회원번호"></label><div class="depth-filter" id="depthFilter" hidden></div><div id="orgError" class="error"></div><section class="card member-sales-card member-sales-inline"><h2>선택 회원 매출 현황</h2><div id="memberDetailInline"><p class="help">회원 이름을 선택하세요.</p></div></section><div id="orgView"></div></section>`;
+    `<section class="card"><div class="section-head"><div><h2>${targetOwner ? `${safe(targetOwner.name)}의 조직 현황` : "조직 현황"}</h2><p class="help" id="orgCollected">최신 데이터를 불러오는 중...</p></div><button class="secondary compact" id="orgReload" type="button">새로고침</button></div>${targetOwner ? `<button class="secondary compact" id="orgBack" type="button">← 내 조직으로</button>` : ""}<div class="view-tabs"><button class="active" data-view="list" type="button">하위 매출 현황</button><button data-view="tree" type="button">계보도</button></div><details class="genealogy-link-manager"><summary>계보 연결이 끊긴 사람 수동으로 잇기</summary><p class="help">앤텔레콤 사이트는 계보를 10단계까지만 보여줘서, 활동하는 사람이 없어 끊긴 구간은 자동으로 이어지지 않습니다. 여기서 이어 붙이면 화면에서만 연결되어 보이고(수동 표시), 실적·NV 집계에는 들어가지 않습니다.</p><form id="manualLinkForm" class="inline-form"><input id="manualLinkMemberId" placeholder="회원번호" required><input id="manualLinkMemberName" placeholder="이름" required><input id="manualLinkParentId" placeholder="상위 회원번호" required><button class="primary compact" type="submit">연결 추가</button></form><div id="manualLinkError" class="error"></div><div id="manualLinkList" class="fav-list"></div></details><div class="org-summary" id="orgSummary"></div><label>회원 검색<input id="orgSearch" type="search" placeholder="이름 또는 회원번호"></label><div class="depth-filter" id="depthFilter" hidden></div><div id="orgError" class="error"></div><section class="card member-sales-card member-sales-inline"><h2>선택 회원 매출 현황</h2><div id="memberDetailInline"><p class="help">회원 이름을 선택하세요.</p></div></section><div id="orgView"></div></section>`;
   $("orgReload").onclick = () => organizationDashboard(targetOwner);
   if (targetOwner)
     $("orgBack").onclick = () => organizationDashboard();
@@ -429,10 +435,51 @@ async function organizationDashboard(targetOwner) {
         '<p class="help">수집 탭에서 먼저 JSON을 저장하세요.</p>';
       return;
     }
-    const payload =
+    const ownerId = targetOwner?.id || me.id;
+    const rawPayload =
       typeof data.payload === "string"
         ? JSON.parse(data.payload)
         : data.payload;
+    const manualLinks = await loadManualLinks(ownerId);
+    const payload = mergeManualLinks(rawPayload, manualLinks);
+    const renderManualLinks = () => {
+      const box = $("manualLinkList");
+      if (!box) return;
+      box.innerHTML = manualLinks.length
+        ? manualLinks
+            .map(
+              (link) =>
+                `<span class="fav-chip">${safe(link.member_name)} (${safe(link.member_id)}) → ${safe(link.parent_id)}<i class="del" data-link-del="${safe(link.id)}">×</i></span>`,
+            )
+            .join("")
+        : '<span class="help">등록된 수동 연결이 없습니다.</span>';
+      box.querySelectorAll("[data-link-del]").forEach(
+        (btn) =>
+          (btn.onclick = async () => {
+            await removeManualLink(btn.dataset.linkDel);
+            organizationDashboard(targetOwner);
+          }),
+      );
+    };
+    renderManualLinks();
+    $("manualLinkForm").onsubmit = async (event) => {
+      event.preventDefault();
+      $("manualLinkError").textContent = "";
+      const memberId = $("manualLinkMemberId").value.trim(),
+        memberName = $("manualLinkMemberName").value.trim(),
+        parentId = $("manualLinkParentId").value.trim();
+      if (!memberId || !memberName || !parentId) return;
+      const { error: linkError } = await addManualLink(ownerId, {
+        memberId,
+        memberName,
+        parentId,
+      });
+      if (linkError) {
+        $("manualLinkError").textContent = friendlyError(linkError);
+        return;
+      }
+      organizationDashboard(targetOwner);
+    };
     const sales = new Map(
       (payload.members || []).map((item) => [String(item.userId), item]),
     );
@@ -556,13 +603,12 @@ async function organizationDashboard(targetOwner) {
       const next = new Set(path);
       next.add(String(item.userId));
       const descendants = (children.get(String(item.userId)) || [])
-        .filter((child) => (Number(child.lv) || 0) <= 10)
         .sort(
           (a, b) =>
             String(a.abPos || "").localeCompare(String(b.abPos || "")) ||
             String(a.userId).localeCompare(String(b.userId)),
         );
-      const content = `<span class="sales-summary"><b>${safe(item.userName || "이름 없음")} <small>(${safe(item.userId || "코드 없음")}) (${safe(item.rankName || "회원")})</small></b><span>대실적 : <strong>${number(item.maxPv)}</strong></span><span>소실적 : <strong>${number(item.minPv)}</strong></span></span>`;
+      const content = `<span class="sales-summary"><b>${safe(item.userName || "이름 없음")} <small>(${safe(item.userId || "코드 없음")}) (${safe(item.rankName || "회원")})</small>${item.manualLink ? ' <i class="manual-link-badge">수동 연결</i>' : ""}</b><span>대실적 : <strong>${number(item.maxPv)}</strong></span><span>소실적 : <strong>${number(item.minPv)}</strong></span></span>`;
       if (!descendants.length) {
         return `<li><button class="family-node family-leaf" data-member="${safe(item.userId)}" type="button">${content}</button></li>`;
       }
@@ -573,7 +619,6 @@ async function organizationDashboard(targetOwner) {
       const next = new Set(path);
       next.add(String(item.userId));
       const descendants = (children.get(String(item.userId)) || [])
-          .filter((child) => (Number(child.lv) || 0) <= 10)
           .sort(
             (a, b) =>
               String(a.abPos || "").localeCompare(String(b.abPos || "")) ||
@@ -581,7 +626,7 @@ async function organizationDashboard(targetOwner) {
           ),
         sub1 = branchTotal(descendants[0]),
         sub2 = branchTotal(descendants[1]),
-        content = `<b>${safe(item.userName || "이름 없음")}</b><small>*${safe(String(item.userId || "").slice(-6))} · ${safe(item.rankName || "회원")} / ${safe(item.rankMaxName || "회원")}</small><span class="family-own">본인 NV <strong>${number(item.ordPv)}</strong></span><span class="family-sales"><em>서브1 실적<strong>${number(sub1)}</strong></em><em>서브2 실적<strong>${number(sub2)}</strong></em><em>대실적<strong>${number(item.maxPv)}</strong></em><em>소실적<strong>${number(item.minPv)}</strong></em></span>`;
+        content = `<b>${safe(item.userName || "이름 없음")}${item.manualLink ? ' <i class="manual-link-badge">수동</i>' : ""}</b><small>*${safe(String(item.userId || "").slice(-6))} · ${safe(item.rankName || "회원")} / ${safe(item.rankMaxName || "회원")}</small><span class="family-own">본인 NV <strong>${number(item.ordPv)}</strong></span><span class="family-sales"><em>서브1 실적<strong>${number(sub1)}</strong></em><em>서브2 실적<strong>${number(sub2)}</strong></em><em>대실적<strong>${number(item.maxPv)}</strong></em><em>소실적<strong>${number(item.minPv)}</strong></em></span>`;
       return `<li><button class="family-node" data-member="${safe(item.userId)}" data-tree-focus type="button">${content}</button>${descendants.length ? `<ul>${descendants.map((child) => horizontalTreeNode(child, next)).join("")}</ul>` : ""}</li>`;
     };
     const render = () => {
