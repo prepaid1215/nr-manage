@@ -14,7 +14,7 @@ const pageNames = {
   organization: "조직", performance: "실적", commission: "수당",
   closing: "마감", team: "팀", settings: "설정", admin: "관리자",
 };
-const eventNames = { page_view: "화면 방문", action: "버튼 사용", submit: "저장/실행" };
+const eventNames = { page_view: "화면 방문", action: "버튼 사용", submit: "저장/실행", error: "오류" };
 
 export async function isAppAdmin() {
   const { data, error } = await supabase.rpc("is_app_admin");
@@ -82,7 +82,11 @@ export async function adminPage(root) {
     $("adminSummary").innerHTML = `<article><span>전체 가입자</span><b>${users.length}명</b></article><article><span>오늘 활동</span><b>${activeToday}명</b></article><article><span>최근 오류</span><b>${errorsToday}건</b></article><article><span>전체 수집</span><b>${totalCollections.toLocaleString()}회</b></article><article><span>수집 실패</span><b>${totalCollectionErrors.toLocaleString()}건</b></article>`;
     renderUsers();
     $("adminEvents").innerHTML = events.length
-      ? events.map((row) => `<article><time>${safe(date(row.created_at))}</time><b>${safe(row.user_name || row.username || "사용자")}</b><span>${safe(eventNames[row.event_type] || row.event_type)} · ${safe(pageNames[row.page] || row.page || "-")}${row.action ? ` · ${safe(row.action)}` : ""}</span></article>`).join("")
+      ? events.map((row) => {
+          const isError = row.event_type === "error";
+          const detailMessage = [row.detail?.name, row.detail?.message].filter(Boolean).join(": ");
+          return `<article${isError ? ' class="admin-event-error"' : ""}><time>${safe(date(row.created_at))}</time><b>${safe(row.user_name || row.username || "사용자")}</b><span>${safe(eventNames[row.event_type] || row.event_type)} · ${safe(pageNames[row.page] || row.page || "-")}${row.action ? ` · ${safe(row.action)}` : ""}</span>${isError && detailMessage ? `<small class="error">${safe(detailMessage)}</small>` : ""}</article>`;
+        }).join("")
       : '<p class="help">아직 기록된 행동이 없습니다.</p>';
   };
   $("adminSearch").oninput = renderUsers;

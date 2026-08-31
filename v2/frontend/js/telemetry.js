@@ -55,9 +55,16 @@ export function installInteractionTracking() {
     trackEvent("submit", action);
   });
   window.addEventListener("error", (event) => {
-    trackEvent("error", "javascript_error", { name: event.error?.name || "Error" });
+    trackEvent("error", "javascript_error", {
+      name: event.error?.name || "Error",
+      message: String(event.error?.message || event.message || "").slice(0, 300),
+    });
   });
   window.addEventListener("unhandledrejection", (event) => {
-    trackEvent("error", "unhandled_promise", { name: event.reason?.name || "Error" });
+    const reason = event.reason;
+    trackEvent("error", "unhandled_promise", {
+      name: reason?.name || "Error",
+      message: String(reason?.message || (typeof reason === "string" ? reason : "") || "").slice(0, 300),
+    });
   });
 }

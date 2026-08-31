@@ -16,13 +16,13 @@ import { performancePage } from "./performance.js?v=20260829-73";
 import { teamPage } from "./team.js?v=20260829-35";
 import { localDate, monthRange } from "./date.js?v=20260829-25";
 import { friendlyError } from "./errors.js?v=20260830-1";
-import { adminPage, isAppAdmin } from "./admin.js?v=20260831-4";
+import { adminPage, isAppAdmin } from "./admin.js?v=20260831-5";
 import {
   installInteractionTracking,
   setTelemetryPage,
   setTelemetryUser,
   trackEvent,
-} from "./telemetry.js?v=20260830-1";
+} from "./telemetry.js?v=20260831-2";
 const $ = (id) => document.getElementById(id);
 let me = null,
   authMode = "login",
@@ -772,6 +772,8 @@ function setupAdminToggle() {
       if (error) throw error;
       button.textContent = data ? "관리자 모드 끄기" : "관리자 모드 켜기";
       status.textContent = data ? "관리자 모드 켜짐" : "관리자 모드 꺼짐";
+      appAdmin = Boolean(data);
+      nav();
     } catch (err) {
       status.textContent = friendlyError(err);
     }
