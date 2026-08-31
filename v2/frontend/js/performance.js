@@ -1288,6 +1288,10 @@ export async function performancePage(root, me) {
       [memberId]: { majorTarget: major, minorTarget: minor },
     };
     $("treeTargetDialog").close();
+    // runPlan()이 체크박스 DOM 상태로 closingMemberIds를 덮어쓰기 때문에,
+    // 방금 추가한 멤버의 체크박스를 먼저 다시 그려서 체크된 상태로
+    // 만들어야 runPlan()에서 그대로 유지되고 방금 입력한 목표가 지워지지 않는다.
+    renderClosers();
     runPlan();
     await persistPlan();
   };
