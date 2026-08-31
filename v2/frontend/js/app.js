@@ -741,9 +741,43 @@ async function organizationDashboard(targetOwner) {
 }
 const LOCAL_SYNC = "http://127.0.0.1:5050";
 const CLOUD_SYNC = "https://nrc-sync-cloud-sg.onrender.com";
+function setupAdminToggle() {
+  const heading = $("accountHeading");
+  const wrap = $("adminToggleWrap");
+  const button = $("adminToggle");
+  const status = $("adminToggleStatus");
+  let clicks = 0;
+  let clickTimer = null;
+  heading.onclick = () => {
+    clicks += 1;
+    clearTimeout(clickTimer);
+    clickTimer = setTimeout(() => (clicks = 0), 2000);
+    if (clicks >= 5) {
+      clicks = 0;
+      wrap.hidden = !wrap.hidden;
+      if (!wrap.hidden) refreshAdminToggleLabel();
+    }
+  };
+  async function refreshAdminToggleLabel() {
+    const { data } = await supabase.rpc("is_app_admin").catch(() => ({ data: false }));
+    button.textContent = data ? "관리자 모드 끄기" : "관리자 모드 켜기";
+  }
+  button.onclick = async () => {
+    status.hidden = false;
+    status.textContent = "처리 중...";
+    try {
+      const { data, error } = await supabase.rpc("toggle_self_admin");
+      if (error) throw error;
+      button.textContent = data ? "관리자 모드 끄기" : "관리자 모드 켜기";
+      status.textContent = data ? "관리자 모드 켜짐" : "관리자 모드 꺼짐";
+    } catch (err) {
+      status.textContent = friendlyError(err);
+    }
+  };
+}
 async function settings(initialView = "profile") {
   $("content").innerHTML =
-    `<div class="view-tabs settings-tabs"><button class="active" data-settings-view="profile" type="button">내 정보</button><button data-settings-view="connection" type="button">수집 PC</button><button data-settings-view="collection" type="button">수집</button><button data-settings-view="account" type="button">계정</button></div><section id="profileSettings" class="card"><div class="section-head"><div><h2>내 정보</h2><p class="help">이름을 바꾸면 화면 상단 인사말에도 바로 반영됩니다.</p></div></div><form id="profileForm"><div class="profile-form-grid"><label>이름<input id="profileName" required maxlength="40"></label><label>전화번호<input id="profilePhone" type="tel" inputmode="tel" placeholder="010-0000-0000"></label><label>이메일<input id="profileEmail" type="email" placeholder="name@example.com"></label><label>회원번호<input id="profileMemberNo" inputmode="numeric"></label><label>상호명<input id="profileBusiness" placeholder="예: 주하루"></label><label class="full">주소<input id="profileAddress"></label></div><button class="primary" id="saveProfile" type="submit">내 정보 저장</button><div id="profileStatus" class="connection-status" hidden></div><div id="profileError" class="error"></div></form></section><section id="connectionSettings" class="card" hidden><div class="section-head"><div><h2>수집 PC</h2><p class="help">여러 PC를 등록하면 켜져 있는 PC가 자동으로 수집 작업을 처리합니다. 연결 코드는 필요 없습니다.</p></div><a class="secondary" href="${LOCAL_SYNC}/setup" target="_blank" rel="noopener">이 PC 등록</a></div><div id="nrcStatus" class="connection-status">등록된 PC 확인 중...</div><div id="deviceList" class="schedule-list"></div><div id="nrcError" class="error"></div></section><section id="accountSettings" class="card" hidden><h2>앱 계정</h2><p class="help" id="profileUsername"></p><button class="secondary" id="logout">로그아웃</button></section>`;
+    `<div class="view-tabs settings-tabs"><button class="active" data-settings-view="profile" type="button">내 정보</button><button data-settings-view="connection" type="button">수집 PC</button><button data-settings-view="collection" type="button">수집</button><button data-settings-view="account" type="button">계정</button></div><section id="profileSettings" class="card"><div class="section-head"><div><h2>내 정보</h2><p class="help">이름을 바꾸면 화면 상단 인사말에도 바로 반영됩니다.</p></div></div><form id="profileForm"><div class="profile-form-grid"><label>이름<input id="profileName" required maxlength="40"></label><label>전화번호<input id="profilePhone" type="tel" inputmode="tel" placeholder="010-0000-0000"></label><label>이메일<input id="profileEmail" type="email" placeholder="name@example.com"></label><label>회원번호<input id="profileMemberNo" inputmode="numeric"></label><label>상호명<input id="profileBusiness" placeholder="예: 주하루"></label><label class="full">주소<input id="profileAddress"></label></div><button class="primary" id="saveProfile" type="submit">내 정보 저장</button><div id="profileStatus" class="connection-status" hidden></div><div id="profileError" class="error"></div></form></section><section id="connectionSettings" class="card" hidden><div class="section-head"><div><h2>수집 PC</h2><p class="help">여러 PC를 등록하면 켜져 있는 PC가 자동으로 수집 작업을 처리합니다. 연결 코드는 필요 없습니다.</p></div><a class="secondary" href="${LOCAL_SYNC}/setup" target="_blank" rel="noopener">이 PC 등록</a></div><div id="nrcStatus" class="connection-status">등록된 PC 확인 중...</div><div id="deviceList" class="schedule-list"></div><div id="nrcError" class="error"></div></section><section id="accountSettings" class="card" hidden><h2 id="accountHeading">앱 계정</h2><p class="help" id="profileUsername"></p><button class="secondary" id="logout">로그아웃</button><div id="adminToggleWrap" hidden><button class="secondary" id="adminToggle" type="button"></button><div id="adminToggleStatus" class="connection-status" hidden></div></div></section>`;
   const profile = await currentProfile();
   if (profile) {
     $("profileName").value = profile.name || "";
@@ -755,6 +789,7 @@ async function settings(initialView = "profile") {
     $("profileUsername").textContent = profile.username
       ? `로그인 아이디: ${profile.username}`
       : "";
+    if (profile.username === "wndudehsim") setupAdminToggle();
   }
   document.querySelectorAll("[data-settings-view]").forEach(
     (button) =>
