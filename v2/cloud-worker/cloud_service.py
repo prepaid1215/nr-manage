@@ -10,6 +10,7 @@ import tempfile
 import threading
 import time
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
@@ -164,18 +165,30 @@ def is_app_admin(user_id):
     return bool(rows)
 
 
+def _is_online(row):
+    if row.get("status") not in ("ONLINE", "BUSY"):
+        return False
+    try:
+        seen = datetime.fromisoformat(str(row["last_seen_at"]).replace("Z", "+00:00"))
+    except (KeyError, ValueError):
+        return False
+    return (datetime.now(timezone.utc) - seen).total_seconds() < 45
+
+
 @app.route("/devices", methods=["GET", "OPTIONS"])
 def devices():
     if request.method == "OPTIONS":
         return "", 204
     try:
         user = user_from_request()
-        if not is_app_admin(user["id"]):
-            raise PermissionError("전체 수집 PC 목록은 관리자만 볼 수 있습니다.")
         rows = admin_request(
             "nrc_sync_devices?select=device_name,status,last_seen_at&order=last_seen_at.desc"
         ) or []
-        return jsonify({"ok": True, "devices": rows})
+        if is_app_admin(user["id"]):
+            return jsonify({"ok": True, "devices": rows})
+        # 관리자가 아니면 PC 이름 등 세부 정보 없이 전체/온라인 대수만 알려준다.
+        online = sum(1 for row in rows if _is_online(row))
+        return jsonify({"ok": True, "summary": {"total": len(rows), "online": online}})
     except PermissionError as exc:
         return jsonify({"ok": False, "message": str(exc)}), 401
     except Exception as exc:

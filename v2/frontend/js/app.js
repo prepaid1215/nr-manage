@@ -1065,7 +1065,7 @@ async function loadRecentJobs() {
     .from("nrc_sync_jobs")
     .select("id,source_account_id,status,message,error,requested_at,completed_at")
     .order("requested_at", { ascending: false })
-    .limit(10);
+    .limit(2);
   if (error) {
     list.innerHTML = `<p class="error">${safe(friendlyError(error))}</p>`;
     return;
@@ -1108,10 +1108,16 @@ async function runHomeCollection() {
   }
 }
 let lastSharedDevicesError = "";
+let lastSharedDevicesSummary = null;
 async function loadSharedDevices() {
+  lastSharedDevicesSummary = null;
   try {
     const data = await cloudApi("/devices");
     lastSharedDevicesError = "";
+    if (data.summary) {
+      lastSharedDevicesSummary = data.summary;
+      return [];
+    }
     return data.devices || [];
   } catch (err) {
     lastSharedDevicesError = friendlyError(err);
@@ -1124,6 +1130,15 @@ async function loadHomePcStatus() {
   if (!box) return;
   try {
     const devices = await loadSharedDevices();
+    if (lastSharedDevicesSummary) {
+      const { total, online } = lastSharedDevicesSummary;
+      box.innerHTML = online
+        ? `<span class="device-dot online"></span><span>공유 수집 PC 온라인 ${online}대 · 지금 수집 가능</span>`
+        : total
+          ? `<span class="device-dot offline"></span><span>공유 수집 PC가 모두 오프라인입니다 · 요청은 대기 후 처리됩니다</span>`
+          : `<span class="device-dot offline"></span><span>등록된 수집 PC가 없습니다</span>`;
+      return;
+    }
     const online = devices.filter(isDeviceOnline);
     box.innerHTML = online.length
       ? `<span class="device-dot online"></span><span>공유 수집 PC 온라인 ${online.length}대 · 지금 수집 가능</span>`
@@ -1139,11 +1154,22 @@ async function loadLocalStatus() {
   if (!box) return;
   try {
     const devices = await loadSharedDevices();
+    const list = $("deviceList");
+    const nrcErrorBox = $("nrcError");
+    if (lastSharedDevicesSummary) {
+      const { total, online } = lastSharedDevicesSummary;
+      box.textContent = total
+        ? `공유 수집 PC ${total}대 · 현재 온라인 ${online}대`
+        : "등록된 수집 PC가 없습니다. ‘이 PC 등록’을 눌러 최초 설정해 주세요.";
+      if (list) list.innerHTML = "";
+      nrcErrorBox.classList.remove("error");
+      nrcErrorBox.textContent = "";
+      return;
+    }
     const online = devices.filter(isDeviceOnline);
     box.textContent = devices.length
       ? `공유 수집 PC ${devices.length}대 · 현재 온라인 ${online.length}대`
       : "등록된 수집 PC가 없습니다. ‘이 PC 등록’을 눌러 최초 설정해 주세요.";
-    const list = $("deviceList");
     if (list)
       list.innerHTML = devices.length
         ? devices
@@ -1153,7 +1179,8 @@ async function loadLocalStatus() {
             )
             .join("")
         : "";
-    $("nrcError").textContent = lastSharedDevicesError
+    nrcErrorBox.classList.add("error");
+    nrcErrorBox.textContent = lastSharedDevicesError
       ? `(진단) 공유 PC 상태 조회 실패: ${lastSharedDevicesError}`
       : "";
   } catch (err) {
