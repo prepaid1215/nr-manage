@@ -577,11 +577,13 @@ export async function performancePage(root, me) {
       focusProjection = null;
     if (focusTargets?.major && focusTargets?.minor) {
       try {
-        focusResult = calculatePerformance(model, treeFocusId, {
-          majorTarget: focusTargets.major,
-          minorTarget: focusTargets.minor,
+        withCleanCompletionState(() => {
+          focusResult = calculatePerformance(model, treeFocusId, {
+            majorTarget: focusTargets.major,
+            minorTarget: focusTargets.minor,
+          });
+          focusProjection = projectClosingCompletion(focusResult);
         });
-        focusProjection = projectClosingCompletion(focusResult);
         (focusProjection.sales || []).forEach((sale) => {
           if (!sale.memberId || sale.salesWon <= 0) return;
           if (sales[sale.memberId]) return;
@@ -654,6 +656,68 @@ export async function performancePage(root, me) {
     $("treeZoomReset").textContent = `${Math.round(treeZoom * 100)}%`;
   };
   const pinTargetCache = new Map();
+  // STEP2 "자동 배분 계산"이 실행되면 아직 실제로 마감하지 않은 사업자도
+  // 계산 편의상 완료된 것처럼 model 행에 잠정 표시해둔다(위 라인 계산이
+  // 이어지도록). 이 표시가 model.rows에 그대로 남아있으면, 같은 사람이
+  // 다른(관련 없는) STEP1 카드의 하위 배치 후보에서도 "이미 완료됨"으로
+  // 잘못 제외돼 "마감 위치 부족"이 뜬다. STEP1 카드 계산은 이 잠정 표시를
+  // 잠깐 지운(진짜 완료 건만 남긴) 깨끗한 상태에서 하고, 끝나면 원래
+  // 상태로 되돌린다.
+  const withCleanCompletionState = (fn) => {
+    const saved = model.rows.map((row) => [
+      row,
+      row.completedClosingMajorNv,
+      row.completedClosingMinorNv,
+      row.completedClosingNv,
+      row.completedClosingPreviousTotal,
+      row.closingDescendantDeltaNv,
+    ]);
+    model.rows.forEach((row) => {
+      delete row.completedClosingMajorNv;
+      delete row.completedClosingMinorNv;
+      delete row.completedClosingNv;
+      delete row.completedClosingPreviousTotal;
+      delete row.closingDescendantDeltaNv;
+    });
+    Object.entries(plan.completions || {}).forEach(([id, completion]) => {
+      try {
+        applyClosingCompletion(model, id, completion);
+      } catch {}
+    });
+    Object.entries(selfClosings || {}).forEach(([id, completion]) => {
+      if (!plan.completions?.[id]) {
+        try {
+          applyClosingCompletion(model, id, completion);
+        } catch {}
+      }
+    });
+    try {
+      return fn();
+    } finally {
+      saved.forEach(
+        ([
+          row,
+          completedClosingMajorNv,
+          completedClosingMinorNv,
+          completedClosingNv,
+          completedClosingPreviousTotal,
+          closingDescendantDeltaNv,
+        ]) => {
+          if (completedClosingMajorNv === undefined) delete row.completedClosingMajorNv;
+          else row.completedClosingMajorNv = completedClosingMajorNv;
+          if (completedClosingMinorNv === undefined) delete row.completedClosingMinorNv;
+          else row.completedClosingMinorNv = completedClosingMinorNv;
+          if (completedClosingNv === undefined) delete row.completedClosingNv;
+          else row.completedClosingNv = completedClosingNv;
+          if (completedClosingPreviousTotal === undefined)
+            delete row.completedClosingPreviousTotal;
+          else row.completedClosingPreviousTotal = completedClosingPreviousTotal;
+          if (closingDescendantDeltaNv === undefined) delete row.closingDescendantDeltaNv;
+          else row.closingDescendantDeltaNv = closingDescendantDeltaNv;
+        },
+      );
+    }
+  };
   const depthOf = (id) => {
     let depth = 0,
       current = model.byId.get(String(id));
@@ -683,11 +747,13 @@ export async function performancePage(root, me) {
     if (!major || !minor)
       return `<div class="business-status"><span>계산 상태</span><b>목표를 입력하세요</b></div>`;
     try {
-      const result = calculatePerformance(model, id, {
-        majorTarget: major,
-        minorTarget: minor,
+      const { result, projection } = withCleanCompletionState(() => {
+        const result = calculatePerformance(model, id, {
+          majorTarget: major,
+          minorTarget: minor,
+        });
+        return { result, projection: projectClosingCompletion(result) };
       });
-      const projection = projectClosingCompletion(result);
       const currentMajor = fmt(result.effectiveTotals[result.majorIndex]);
       const currentMinor = fmt(result.effectiveTotals[result.minorIndex]);
       if (projection.feasible === false)
@@ -718,11 +784,13 @@ export async function performancePage(root, me) {
           achieved = false;
         if (card.major && card.minor) {
           try {
-            const result = calculatePerformance(model, card.id, {
-              majorTarget: card.major,
-              minorTarget: card.minor,
+            const projection = withCleanCompletionState(() => {
+              const result = calculatePerformance(model, card.id, {
+                majorTarget: card.major,
+                minorTarget: card.minor,
+              });
+              return projectClosingCompletion(result);
             });
-            const projection = projectClosingCompletion(result);
             saleTotal = (projection.sales || []).reduce(
               (sum, sale) => sum + sale.salesWon,
               0,
