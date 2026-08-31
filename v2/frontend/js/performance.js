@@ -195,6 +195,41 @@ export async function performancePage(root, me) {
     };
   }
 
+  async function saveGoalOnly(topMemberId, major, minor) {
+    if (storage !== "supabase") {
+      alert("Supabase 계정 저장일 때만 이 자리에서 바로 목표를 저장할 수 있습니다.");
+      return false;
+    }
+    const { data: existingRow, error: loadError } = await supabase
+      .from(PLAN_TABLE)
+      .select("*")
+      .eq("owner_id", ownerId)
+      .eq("top_member_id", topMemberId)
+      .maybeSingle();
+    if (loadError) {
+      alert(`목표 저장에 실패했습니다: ${loadError.message}`);
+      return false;
+    }
+    const row = {
+      ...(existingRow || {}),
+      owner_id: ownerId,
+      top_member_id: topMemberId,
+      top_major_target: major,
+      top_minor_target: minor,
+      closing_member_ids: existingRow?.closing_member_ids || [topMemberId],
+      updated_at: new Date().toISOString(),
+    };
+    const { error: saveError } = await supabase
+      .from(PLAN_TABLE)
+      .upsert(row, { onConflict: "owner_id,top_member_id" });
+    if (saveError) {
+      alert(`목표 저장에 실패했습니다: ${saveError.message}`);
+      return false;
+    }
+    pinTargetCache.set(topMemberId, { major, minor });
+    return true;
+  }
+
   async function switchToTopMember(topMemberId) {
     if (!model.byId.has(String(topMemberId))) return;
     plan = await loadPlanFor(topMemberId);
@@ -459,15 +494,22 @@ export async function performancePage(root, me) {
       otherPins
         .map((pin) => {
           const target = pinTargetCache.get(pin.id) || { major: 0, minor: 0 };
-          return `<div class="closing-target-row pin-row" data-pin="${safe(pin.id)}"><label>최상위 마감 사업자<span class="pin-name">${safe(pin.name)} (${safe(pin.id)}) <button class="pin-remove" data-unpin="${safe(pin.id)}" type="button">삭제</button></span></label><label>대실적 목표 (NV)<span class="pin-value">${fmt(target.major)}</span></label><label>소실적 목표 (NV)<span class="pin-value">${fmt(target.minor)}</span></label></div>`;
+          return `<div class="closing-target-row pin-row" data-pin="${safe(pin.id)}"><label>최상위 마감 사업자<span class="pin-name">${safe(pin.name)} (${safe(pin.id)}) <button class="pin-remove" data-unpin="${safe(pin.id)}" type="button">삭제</button></span></label><label>대실적 목표 (NV)<input class="pin-major" data-pin-major="${safe(pin.id)}" type="number" min="0" step="10000" value="${target.major}"></label><label>소실적 목표 (NV)<input class="pin-minor" data-pin-minor="${safe(pin.id)}" type="number" min="0" step="10000" value="${target.minor}"></label><button class="secondary compact pin-save" data-pin-save="${safe(pin.id)}" type="button">저장</button></div>`;
         })
         .join("") +
       `<button class="secondary compact tree-pin-add" id="treePinAdd" type="button">+ 사업자 추가</button>`;
-    box.querySelectorAll("[data-pin]").forEach(
-      (row) =>
-        (row.onclick = (event) => {
-          if (event.target.closest("[data-unpin]")) return;
-          switchToTopMember(row.dataset.pin);
+    box.querySelectorAll("[data-pin-save]").forEach(
+      (button) =>
+        (button.onclick = async () => {
+          const id = button.dataset.pinSave,
+            row = button.closest("[data-pin]"),
+            major = Number(row.querySelector("[data-pin-major]").value || 0),
+            minor = Number(row.querySelector("[data-pin-minor]").value || 0);
+          button.disabled = true;
+          const ok = await saveGoalOnly(id, major, minor);
+          button.disabled = false;
+          button.textContent = ok ? "저장됨" : "저장";
+          if (ok) setTimeout(() => (button.textContent = "저장"), 1500);
         }),
     );
     box.querySelectorAll("[data-unpin]").forEach(
