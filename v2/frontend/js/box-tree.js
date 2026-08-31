@@ -30,12 +30,13 @@ export function boxCardHtml(row, options = {}) {
     ? `<span class="box-sale">💰 추천 매출 ${safe(options.sale)}</span>`
     : "";
   const total = (options.totalOf || defaultTotal)(row);
+  const grandTotal = Number(row?.ordPv || 0) + Number(total || 0);
   const tag = options.clickable === false ? "div" : "button";
   const attrs =
     options.clickable === false
       ? ""
       : ` data-member="${safe(id)}" type="button"`;
-  return `<${tag} class="box-node ${boxRankTone(row)}${options.selected ? " selected" : ""}${options.marked ? " marked" : ""}${options.sale ? " sale" : ""}"${attrs}><b>${safe(row?.userName || "이름 없음")}</b><small>*${safe(id)}</small><small>${safe(row?.rankName || "회원")}/${safe(row?.rankMaxName || "회원")}</small>${options.hideDate ? "" : `<small>${safe(row?.regDate || "-")}</small>`}<em>본인 ${number(row?.ordPv)} NV</em><span class="box-line-total">라인 전체 ${number(total)}</span>${note}${badge}${sale}</${tag}>`;
+  return `<${tag} class="box-node ${boxRankTone(row)}${options.selected ? " selected" : ""}${options.marked ? " marked" : ""}${options.sale ? " sale" : ""}"${attrs}><b>${safe(row?.userName || "이름 없음")}</b><small>*${safe(id)}</small><small>${safe(row?.rankName || "회원")}/${safe(row?.rankMaxName || "회원")}</small>${options.hideDate ? "" : `<small>${safe(row?.regDate || "-")}</small>`}<em>본인 ${number(row?.ordPv)} NV</em><span class="box-line-total">라인 전체 ${number(total)}</span><span class="box-line-total box-grand-total">총(본인+전체) ${number(grandTotal)}</span>${note}${badge}${sale}</${tag}>`;
 }
 
 // ctx: { byId: Map, children: Map } — buildPerformanceModel 결과나 동일 구조

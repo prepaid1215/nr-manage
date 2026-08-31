@@ -141,6 +141,47 @@ export function branchBreakdown(row) {
   };
 }
 
+// 직계 하위가 2명이면 그대로 한 명씩 두 줄로, 3명 이상이면 실적 큰 순서로
+// 정렬해 그 순간 합이 더 작은 줄에 번갈아 넣어서(그리디 균형 분배) 최대한
+// 대실적 줄/소실적 줄 두 개로 균형 있게 나눈다. "밸런스 있게 내려가면 된다."
+export function balancedLines(model, member) {
+  const directChildren = model.children.get(memberId(member)) || [];
+  if (directChildren.length <= 2) {
+    return [
+      directChildren[0] ? [directChildren[0]] : [],
+      directChildren[1] ? [directChildren[1]] : [],
+    ];
+  }
+  const withTotal = directChildren
+    .map((row) => ({ row, total: branchBreakdown(row).total }))
+    .sort((left, right) => right.total - left.total);
+  const groups = [[], []];
+  const sums = [0, 0];
+  withTotal.forEach(({ row, total }) => {
+    const target = sums[0] <= sums[1] ? 0 : 1;
+    groups[target].push(row);
+    sums[target] += total;
+  });
+  return groups;
+}
+
+// 그룹(하위 여러 명을 한 줄로 묶은 것)의 실적 합계.
+export function groupBranchBreakdown(group) {
+  return (group || []).reduce(
+    (acc, row) => {
+      const branch = branchBreakdown(row);
+      return {
+        own: acc.own + branch.own,
+        major: acc.major + branch.major,
+        minor: acc.minor + branch.minor,
+        total: acc.total + branch.total,
+        completed: acc.completed || branch.completed,
+      };
+    },
+    { own: 0, major: 0, minor: 0, total: 0, completed: false },
+  );
+}
+
 export function salesTopUpForDeficit(deficitNv) {
   const deficit = Math.max(0, numeric(deficitNv));
   if (deficit === 0) return { salesWon: 0, addedNv: 0, excessNv: 0 };
@@ -208,7 +249,15 @@ export function distributeLineDeficit(
 const splitLineSales = (topUp, codes) => {
   if (!topUp || topUp.salesWon <= 0 || !codes.length) return [];
   const units = topUp.salesWon / SALE_UNIT_WON;
-  if (topUp.salesWon >= SPLIT_SALE_WON && codes.length >= 2) {
+  // codes[1]이 소실적 지급 기준선을 가진 상위 본인 코드인 경우, 반으로
+  // 나눴을 때 두 코드 다 그 기준선을 넘을 만큼 매출이 클 때만 나눈다.
+  // 안 그러면 상위 쪽이 기준선을 못 채워 나누는 의미가 없다.
+  const payoutFloor = codes.length >= 2 ? minorPayoutFloor(codes[1]) : 0;
+  const splitThreshold =
+    payoutFloor > 0
+      ? salesTopUpForDeficit(payoutFloor).salesWon * 2
+      : SPLIT_SALE_WON;
+  if (topUp.salesWon >= splitThreshold && codes.length >= 2) {
     const firstUnits = Math.ceil(units / 2);
     const secondUnits = units - firstUnits;
     if (secondUnits * SALE_UNIT_WON >= MIN_SALE_WON) {
@@ -441,11 +490,12 @@ export function sortMembersDeepestFirst(model, memberIds) {
 }
 
 function deepestLeaf(start, children) {
-  if (!start) return null;
+  const starts = (Array.isArray(start) ? start : [start]).filter(Boolean);
+  if (!starts.length) return null;
   const leaves = [];
   const visited = new Set();
   let visitOrder = 0;
-  const stack = [{ row: start, depth: 0 }];
+  const stack = starts.map((row) => ({ row, depth: 0 }));
 
   while (stack.length) {
     const { row, depth } = stack.pop();
@@ -464,18 +514,23 @@ function deepestLeaf(start, children) {
   return (
     leaves.sort(
       (left, right) => right.depth - left.depth || right.order - left.order,
-    )[0]?.row || start
+    )[0]?.row || starts[0]
   );
 }
 
 // 매출을 넣을 수 있는 코드를 깊은 곳부터 최대 limit개.
 // 완료된 마감 사업자와 그 하위에는 중복 배치하지 않는다.
+// start는 회원 한 명이거나(기존), 하위가 3명 이상이라 두 줄로 나눈 그룹
+// (배열)일 수도 있다 — 그룹이면 그 안의 모든 사람과 하위를 함께 뒤진다.
 export function placeableCodes(start, children, limit = MAX_CODES_PER_LINE) {
-  if (!start || numeric(start.completedClosingNv) > 0) return [];
+  const starts = (Array.isArray(start) ? start : [start]).filter(
+    (row) => row && numeric(row.completedClosingNv) <= 0,
+  );
+  if (!starts.length) return [];
   const found = [];
   const visited = new Set();
   let visitOrder = 0;
-  const stack = [{ row: start, depth: 0 }];
+  const stack = starts.map((row) => ({ row, depth: 0 }));
 
   while (stack.length) {
     const { row, depth } = stack.pop();
@@ -521,8 +576,8 @@ export function calculatePerformance(
   if (!member) throw new Error("계산할 회원을 찾지 못했습니다.");
 
   const directChildren = model.children.get(memberId(member)) || [];
-  const subMembers = [directChildren[0] || null, directChildren[1] || null];
-  const branches = subMembers.map(branchBreakdown);
+  const subMembers = balancedLines(model, member);
+  const branches = subMembers.map(groupBranchBreakdown);
   const minorOwnContribution = Math.max(0, numeric(member.ordPv));
   const ownContributionIndex = branches[0].total < branches[1].total ? 0 : 1;
   const effectiveTotals = branches.map(
@@ -538,10 +593,26 @@ export function calculatePerformance(
       (ownContributionIndex === minorIndex ? minorOwnContribution : 0),
   );
 
+  // 상위(member)가 인증직급 소실적 지급 기준선(예: GD 6만 NV)을 갖고 있는데
+  // 하위 라인에 나눠 넣을 코드가 하나뿐이면, 상위 본인 코드도 후보에 넣어서
+  // 둘로 나눠 넣을 수 있게 한다 — 그래야 상위도 본인 매출로 그 기준선을 채운다.
+  const ancestorPayoutFloor = minorPayoutFloor(member);
+  const ancestorEligible =
+    ancestorPayoutFloor > 0 && numeric(member.completedClosingNv) <= 0;
+  let ancestorUsed = false;
   const placements = [0, 1].map((index) => {
     const subMember = subMembers[index];
     if (subMember) {
-      const codes = placeableCodes(subMember, model.children);
+      let codes = placeableCodes(subMember, model.children);
+      if (
+        codes.length === 1 &&
+        ancestorEligible &&
+        !ancestorUsed &&
+        memberId(codes[0]) !== memberId(member)
+      ) {
+        codes = [codes[0], member];
+        ancestorUsed = true;
+      }
       if (codes.length) return { kind: "line", target: codes[0], codes };
     }
     if (index === ownContributionIndex) {
@@ -592,7 +663,7 @@ export function calculatePerformance(
 
   if (directChildren.length > 2) {
     warnings.push(
-      `직접 하위가 ${directChildren.length}명이라 앞의 두 라인만 계산했습니다.`,
+      `직접 하위가 ${directChildren.length}명이라, 실적이 큰 순서로 두 줄에 나눠 균형 있게 계산했습니다.`,
     );
   }
   if (model.missingSalesIds.length) {
@@ -631,8 +702,8 @@ export function calculatePerformance(
 }
 
 function shallowestClosingDescendant(start, children, closingSet) {
-  if (!start) return null;
-  const queue = [start];
+  const queue = (Array.isArray(start) ? start : [start]).filter(Boolean);
+  if (!queue.length) return null;
   const visited = new Set();
   while (queue.length) {
     const row = queue.shift();
@@ -676,9 +747,8 @@ export function allocateClosingTargets(
   const overrides = targetOverrides || {};
 
   const allocate = (member, targets, depth, autoTargets) => {
-    const directChildren = model.children.get(memberId(member)) || [];
-    const subMembers = [directChildren[0] || null, directChildren[1] || null];
-    const branches = subMembers.map(branchBreakdown);
+    const subMembers = balancedLines(model, member);
+    const branches = subMembers.map(groupBranchBreakdown);
     const own = Math.max(0, numeric(member.ordPv));
     const ownContributionIndex = branches[0].total < branches[1].total ? 0 : 1;
     const effectiveTotals = branches.map(
@@ -703,7 +773,7 @@ export function allocateClosingTargets(
         {
           placeable: subMembers.map(
             (subMember, index) =>
-              Boolean(subMember) || index === ownContributionIndex,
+              subMember.length > 0 || index === ownContributionIndex,
           ),
         },
       );

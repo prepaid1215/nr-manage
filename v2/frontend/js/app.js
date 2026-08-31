@@ -12,11 +12,11 @@ import {
   checklistPage,
 } from "./checklist.js?v=20260829-29";
 import { closingPage, commissionPage } from "./finance.js?v=20260831-35";
-import { performancePage } from "./performance.js?v=20260831-78";
+import { performancePage } from "./performance.js?v=20260831-81";
 import { teamPage } from "./team.js?v=20260829-35";
 import { localDate, monthRange } from "./date.js?v=20260829-25";
 import { friendlyError } from "./errors.js?v=20260830-1";
-import { adminPage, isAppAdmin } from "./admin.js?v=20260831-8";
+import { adminPage, isAppAdmin } from "./admin.js?v=20260831-10";
 import {
   loadManualLinks,
   mergeManualLinks,
@@ -944,8 +944,13 @@ async function settings(initialView = "profile") {
 }
 async function collection() {
   $("content").innerHTML =
-    `<div class="view-tabs settings-tabs"><button data-settings-jump="profile" type="button">내 정보</button><button data-settings-jump="connection" type="button">수집 PC</button><button class="active" type="button">수집</button><button data-settings-jump="account" type="button">계정</button></div><section class="card"><div class="section-head"><div><h2>공유 PC 수집 승인</h2><p class="help">NRC 로그인정보를 암호화해 보관하고, 승인된 온라인 Windows PC에 수집할 때만 전달합니다. 여러 계정을 등록하면 하위 사업자 매출도 함께 받아볼 수 있습니다.</p></div></div><div id="cloudCredentialList" class="schedule-list"></div><form id="cloudCredentialForm"><label>NRC 홈페이지 아이디<input id="cloudLoginId" autocomplete="username" required></label><label>NRC 홈페이지 비밀번호<input id="cloudPassword" type="password" autocomplete="current-password" required></label><button class="primary" id="cloudCredentialSave" type="submit">공유 PC 수집 승인·저장</button></form><div id="cloudCredentialStatus" class="connection-status">공유 수집 승인 상태 확인 중...</div><div id="cloudCredentialError" class="error"></div></section><section class="card"><h2>NRC 데이터 수집</h2><p class="help">승인된 PC 중 현재 켜져 있는 한 대가 계보·NV·소비자회선을 수집합니다. 모든 PC가 꺼져 있으면 요청은 대기합니다.</p><form id="collectForm"><label>수집할 NRC 계정<select id="nrcSourceAccount" required><option value="">승인 계정 확인 중...</option></select></label><button class="primary" id="nrcRun" type="submit">매출 데이터 받기</button></form><div id="nrcStatus" class="connection-status">수집 준비</div><div id="nrcError" class="error"></div></section><section class="card"><h2>공유 PC 자동수집 예약</h2><p class="help">지정 시간에 켜져 있는 승인 PC 한 대가 자동 수집합니다.</p><form id="scheduleForm"><label>예약 이름<input id="scheduleLabel" placeholder="예: 주하루 오전 수집" required></label><label>NRC 계정<select id="scheduleSourceAccount" required><option value="">승인 계정 확인 중...</option></select></label><label>반복 방식<select id="scheduleFrequency"><option value="daily">매일</option><option value="weekly">매주</option><option value="monthly">매월(특정 날짜)</option></select></label><label id="scheduleWeekdayField" hidden>요일<select id="scheduleWeekday"><option value="0">일요일</option><option value="1">월요일</option><option value="2">화요일</option><option value="3">수요일</option><option value="4">목요일</option><option value="5">금요일</option><option value="6">토요일</option></select></label><label id="scheduleMonthDaysField" hidden>실행일<input id="scheduleMonthDays" placeholder="예: 8,15,23,말일"><small class="help">쉼표로 여러 날짜, "말일"은 매달 마지막 날</small></label><label>실행 시간<input id="scheduleTime" type="time" required></label><button class="primary" type="submit">자동수집 예약 저장</button></form><div id="scheduleList" class="schedule-list"></div><div id="scheduleError" class="error"></div></section><section class="card"><h2>최근 수집 요청</h2><div id="jobList" class="schedule-list"><p class="help">요청 내역을 불러오는 중...</p></div></section>`;
+    `<div class="view-tabs settings-tabs"><button data-settings-jump="profile" type="button">내 정보</button><button data-settings-jump="connection" type="button">수집 PC</button><button class="active" type="button">수집</button><button data-settings-jump="account" type="button">계정</button></div><section class="card"><div class="section-head"><div><h2>공유 PC 수집 승인</h2><p class="help">NRC 로그인정보를 암호화해 보관하고, 승인된 온라인 Windows PC에 수집할 때만 전달합니다. <b>본인 계정뿐 아니라 하위 사업자의 NRC 아이디도 여기에 추가하면, 매번 그 사람이 직접 로그인하지 않아도 한 번에 같이 매출을 받아볼 수 있습니다.</b></p></div><button class="secondary compact" id="cloudCredentialAddToggle" type="button" hidden>+ 계정 추가</button></div><div id="cloudCredentialList" class="schedule-list"></div><form id="cloudCredentialForm"><label>NRC 홈페이지 아이디<input id="cloudLoginId" autocomplete="off" required></label><label>NRC 홈페이지 비밀번호<input id="cloudPassword" type="password" autocomplete="new-password" required></label><button class="primary" id="cloudCredentialSave" type="submit">공유 PC 수집 승인·저장</button></form><div id="cloudCredentialStatus" class="connection-status">공유 수집 승인 상태 확인 중...</div><div id="cloudCredentialError" class="error"></div></section><section class="card"><h2>NRC 데이터 수집</h2><p class="help">승인된 PC 중 현재 켜져 있는 한 대가 계보·NV·소비자회선을 수집합니다. 모든 PC가 꺼져 있으면 요청은 대기합니다.</p><form id="collectForm"><label>수집할 NRC 계정<select id="nrcSourceAccount" required><option value="">승인 계정 확인 중...</option></select></label><button class="primary" id="nrcRun" type="submit">매출 데이터 받기</button></form><div id="nrcStatus" class="connection-status">수집 준비</div><div id="nrcError" class="error"></div></section><section class="card"><h2>공유 PC 자동수집 예약</h2><p class="help">지정 시간에 켜져 있는 승인 PC 한 대가 자동 수집합니다.</p><form id="scheduleForm"><label>예약 이름<input id="scheduleLabel" placeholder="예: 주하루 오전 수집" required></label><label>NRC 계정<select id="scheduleSourceAccount" required><option value="">승인 계정 확인 중...</option></select></label><label>반복 방식<select id="scheduleFrequency"><option value="daily">매일</option><option value="weekly">매주</option><option value="monthly">매월(특정 날짜)</option></select></label><label id="scheduleWeekdayField" hidden>요일<select id="scheduleWeekday"><option value="0">일요일</option><option value="1">월요일</option><option value="2">화요일</option><option value="3">수요일</option><option value="4">목요일</option><option value="5">금요일</option><option value="6">토요일</option></select></label><label id="scheduleMonthDaysField" hidden>실행일<input id="scheduleMonthDays" placeholder="예: 8,15,23,말일"><small class="help">쉼표로 여러 날짜, "말일"은 매달 마지막 날</small></label><label>실행 시간<input id="scheduleTime" type="time" required></label><button class="primary" type="submit">자동수집 예약 저장</button></form><div id="scheduleList" class="schedule-list"></div><div id="scheduleError" class="error"></div></section><section class="card"><h2>최근 수집 요청</h2><div id="jobList" class="schedule-list"><p class="help">요청 내역을 불러오는 중...</p></div></section>`;
   $("cloudCredentialForm").onsubmit = saveCloudCredential;
+  $("cloudCredentialAddToggle").onclick = () => {
+    $("cloudCredentialForm").hidden = false;
+    $("cloudCredentialAddToggle").hidden = true;
+    $("cloudLoginId").focus();
+  };
   $("collectForm").onsubmit = runCollection;
   $("scheduleForm").onsubmit = addSchedule;
   $("scheduleFrequency").onchange = () => {
@@ -1036,6 +1041,12 @@ async function loadCloudCredential() {
     status.textContent = accounts.length
       ? `공유 PC 수집 승인 계정 ${accounts.length}개`
       : "NRC 아이디와 비밀번호를 저장하면 공유 PC 수집이 승인됩니다.";
+    const addToggle = $("cloudCredentialAddToggle"),
+      form = $("cloudCredentialForm");
+    if (addToggle && form) {
+      addToggle.hidden = accounts.length === 0;
+      form.hidden = accounts.length > 0;
+    }
     return data;
   } catch (err) {
     status.textContent = "클라우드 수집기 상태를 확인하지 못했습니다.";
