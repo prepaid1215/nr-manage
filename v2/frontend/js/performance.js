@@ -6,6 +6,7 @@ import {
   buildPerformanceModel,
   calculatePerformance,
   cancelCompletionCascade,
+  comparePosition,
   minorIncentiveTier,
   nodeHasTarget,
   nodeTargets,
@@ -14,9 +15,10 @@ import {
   pruneInvalidCompletions,
   salesTopUpForDeficit,
   sortMembersDeepestFirst,
-} from "./performance-calculator.js?v=20260829-55";
+} from "./performance-calculator.js?v=20260831-56";
 import { boxTreeHtml } from "./box-tree.js?v=20260829-53";
 import { friendlyError } from "./errors.js?v=20260830-1";
+import { isAppAdmin } from "./admin.js?v=20260831-7";
 
 const PLAN_TABLE = "nrc_closing_plans";
 const MIN_TREE_ZOOM = 0.72;
@@ -52,7 +54,7 @@ const flattenAllocation = (node, out = []) => {
 };
 
 export async function performancePage(root, me) {
-  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>마감 실적 계산기</h2><p class="help">기준이 되는 최상위 마감 사업자와 목표만 정하면, 아래 사업자에게는 &quot;라인 합계&quot; 목표로 내려갑니다. 대·소를 각각 채우지 않으므로 매출이 덜 들어갑니다.</p></div></div><p id="perfSource" class="help"></p><p id="perfStorage" class="help"></p><div class="closing-target-row"><label>최상위 마감 사업자<select id="topMemberSelect"></select></label><label>대실적 목표 (NV)<input id="topMajor" type="number" min="1" step="10000"></label><label>소실적 목표 (NV)<input id="topMinor" type="number" min="1" step="10000"></label></div><div id="treePins" class="tree-pins"></div><section class="card closing-main-tree"><div class="section-head"><div><h2>계보도에서 목표 설정</h2><p class="help">클릭하면 그 사람 기준으로 계보도가 이동하고, 더블클릭하면 대실적·소실적 목표를 입력합니다.</p></div><div class="tree-nav"><button class="secondary compact" id="treeBack" type="button">← 뒤로</button><button class="secondary compact" id="treeHome" type="button">맨 위로</button><span class="tree-zoom-controls"><button class="secondary compact" id="treeZoomOut" type="button" aria-label="축소">−</button><button class="secondary compact" id="treeZoomReset" type="button">100%</button><button class="secondary compact" id="treeZoomIn" type="button" aria-label="확대">＋</button></span></div></div><div id="closingMainTree" class="box-tree pannable-tree"><div class="tree-stage" id="closingMainTreeStage"><ul></ul></div></div></section><dialog id="treeTargetDialog" class="customer-dialog small"><form id="treeTargetForm"><div class="dialog-head"><h2 id="treeTargetTitle">목표 설정</h2><button id="treeTargetClose" type="button">×</button></div><label>대실적 목표 (NV)<input id="treeTargetMajor" type="number" min="0" step="10000" required></label><label>소실적 목표 (NV)<input id="treeTargetMinor" type="number" min="0" step="10000" required></label><p id="treeTargetAuto" class="help"></p><div class="customer-actions"><button class="secondary" id="treeTargetReset" type="button">자동값으로</button><button class="primary" type="submit">저장</button></div></form></dialog><details class="closing-member-picker" open><summary>마감할 하위 사업자 선택 <b id="closingCount">0명</b></summary><p class="help">체크하지 않은 회원의 라인은 라인 합계만 맞으면 그대로 통과합니다. 체크한 사업자는 라인 합계를 맞추면서 소실적이 인증직급 지급 기준선(DT 3만 · GD 이상 6만 NV) 이상이 되게 채웁니다.</p><div class="closing-picker-tools"><input id="closingFilter" type="search" placeholder="이름 또는 회원번호 검색"><button class="secondary compact" id="closingShowSingles" type="button">단독 계정 보기</button><button class="secondary compact" id="closingSelectAll" type="button">전체 선택</button><button class="secondary compact" id="closingSelectNone" type="button">전체 해제</button></div><div id="closingCollapsedGroups" class="closing-collapsed-groups"></div><div id="closingOptions" class="closing-member-options"></div></details><button id="perfRun" class="primary">자동 배분 계산</button><p id="perfNotice" class="help"></p><div id="perfError" class="error"></div></section><section id="perfSummary"></section><section id="perfResult"></section>`;
+  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>마감 실적 계산기</h2><p class="help">기준이 되는 최상위 마감 사업자와 목표만 정하면, 아래 사업자에게는 &quot;라인 합계&quot; 목표로 내려갑니다. 대·소를 각각 채우지 않으므로 매출이 덜 들어갑니다.</p></div></div><p id="perfSource" class="help"></p><p id="perfStorage" class="help"></p><button class="secondary compact" id="linkOtherAccounts" type="button" hidden>🔗 다른 계정 자동 연결</button><p id="linkOtherAccountsStatus" class="help" hidden></p><div class="closing-target-row"><label>최상위 마감 사업자<select id="topMemberSelect"></select></label><label>대실적 목표 (NV)<input id="topMajor" type="number" min="1" step="10000"></label><label>소실적 목표 (NV)<input id="topMinor" type="number" min="1" step="10000"></label></div><div id="treePins" class="tree-pins"></div><section class="card closing-main-tree"><div class="section-head"><div><h2>계보도에서 목표 설정</h2><p class="help">클릭하면 그 사람 기준으로 계보도가 이동하고, 더블클릭하면 대실적·소실적 목표를 입력합니다.</p></div><div class="tree-nav"><button class="secondary compact" id="treeBack" type="button">← 뒤로</button><button class="secondary compact" id="treeHome" type="button">맨 위로</button><span class="tree-zoom-controls"><button class="secondary compact" id="treeZoomOut" type="button" aria-label="축소">−</button><button class="secondary compact" id="treeZoomReset" type="button">100%</button><button class="secondary compact" id="treeZoomIn" type="button" aria-label="확대">＋</button></span></div></div><div id="closingMainTree" class="box-tree pannable-tree"><div class="tree-stage" id="closingMainTreeStage"><ul></ul></div></div></section><dialog id="treeTargetDialog" class="customer-dialog small"><form id="treeTargetForm"><div class="dialog-head"><h2 id="treeTargetTitle">목표 설정</h2><button id="treeTargetClose" type="button">×</button></div><label>대실적 목표 (NV)<input id="treeTargetMajor" type="number" min="0" step="10000" required></label><label>소실적 목표 (NV)<input id="treeTargetMinor" type="number" min="0" step="10000" required></label><p id="treeTargetAuto" class="help"></p><div class="customer-actions"><button class="secondary" id="treeTargetReset" type="button">자동값으로</button><button class="primary" type="submit">저장</button></div></form></dialog><details class="closing-member-picker" open><summary>마감할 하위 사업자 선택 <b id="closingCount">0명</b></summary><p class="help">체크하지 않은 회원의 라인은 라인 합계만 맞으면 그대로 통과합니다. 체크한 사업자는 라인 합계를 맞추면서 소실적이 인증직급 지급 기준선(DT 3만 · GD 이상 6만 NV) 이상이 되게 채웁니다.</p><div class="closing-picker-tools"><input id="closingFilter" type="search" placeholder="이름 또는 회원번호 검색"><button class="secondary compact" id="closingShowSingles" type="button">단독 계정 보기</button><button class="secondary compact" id="closingSelectAll" type="button">전체 선택</button><button class="secondary compact" id="closingSelectNone" type="button">전체 해제</button></div><div id="closingCollapsedGroups" class="closing-collapsed-groups"></div><div id="closingOptions" class="closing-member-options"></div></details><button id="perfRun" class="primary">자동 배분 계산</button><p id="perfNotice" class="help"></p><div id="perfError" class="error"></div></section><section id="perfSummary"></section><section id="perfResult"></section>`;
   const $ = (id) => document.getElementById(id);
   const { data, error } = await supabase
     .from("nrc_sync_snapshots")
@@ -85,6 +87,70 @@ export async function performancePage(root, me) {
 
   const { data: auth } = await supabase.auth.getUser().catch(() => ({}));
   const ownerId = auth?.user?.id || null;
+  async function linkOtherAccounts() {
+    const button = $("linkOtherAccounts"),
+      status = $("linkOtherAccountsStatus");
+    button.disabled = true;
+    status.hidden = false;
+    status.textContent = "다른 계정을 불러와 겹치는 회원을 찾는 중...";
+    try {
+      const { data: snapshots, error: snapshotError } = await supabase.rpc(
+        "admin_all_latest_snapshots",
+      );
+      if (snapshotError) throw snapshotError;
+      let addedRows = 0;
+      const linkedNames = [];
+      (snapshots || []).forEach((snapshot) => {
+        if (snapshot.user_id === ownerId) return;
+        let extModel;
+        try {
+          const extPayload =
+            typeof snapshot.payload === "string"
+              ? JSON.parse(snapshot.payload)
+              : snapshot.payload;
+          extModel = buildPerformanceModel(extPayload);
+        } catch {
+          return;
+        }
+        const before = model.byId.size;
+        extModel.rows.forEach((row) => {
+          const id = String(row.userId ?? "");
+          if (!id || model.byId.has(id)) return;
+          model.rows.push(row);
+          model.byId.set(id, row);
+        });
+        const gained = model.byId.size - before;
+        if (gained > 0) {
+          addedRows += gained;
+          linkedNames.push(snapshot.name || snapshot.username || "계정");
+        }
+      });
+      if (addedRows > 0) {
+        const children = new Map();
+        model.rows.forEach((row) => {
+          const parentId = String(row.ppId ?? "");
+          if (!children.has(parentId)) children.set(parentId, []);
+          children.get(parentId).push(row);
+        });
+        children.forEach((items) => items.sort(comparePosition));
+        model.children = children;
+        renderControls();
+        renderMainTree();
+        renderTreePins();
+        status.textContent = `${linkedNames.length}개 계정에서 회원 ${addedRows.toLocaleString()}명을 이어붙였습니다 (${linkedNames.join(", ")}).`;
+      } else {
+        status.textContent = "겹치는 회원이 있는 다른 계정을 찾지 못했습니다.";
+      }
+    } catch (linkError) {
+      status.textContent = friendlyError(linkError, "다른 계정을 연결하지 못했습니다.");
+    } finally {
+      button.disabled = false;
+    }
+  }
+  isAppAdmin().then((admin) => {
+    if (admin) $("linkOtherAccounts").hidden = false;
+  });
+  $("linkOtherAccounts").onclick = linkOtherAccounts;
   let storage = ownerId ? "supabase" : "local";
   let storageNote = ownerId
     ? ""

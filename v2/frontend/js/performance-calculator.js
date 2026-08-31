@@ -114,7 +114,7 @@ const normalizeTargets = (requestedTargets) => {
   };
 };
 
-const comparePosition = (left, right) => {
+export const comparePosition = (left, right) => {
   const leftPosition = numeric(left?.abPos) || Number.MAX_SAFE_INTEGER;
   const rightPosition = numeric(right?.abPos) || Number.MAX_SAFE_INTEGER;
   return (
