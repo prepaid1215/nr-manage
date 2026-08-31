@@ -39,7 +39,16 @@ export function boxCardHtml(row, options = {}) {
     options.clickable === false
       ? ""
       : ` data-member="${safe(id)}" type="button"`;
-  return `<${tag} class="box-node ${boxRankTone(row)}${options.selected ? " selected" : ""}${options.marked ? " marked" : ""}${options.sale ? " sale" : ""}"${attrs}><b>${safe(row?.userName || "이름 없음")}</b><small>*${safe(id)}</small><small>${safe(row?.rankName || "회원")}/${safe(row?.rankMaxName || "회원")}</small>${options.hideDate ? "" : `<small>${safe(row?.regDate || "-")}</small>`}<em>본인 ${number(row?.ordPv)} NV</em><span class="box-line-total">라인 전체 ${number(lineOnly)}</span><span class="box-line-total box-grand-total">총(본인+전체) ${number(grandTotal)}</span>${note}${badge}${sale}</${tag}>`;
+  // 진짜 <button> 안에 또 <button>을 넣으면 안 되므로(중첩 button은 무효한
+  // HTML) 숨기기/복원 컨트롤은 <span role="button">로 만든다. 클릭 위임
+  // 쪽(호출부)에서 data-hide-member/data-restore-member를 먼저 확인하고
+  // data-member 카드 이동은 그 다음에 처리해야 한다.
+  const hideBtn = options.hideable
+    ? options.hidden
+      ? `<span class="box-hide restore" data-restore-member="${safe(id)}" role="button" tabindex="0" title="다시 보기">↺</span>`
+      : `<span class="box-hide" data-hide-member="${safe(id)}" role="button" tabindex="0" title="숨기기">×</span>`
+    : "";
+  return `<${tag} class="box-node ${boxRankTone(row)}${options.selected ? " selected" : ""}${options.marked ? " marked" : ""}${options.sale ? " sale" : ""}${options.hidden ? " box-hidden-card" : ""}"${attrs}><b>${safe(row?.userName || "이름 없음")}</b><small>*${safe(id)}</small><small>${safe(row?.rankName || "회원")}/${safe(row?.rankMaxName || "회원")}</small>${options.hideDate ? "" : `<small>${safe(row?.regDate || "-")}</small>`}<em>본인 ${number(row?.ordPv)} NV</em><span class="box-line-total">라인 전체 ${number(lineOnly)}</span><span class="box-line-total box-grand-total">총(본인+전체) ${number(grandTotal)}</span>${note}${badge}${sale}${hideBtn}</${tag}>`;
 }
 
 // ctx: { byId: Map, children: Map } — buildPerformanceModel 결과나 동일 구조
@@ -53,6 +62,9 @@ export function boxTreeHtml(ctx, rootId, options = {}) {
   const totalOf = options.totalOf || defaultTotal;
   const clickable = options.clickable !== false;
   const selectedId = options.selectedId ? String(options.selectedId) : "";
+  const hiddenIds = options.hiddenIds || new Set();
+  const showHidden = Boolean(options.showHidden);
+  const hideable = Boolean(options.hideable);
   const kidsOf = (id) => ctx.children.get(String(id)) || [];
 
   const descendantCount = (id) => {
@@ -73,11 +85,14 @@ export function boxTreeHtml(ctx, rootId, options = {}) {
   const node = (row, level, path) => {
     const id = String(row.userId);
     if (path.has(id)) return "";
+    // 최상위(level 1)는 숨김 목록에 있어도 항상 보여준다 — 안 그러면
+    // 지금 보고 있는 기준 사업자 자체가 숨겨져서 트리가 통째로 사라진다.
+    if (level > 1 && hiddenIds.has(id) && !showHidden) return "";
     const nextPath = new Set(path);
     nextPath.add(id);
     const kids = kidsOf(id);
     const showKids = level < depth && kids.length;
-    const hidden = !showKids && kids.length ? descendantCount(id) : 0;
+    const hiddenCount = !showKids && kids.length ? descendantCount(id) : 0;
     return `<li>${boxCardHtml(row, {
       badge: badges[id],
       note: notes[id],
@@ -87,7 +102,9 @@ export function boxTreeHtml(ctx, rootId, options = {}) {
       hideDate: options.hideDate,
       selected: id === selectedId,
       marked: Boolean(badges[id]),
-    })}${hidden ? `<div class="box-more">아래 ${hidden}명 더 있음</div>` : ""}${
+      hideable,
+      hidden: hiddenIds.has(id),
+    })}${hiddenCount ? `<div class="box-more">아래 ${hiddenCount}명 더 있음</div>` : ""}${
       showKids
         ? `<ul>${kids.map((kid) => node(kid, level + 1, nextPath)).join("")}</ul>`
         : ""
