@@ -1,7 +1,7 @@
 import { supabase } from "./supabase.js?v=20260829-34";
 import { localDate } from "./date.js?v=20260829-25";
 import { friendlyError } from "./errors.js?v=20260830-1";
-import { isAppAdmin } from "./admin.js?v=20260831-10";
+import { isAppAdmin } from "./admin.js?v=20260831-11";
 const now = new Date(),
   yearNow = now.getFullYear(),
   monthNow = now.getMonth() + 1,
