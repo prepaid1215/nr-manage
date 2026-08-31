@@ -1,5 +1,6 @@
 import { supabase } from "./supabase.js?v=20260829-34";
 import { localDate } from "./date.js?v=20260829-25";
+import { friendlyError } from "./errors.js?v=20260830-1";
 const now = new Date(),
   yearNow = now.getFullYear(),
   monthNow = now.getMonth() + 1,
@@ -63,7 +64,7 @@ export async function closingPage(root, me) {
         .eq("owner_id", me.id)
         .eq("year", year);
     if (error) {
-      $("closingError").textContent = error.message;
+      $("closingError").textContent = friendlyError(error);
       return;
     }
     inputs.forEach((input) => {
@@ -98,7 +99,7 @@ export async function closingPage(root, me) {
       { error } = await supabase
         .from("closing_sales")
         .upsert(values, { onConflict: "owner_id,year,month,round" });
-    if (error) $("closingError").textContent = error.message;
+    if (error) $("closingError").textContent = friendlyError(error);
     else load();
   };
   root.querySelectorAll("[data-closing-view]").forEach(
@@ -171,7 +172,7 @@ export async function commissionPage(root, me) {
         .eq("owner_id", me.id)
         .eq("year", year);
     if (error) {
-      $("commError").textContent = error.message;
+      $("commError").textContent = friendlyError(error);
       return;
     }
     inputs.forEach(
@@ -200,7 +201,7 @@ export async function commissionPage(root, me) {
       { error } = await supabase
         .from("commissions")
         .upsert(values, { onConflict: "owner_id,year,month,round" });
-    if (error) $("commError").textContent = error.message;
+    if (error) $("commError").textContent = friendlyError(error);
     else load();
   };
   await load();

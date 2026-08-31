@@ -15,9 +15,19 @@ import { closingPage, commissionPage } from "./finance.js?v=20260829-28";
 import { performancePage } from "./performance.js?v=20260829-73";
 import { teamPage } from "./team.js?v=20260829-35";
 import { localDate, monthRange } from "./date.js?v=20260829-25";
+import { friendlyError } from "./errors.js?v=20260830-1";
+import { adminPage, isAppAdmin } from "./admin.js?v=20260830-3";
+import {
+  installInteractionTracking,
+  setTelemetryPage,
+  setTelemetryUser,
+  trackEvent,
+} from "./telemetry.js?v=20260830-1";
 const $ = (id) => document.getElementById(id);
 let me = null,
-  authMode = "login";
+  authMode = "login",
+  appAdmin = false,
+  trackingInstalled = false;
 const menus = [
   ["home", "홈"],
   ["customers", "고객"],
@@ -29,9 +39,11 @@ const menus = [
   ["closing", "마감"],
   ["team", "팀"],
   ["settings", "설정"],
+  ["admin", "관리자"],
 ];
+const visibleMenus = () => menus.filter(([id]) => id !== "admin" || appAdmin);
 function nav() {
-  const html = menus
+  const html = visibleMenus()
     .map(([id, label]) => `<button data-page="${id}">${label}</button>`)
     .join("");
   $("topNav").innerHTML = html;
@@ -130,7 +142,7 @@ async function home() {
     .find(Boolean);
   if (failed) {
     $("homeAlerts").innerHTML =
-      `<article>⚠️ 데이터를 불러오지 못했습니다: ${safe(failed.message)}</article>`;
+      `<article>⚠️ ${safe(friendlyError(failed, "데이터를 불러오지 못했습니다. 잠시 후 새로고침해 주세요."))}</article>`;
     return;
   }
   const cs = customers.data || [],
@@ -198,6 +210,9 @@ async function home() {
     : '<p class="help">현재 긴급한 알림이 없습니다.</p>';
 }
 async function show(page, options) {
+  if (page === "admin" && !appAdmin) page = "home";
+  setTelemetryPage(page);
+  trackEvent("page_view", page);
   document
     .querySelectorAll("[data-page]")
     .forEach((b) => b.classList.toggle("active", b.dataset.page === page));
@@ -211,8 +226,9 @@ async function show(page, options) {
   if (page === "closing") return closingPage($("content"), me);
   if (page === "team") return teamPage($("content"), me);
   if (page === "settings") return settings();
+  if (page === "admin") return adminPage($("content"));
   $("content").innerHTML =
-    `<section class="card"><h2>더보기</h2><p class="help">전체 메뉴가 아래에 있습니다. PC와 모바일 어디서나 똑같이 사용할 수 있습니다.</p><div class="more-menu">${menus
+    `<section class="card"><h2>더보기</h2><p class="help">전체 메뉴가 아래에 있습니다. PC와 모바일 어디서나 똑같이 사용할 수 있습니다.</p><div class="more-menu">${visibleMenus()
       .slice(4)
       .map(([id, label]) => `<button data-page="${id}" type="button">${label}</button>`)
       .join("")}</div></section>`;
@@ -296,7 +312,7 @@ async function organization() {
     render();
   } catch (err) {
     $("orgCollected").textContent = "조직 데이터를 불러오지 못했습니다.";
-    $("orgError").textContent = err.message;
+    $("orgError").textContent = friendlyError(err);
   }
 }
 const number = (value) => Number(value || 0).toLocaleString("ko-KR");
@@ -388,7 +404,7 @@ async function organizationTree() {
     renderTree();
   } catch (err) {
     $("orgCollected").textContent = "계보도를 불러오지 못했습니다.";
-    $("orgError").textContent = err.message;
+    $("orgError").textContent = friendlyError(err);
   }
 }
 async function organizationDashboard(targetOwner) {
@@ -720,7 +736,7 @@ async function organizationDashboard(targetOwner) {
     render();
   } catch (err) {
     $("orgCollected").textContent = "조직 데이터를 불러오지 못했습니다.";
-    $("orgError").textContent = err.message;
+    $("orgError").textContent = friendlyError(err);
   }
 }
 const LOCAL_SYNC = "http://127.0.0.1:5050";
@@ -896,7 +912,7 @@ async function loadCloudCredential() {
     return data;
   } catch (err) {
     status.textContent = "클라우드 수집기 상태를 확인하지 못했습니다.";
-    error.textContent = err.message;
+    error.textContent = friendlyError(err);
     return null;
   }
 }
@@ -921,7 +937,7 @@ async function saveCloudCredential(event) {
     await loadCloudCredential();
     await loadSavedNrc();
   } catch (err) {
-    error.textContent = err.message;
+    error.textContent = friendlyError(err);
   } finally {
     button.disabled = false;
     button.textContent = "공유 PC 수집 승인·저장";
@@ -939,7 +955,7 @@ async function deleteCloudCredential(sourceAccountId) {
     await loadCloudCredential();
     await loadSavedNrc();
   } catch (err) {
-    error.textContent = err.message;
+    error.textContent = friendlyError(err);
   }
 }
 async function loadSyncDevices() {
@@ -1016,7 +1032,7 @@ async function loadRecentJobs() {
     .order("requested_at", { ascending: false })
     .limit(10);
   if (error) {
-    list.innerHTML = `<p class="error">${safe(error.message)}</p>`;
+    list.innerHTML = `<p class="error">${safe(friendlyError(error))}</p>`;
     return;
   }
   list.innerHTML = data.length
@@ -1046,10 +1062,10 @@ async function runHomeCollection() {
     await home();
   } catch (error) {
     if (error.isPending) {
-      status.textContent = error.message;
+      status.textContent = friendlyError(error);
       errorBox.textContent = "";
     } else {
-      errorBox.textContent = error.message;
+      errorBox.textContent = friendlyError(error);
     }
   } finally {
     button.disabled = false;
@@ -1063,7 +1079,7 @@ async function loadSharedDevices() {
     lastSharedDevicesError = "";
     return data.devices || [];
   } catch (err) {
-    lastSharedDevicesError = err.message || String(err);
+    lastSharedDevicesError = friendlyError(err);
     console.warn("공유 PC 상태 조회 실패:", err);
     return loadSyncDevices();
   }
@@ -1109,7 +1125,7 @@ async function loadLocalStatus() {
     box.textContent = "수집 PC 정보를 불러오지 못했습니다.";
     $("nrcError").textContent = /nrc_sync_devices|schema cache/i.test(err.message)
       ? "Supabase에서 RUN_013_MULTI_PC_SYNC_QUEUE.sql을 먼저 실행해 주세요."
-      : err.message;
+      : friendlyError(err);
   }
 }
 async function runCollection(e) {
@@ -1130,11 +1146,11 @@ async function runCollection(e) {
     await loadRecentJobs();
   } catch (err) {
     if (err.isPending) {
-      $("nrcStatus").textContent = err.message;
+      $("nrcStatus").textContent = friendlyError(err);
       error.textContent = "";
       await loadRecentJobs();
     } else {
-      error.textContent = err.message;
+      error.textContent = friendlyError(err);
     }
   } finally {
     button.disabled = false;
@@ -1170,7 +1186,7 @@ async function loadSavedNrc() {
         ? accounts.map((account) => `<option value="${safe(account)}">${safe(account)}</option>`).join("")
         : '<option value="">등록된 NRC 계정 없음</option>';
   } catch (err) {
-    $("nrcError").textContent = err.message;
+    $("nrcError").textContent = friendlyError(err);
   }
 }
 const safe = (value) =>
@@ -1205,7 +1221,7 @@ async function loadSchedules() {
       );
   } catch (err) {
     list.innerHTML = "";
-    $("scheduleError").textContent = err.message;
+    $("scheduleError").textContent = friendlyError(err);
   }
 }
 async function addSchedule(e) {
@@ -1226,7 +1242,7 @@ async function addSchedule(e) {
     e.target.reset();
     await loadSchedules();
   } catch (err) {
-    error.textContent = err.message;
+    error.textContent = friendlyError(err);
   }
 }
 async function deleteSchedule(scheduleId) {
@@ -1239,7 +1255,7 @@ async function deleteSchedule(scheduleId) {
     if (error) throw error;
     await loadSchedules();
   } catch (err) {
-    $("scheduleError").textContent = err.message;
+    $("scheduleError").textContent = friendlyError(err);
   }
 }
 function setAuthMode(mode) {
@@ -1268,6 +1284,12 @@ async function start() {
   const username = session.user.user_metadata?.username || "사용자";
   const profile = await currentProfile().catch(() => null);
   me = profile || { id: session.user.id, name: username, status: "ACTIVE" };
+  setTelemetryUser(me.id);
+  appAdmin = await isAppAdmin();
+  if (!trackingInstalled) {
+    installInteractionTracking();
+    trackingInstalled = true;
+  }
   $("loginView").hidden = true;
   $("appView").hidden = false;
   $("userName").textContent = `${me.name || username}님`;
@@ -1297,18 +1319,14 @@ $("loginForm").onsubmit = async (e) => {
         });
         if (!result.session) await signIn({ username, password });
       } catch (err) {
-        if (/already registered/i.test(err.message))
+        if (/already registered/i.test(err.cause?.message || err.message))
           await signIn({ username, password });
         else throw err;
       }
     } else await signIn({ username, password });
     await start();
   } catch (err) {
-    errorBox.textContent = /invalid login credentials/i.test(err.message)
-      ? "아이디 또는 비밀번호가 맞지 않습니다."
-      : /email not confirmed/i.test(err.message)
-        ? "관리자 설정에서 이메일 확인을 꺼주세요."
-        : err.message;
+    errorBox.textContent = friendlyError(err, "로그인하지 못했습니다. 잠시 후 다시 시도해 주세요.");
   } finally {
     submit.disabled = false;
     submit.textContent = authMode === "signup" ? "회원가입" : "로그인";

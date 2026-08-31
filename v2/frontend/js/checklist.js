@@ -1,4 +1,5 @@
 import { supabase } from "./supabase.js?v=20260829-34";
+import { friendlyError } from "./errors.js?v=20260830-1";
 const groups = [
   [
     "마케팅",
@@ -102,7 +103,7 @@ export async function checklistPage(root, me) {
     .from("checklist_progress")
     .select("*")
     .eq("owner_id", me.id);
-  if (error) $("checkError").textContent = error.message;
+  if (error) $("checkError").textContent = friendlyError(error);
   else {
     const map = new Map((data || []).map((row) => [row.item_key, row]));
     articles.forEach((a) => {
@@ -126,7 +127,7 @@ export async function checklistPage(root, me) {
       { error } = await supabase
         .from("checklist_progress")
         .upsert(values, { onConflict: "owner_id,item_key" });
-    if (error) $("checkError").textContent = error.message;
+    if (error) $("checkError").textContent = friendlyError(error);
     else {
       $("checkStatus").hidden = false;
       $("checkStatus").textContent = "체크리스트를 저장했습니다.";

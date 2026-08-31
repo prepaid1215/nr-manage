@@ -1,5 +1,6 @@
 import { supabase } from "./supabase.js?v=20260829-34";
 import { boxCardHtml, boxTreeHtml } from "./box-tree.js?v=20260829-53";
+import { friendlyError } from "./errors.js?v=20260830-1";
 
 const number = (value) => Number(value || 0).toLocaleString("ko-KR");
 const safe = (value) =>
@@ -25,7 +26,7 @@ export async function boxGenealogyPage(root) {
     .maybeSingle();
   if (error || !data) {
     $("boxCollected").textContent = "저장된 계보 데이터가 없습니다.";
-    $("boxError").textContent = error?.message || "";
+    $("boxError").textContent = friendlyError(error, "계보 데이터를 불러오지 못했습니다.");
     $("boxStage").innerHTML =
       '<p class="help">홈 화면에서 매출받기를 먼저 실행하세요.</p>';
     return;
