@@ -12,7 +12,7 @@ import {
   checklistPage,
 } from "./checklist.js?v=20260829-29";
 import { closingPage, commissionPage } from "./finance.js?v=20260831-37";
-import { performancePage } from "./performance.js?v=20260831-86";
+import { performancePage } from "./performance.js?v=20260831-87";
 import { teamPage } from "./team.js?v=20260829-35";
 import { localDate, monthRange } from "./date.js?v=20260829-25";
 import { friendlyError } from "./errors.js?v=20260830-1";
