@@ -4,7 +4,6 @@ import json
 import os
 import socket
 import sys
-import tempfile
 import threading
 import time
 import urllib.error
@@ -17,20 +16,15 @@ from pathlib import Path
 import keyring
 import scraper as scraper_module
 from scraper import run_combined
-from runtime_mode import TEMP_MODE
 
 
 SUPABASE_URL = "https://ymagjzwebshfnjiisrao.supabase.co"
 SUPABASE_KEY = "sb_publishable_odxxHbBufV-ZSFlVJ8xFiw_18hBVyJf"
 CLOUD_COORDINATOR = "https://nrc-sync-cloud-sg.onrender.com"
 DATA_DIR = (
-    Path(tempfile.mkdtemp(prefix="NRCSync-Temp-"))
-    if TEMP_MODE
-    else (
-        Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "NRCSync" / "data"
-        if getattr(sys, "frozen", False)
-        else Path(__file__).parent / "data"
-    )
+    Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "NRCSync" / "data"
+    if getattr(sys, "frozen", False)
+    else Path(__file__).parent / "data"
 )
 DEVICE_FILE = DATA_DIR / "worker_device.json"
 SESSION_SERVICE = "NRC-Management-Worker-Session"
@@ -231,17 +225,6 @@ def heartbeat(status="ONLINE", error=None):
         },
         "resolution=merge-duplicates,return=minimal",
     )
-
-
-def deregister_device():
-    """임시 연결 모드에서 프로그램을 끌 때, 등록해뒀던 이 PC를 서버에서도 지운다."""
-    device = _load_device()
-    if not device:
-        return
-    try:
-        _rest(f"nrc_sync_devices?id=eq.{device['id']}", "DELETE")
-    except Exception:
-        pass
 
 
 def _patch_job(job_id, values):
