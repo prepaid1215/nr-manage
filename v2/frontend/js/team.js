@@ -1,5 +1,6 @@
 import { supabase } from "./supabase.js?v=20260829-34";
 import { friendlyError } from "./errors.js?v=20260830-1";
+import { buildPerformanceModel } from "./performance-calculator.js?v=20260831-61";
 
 const resources = [
   ["customers", "고객"],
@@ -27,6 +28,53 @@ export async function teamPage(root, me) {
     /function .* does not exist|schema cache/i.test(error.message)
       ? "Supabase에서 RUN_011_PARTNER_CODE_APPOINTMENT.sql을 먼저 실행하세요."
       : friendlyError(error);
+
+  // 회원코드로 파트너를 임명하기 전에, 실적 탭에서 이미 수집해둔 내 계보도
+  // 데이터와 대조해서 그 사람이 실제로 내 하위인지 상위인지 확인한다.
+  // 계보도 수집이 안 돼 있거나 그 관계가 안 잡히면 "확인 불가"로 두고
+  // 예전처럼 그대로 진행할 수 있게 한다(차단하지 않음).
+  let genealogyModel = null,
+    genealogyLoadTried = false;
+  async function loadMyGenealogyModel() {
+    if (genealogyModel || genealogyLoadTried) return genealogyModel;
+    genealogyLoadTried = true;
+    try {
+      const { data } = await supabase
+        .from("nrc_sync_snapshots")
+        .select("payload")
+        .eq("owner_id", me.id)
+        .eq("snapshot_type", "combined")
+        .order("collected_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!data) return null;
+      const payload =
+        typeof data.payload === "string" ? JSON.parse(data.payload) : data.payload;
+      genealogyModel = buildPerformanceModel(payload);
+    } catch {
+      genealogyModel = null;
+    }
+    return genealogyModel;
+  }
+  const isAncestor = (model, startId, targetId) => {
+    let current = model.byId.get(String(startId));
+    const visited = new Set();
+    while (current?.ppId && !visited.has(String(current.ppId))) {
+      visited.add(String(current.ppId));
+      if (String(current.ppId) === String(targetId)) return true;
+      current = model.byId.get(String(current.ppId));
+    }
+    return false;
+  };
+  async function checkGenealogyRelation(memberNo) {
+    const model = await loadMyGenealogyModel();
+    const myId = String(me.member_no || "");
+    if (!model || !myId || !model.byId.has(myId) || !model.byId.has(String(memberNo)))
+      return "unknown";
+    if (isAncestor(model, memberNo, myId)) return "downline";
+    if (isAncestor(model, myId, memberNo)) return "upline";
+    return "unrelated";
+  }
 
   async function load() {
     errorBox.textContent = "";
@@ -76,12 +124,41 @@ export async function teamPage(root, me) {
             return;
           }
           const partner = data?.[0];
-          box.innerHTML = partner
-            ? `<article><div><b>${safe(partner.partner_name)}</b><small>회원코드 ${safe(partner.masked_member_no)}</small></div>${partner.already_member ? '<strong class="partner-appointed">이미 등록된 파트너</strong>' : `<button class="primary compact" data-appoint="${teamId}" data-code="${safe(memberNo)}" type="button">파트너 임명</button>`}</article>`
-            : '<p class="error">일치하는 가입 회원이 없습니다.</p>';
+          if (!partner) {
+            box.innerHTML = '<p class="error">일치하는 가입 회원이 없습니다.</p>';
+            return;
+          }
+          box.innerHTML = `<article><div><b>${safe(partner.partner_name)}</b><small>회원코드 ${safe(partner.masked_member_no)}</small></div><small data-relation-note="${teamId}">계보도 확인 중...</small>${partner.already_member ? '<strong class="partner-appointed">이미 등록된 파트너</strong>' : `<button class="primary compact" data-appoint="${teamId}" data-code="${safe(memberNo)}" type="button">파트너 임명</button>`}</article>`;
           box
             .querySelector("[data-appoint]")
             ?.addEventListener("click", appointPartner);
+          if (!partner.already_member) {
+            const relation = await checkGenealogyRelation(memberNo);
+            const note = box.querySelector("[data-relation-note]");
+            const appointButton = box.querySelector("[data-appoint]");
+            if (note) {
+              if (relation === "downline") {
+                note.textContent = "✅ 계보도 확인됨 · 내 하위 사업자입니다.";
+                note.className = "relation-ok";
+              } else if (relation === "upline") {
+                note.textContent = "⚠️ 계보도상 이 사람은 내 상위입니다. 상위를 내 하위 파트너로 등록하면 안 됩니다.";
+                note.className = "relation-warn";
+                if (appointButton) {
+                  appointButton.disabled = true;
+                  appointButton.textContent = "상위라 임명 불가";
+                }
+              } else if (relation === "unrelated") {
+                note.textContent = "❔ 계보도에서 이 사람이 내 하위로 확인되지 않습니다. 회원코드를 다시 확인해주세요.";
+                note.className = "relation-warn";
+              } else {
+                note.textContent = "계보도 데이터가 없어 관계를 확인하지 못했습니다(실적 탭에서 먼저 수집하면 확인됩니다).";
+                note.className = "relation-unknown";
+              }
+            }
+          } else {
+            const note = box.querySelector("[data-relation-note]");
+            if (note) note.remove();
+          }
         }),
     );
     root.querySelectorAll("[data-share]").forEach(
@@ -171,8 +248,17 @@ export async function teamPage(root, me) {
   }
 
   async function appointPartner(event) {
-    const button = event.currentTarget,
-      { data, error } = await supabase.rpc("appoint_partner_by_member_no", {
+    const button = event.currentTarget;
+    if (button.disabled) return;
+    const relation = await checkGenealogyRelation(button.dataset.code);
+    if (
+      relation === "upline" &&
+      !confirm(
+        "계보도상 이 사람은 내 상위로 확인됩니다. 그래도 파트너로 임명할까요?",
+      )
+    )
+      return;
+    const { data, error } = await supabase.rpc("appoint_partner_by_member_no", {
         p_team_id: button.dataset.appoint,
         p_member_no: button.dataset.code,
       });

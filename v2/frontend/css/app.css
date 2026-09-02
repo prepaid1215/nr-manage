@@ -143,7 +143,8 @@
 @media(max-width:900px){.nrc-overview{grid-template-columns:1fr 1fr}}@media(max-width:760px){.nrc-overview{grid-template-columns:1fr}.nrc-gauges{grid-template-columns:1fr}.nrc-overview article>div{padding:11px}.nrc-gauge{width:170px}}
 /* Partner appointment */
 .partner-search{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end;margin-top:12px}.partner-search label{margin:0}.partner-search button{width:auto;margin:0}
-.partner-result article{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;padding:12px;border:1px solid #b9d2ff;border-radius:12px;background:#f2f6ff}.partner-result small{display:block;margin-top:4px;color:var(--muted)}.partner-result button{margin:0}.partner-appointed{color:#187454;font-size:12px}
+.partner-result article{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;padding:12px;border:1px solid #b9d2ff;border-radius:12px;background:#f2f6ff;flex-wrap:wrap}.partner-result small{display:block;margin-top:4px;color:var(--muted)}.partner-result button{margin:0}.partner-appointed{color:#187454;font-size:12px}
+.relation-ok{color:#187454;font-weight:700}.relation-warn{color:var(--danger);font-weight:700}.relation-unknown{color:var(--muted)}
 .team-member-title{margin:16px 0 8px;font-size:13px}.team-members span b{margin-right:3px}
 @media(max-width:600px){.partner-search{grid-template-columns:1fr}.partner-search button{width:100%}.partner-result article{align-items:flex-start;flex-direction:column}}
 /* Closing plan steps */
