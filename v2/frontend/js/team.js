@@ -148,7 +148,7 @@ export async function teamPage(root, me) {
                   appointButton.textContent = "상위라 임명 불가";
                 }
               } else if (relation === "unrelated") {
-                note.textContent = "❔ 계보도에서 이 사람이 내 하위로 확인되지 않습니다. 회원코드를 다시 확인해주세요.";
+                note.textContent = "❔ 계보도에서 하위로 확인되지 않았습니다. 회원코드가 맞는지, 또는 계보 수집 중간에 빠진 사업자가 있어 연결이 끊긴 건 아닌지 확인해보세요. (막지는 않으니 확실하면 그대로 임명하셔도 됩니다)";
                 note.className = "relation-warn";
               } else {
                 note.textContent = "계보도 데이터가 없어 관계를 확인하지 못했습니다(실적 탭에서 먼저 수집하면 확인됩니다).";
