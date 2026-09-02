@@ -54,7 +54,7 @@ export async function teamPage(root, me) {
                   ? "OWNER"
                   : roles.get(team.id) || "MEMBER",
               canManage = role === "OWNER" || role === "MANAGER";
-            return `<section class="card team-card"><div class="section-head"><div><h2>${safe(team.name)}</h2><small>${safe(team.id)}</small></div><b>${role === "OWNER" ? "팀장" : role === "MANAGER" ? "관리자" : "파트너"}</b></div>${canManage ? `<form data-find-partner="${team.id}" class="partner-search"><label>하위 회원코드<input name="memberNo" inputmode="numeric" pattern="[0-9]+" placeholder="회원코드를 정확히 입력" required></label><button class="secondary" type="submit">코드 검색</button></form><div class="partner-result" data-partner-result="${team.id}"></div>` : ""}${role === "OWNER" ? `<form data-share="${team.id}" class="share-form"><select name="viewer" required><option value="">권한을 받을 파트너 선택</option></select><select name="resource">${resources.map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}</select><label class="check"><input name="write" type="checkbox"> 수정도 허용</label><button class="secondary">공유 권한 추가</button></form>` : ""}<h3 class="team-member-title">팀 구성원</h3><div data-members="${team.id}" class="team-members"></div><div data-team-status="${team.id}" class="connection-status" hidden></div></section>`;
+            return `<section class="card team-card"><div class="section-head"><div><h2>${safe(team.name)}</h2><small>${safe(team.id)}</small></div><b>${role === "OWNER" ? "팀장" : role === "MANAGER" ? "관리자" : "파트너"}</b></div>${canManage ? `<form data-find-partner="${team.id}" class="partner-search"><label>하위 회원코드<input name="memberNo" inputmode="numeric" pattern="[0-9]+" placeholder="회원코드를 정확히 입력" required></label><button class="secondary" type="submit">코드 검색</button></form><div class="partner-result" data-partner-result="${team.id}"></div>` : ""}${role === "OWNER" ? `<form data-share="${team.id}" class="share-form"><select name="viewer" required><option value="">권한을 받을 파트너 선택</option></select><div class="share-resource-grid">${resources.map(([value, label]) => `<label class="check compact"><input type="checkbox" name="resource" value="${value}"> ${label}</label>`).join("")}</div><label class="check"><input name="write" type="checkbox"> 수정도 허용</label><button class="secondary">공유 권한 추가</button></form><h3 class="team-member-title">공유 권한 목록</h3><div data-grants="${team.id}" class="grant-list"></div>` : ""}<h3 class="team-member-title">팀 구성원</h3><div data-members="${team.id}" class="team-members"></div><div data-team-status="${team.id}" class="connection-status" hidden></div></section>`;
           })
           .join("")
       : '<section class="card"><p class="help">가입한 팀이 없습니다.</p></section>';
@@ -88,29 +88,86 @@ export async function teamPage(root, me) {
       (form) =>
         (form.onsubmit = async (event) => {
           event.preventDefault();
+          const teamId = form.dataset.share,
+            selectedResources = [...form.querySelectorAll('[name="resource"]:checked')].map(
+              (input) => input.value,
+            );
+          if (!selectedResources.length) {
+            errorBox.textContent = "공유할 자료를 하나 이상 선택하세요.";
+            return;
+          }
           const { error } = await supabase.from("sharing_grants").upsert(
-            {
-              team_id: form.dataset.share,
+            selectedResources.map((resource) => ({
+              team_id: teamId,
               viewer_id: form.viewer.value,
               owner_id: me.id,
-              resource: form.resource.value,
+              resource,
               can_read: true,
               can_write: form.write.checked,
               created_by: me.id,
-            },
+            })),
             { onConflict: "team_id,viewer_id,owner_id,resource" },
           );
           if (error) errorBox.textContent = friendlyError(error);
           else {
-            const status = root.querySelector(
-              `[data-team-status="${form.dataset.share}"]`,
-            );
+            const status = root.querySelector(`[data-team-status="${teamId}"]`);
             status.hidden = false;
-            status.textContent = "자료 공유 권한을 저장했습니다.";
+            status.textContent = `자료 공유 권한 ${selectedResources.length}건을 저장했습니다.`;
+            form.querySelectorAll('[name="resource"]').forEach((input) => (input.checked = false));
+            await loadGrants(teamId);
           }
         }),
     );
     for (const team of teams) await loadMembers(team.id);
+    for (const team of teams)
+      if (team.owner_id === me.id) await loadGrants(team.id);
+  }
+
+  const resourceLabel = (value) =>
+    resources.find(([key]) => key === value)?.[1] || value;
+
+  async function loadGrants(teamId) {
+    const box = root.querySelector(`[data-grants="${teamId}"]`);
+    if (!box) return;
+    const [grantsResult, membersResult] = await Promise.all([
+      supabase
+        .from("sharing_grants")
+        .select("id,viewer_id,resource,can_write")
+        .eq("team_id", teamId)
+        .eq("owner_id", me.id),
+      supabase.rpc("list_team_partners", { p_team_id: teamId }),
+    ]);
+    if (grantsResult.error) {
+      box.innerHTML = `<p class="error">${safe(friendlyError(grantsResult.error))}</p>`;
+      return;
+    }
+    const nameByViewer = new Map(
+      (membersResult.data || []).map((member) => [
+        member.user_id,
+        member.partner_name,
+      ]),
+    );
+    const grants = grantsResult.data || [];
+    box.innerHTML = grants.length
+      ? grants
+          .map(
+            (grant) =>
+              `<article class="grant-item"><div><b>${safe(nameByViewer.get(grant.viewer_id) || "알 수 없음")}</b><small>${safe(resourceLabel(grant.resource))} · ${grant.can_write ? "읽기+수정" : "읽기만"}</small></div><button class="grant-revoke" data-revoke-grant="${grant.id}" type="button">취소</button></article>`,
+          )
+          .join("")
+      : '<p class="help">공유한 권한이 없습니다.</p>';
+    box.querySelectorAll("[data-revoke-grant]").forEach(
+      (button) =>
+        (button.onclick = async () => {
+          if (!confirm("이 공유 권한을 취소할까요?")) return;
+          const { error } = await supabase
+            .from("sharing_grants")
+            .delete()
+            .eq("id", button.dataset.revokeGrant);
+          if (error) errorBox.textContent = friendlyError(error);
+          else await loadGrants(teamId);
+        }),
+    );
   }
 
   async function appointPartner(event) {
