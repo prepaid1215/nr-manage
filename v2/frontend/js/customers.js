@@ -16,7 +16,7 @@ const loadFavSellers=async ownerId=>{const{data,error}=await supabase.from('fav_
 const addFavSeller=(ownerId,no,name)=>supabase.from('fav_sellers').insert({owner_id:ownerId,member_no:no,name});
 const delFavSeller=id=>supabase.from('fav_sellers').delete().eq('id',id);
 export async function customersPage(root,me,options){
-  root.innerHTML=`<section class="card"><div class="section-head"><div><h2>고객 관리</h2><p class="help">내 고객과 공유 허용된 팀 고객을 관리합니다.</p></div><div class="customer-header-actions"><button class="primary compact" id="customerAdd">+ 고객 등록</button></div></div><div class="customer-quick-actions"><button class="secondary compact" id="transferAdd">+ 신규개통양도</button><button class="secondary compact" id="repurchaseAdd">+ 재구매양도</button></div><div id="transferUndo" class="connection-status" hidden></div><div class="view-tabs"><button class="active" data-scope="mine">내 고객</button><button data-scope="shared">공유 고객</button><button id="dueOnly">🔔 알림 대상만</button></div><div class="customer-tools"><input id="customerSearch" type="search" placeholder="이름·전화번호·회원번호 검색"><select id="customerNetwork"><option value="">전체 통신사</option><option>KT</option><option>LG U+</option><option>SKT</option><option>알뜰폰</option></select></div><div id="customerSummary" class="org-summary"></div><div id="customerError" class="error"></div><div id="customerList" class="customer-list"></div></section><dialog id="customerDialog" class="customer-dialog"><form id="customerForm"><div class="dialog-head"><h2 id="customerTitle">고객 등록</h2><button id="customerClose" type="button">×</button></div><div class="customer-form"><input id="cId" type="hidden"><label>개통일<input id="cDate" type="date"></label><label>회원번호<input id="cMember"></label><label>고객명<input id="cName" required></label><label>전화번호<input id="cPhone" type="tel"></label><label>통신사<select id="cNetwork"><option value="">선택</option><option>KT</option><option>LG U+</option><option>SKT</option><option>알뜰폰</option></select></label><label>요금제<input id="cPlan"></label><label>개통유형<select id="cType"><option>신규</option><option>번호이동</option><option>기기변경</option></select></label><label>개통방법<select id="cMethod"><option>플랫폼</option><option>앤스마트</option><option>지점방문</option></select></label><label>유입경로<input id="cSource"></label><label>기여도<input id="cAttribution" type="number" min="0" value="0"></label><label class="full">메모<textarea id="cMemo" rows="3"></textarea></label></div><div class="customer-actions"><button class="secondary" id="customerCancel" type="button">취소</button><button class="primary" type="submit">저장</button></div></form></dialog><dialog id="amountDialog" class="customer-dialog small"><form id="amountForm"><div class="dialog-head"><h2 id="amountTitle">금액 입력</h2><button id="amountClose" type="button">×</button></div><p id="amountHint" class="help"></p><label>금액(원)<input id="amountValue" type="number" min="0" step="1000"></label><div class="customer-actions"><button class="secondary" id="amountSkip" type="button">건너뛰기</button><button class="primary" type="submit">저장</button></div></form></dialog><dialog id="repurchaseDialog" class="customer-dialog small"><div class="dialog-head"><h2>재구매 등록</h2><button id="repurchaseClose" type="button">×</button></div><label>전화번호 뒷자리<input id="repurchasePhone" inputmode="numeric" placeholder="예: 1234" maxlength="4"></label><div id="repurchaseMatches" class="repurchase-matches"></div><button class="secondary compact repurchase-skip" id="repurchaseSkip" type="button">번호 없이 입력</button><form id="repurchaseAmountForm" hidden><p id="repurchaseSelected" class="help"></p><label>재구매 금액(원)<input id="repurchaseValue" type="number" min="0" step="1000" required></label><div class="customer-actions"><button class="secondary" id="repurchaseBack" type="button">다시 검색</button><button class="primary" type="submit">저장</button></div></form></dialog>`;
+  root.innerHTML=`<section class="card"><div class="section-head"><div><h2>고객 관리</h2><p class="help">내 고객과 공유 허용된 팀 고객을 관리합니다.</p></div><div class="customer-header-actions"><button class="primary compact" id="customerAdd">+ 고객 등록</button></div></div><div class="customer-quick-actions"><button class="secondary compact" id="transferAdd">+ 신규개통양도</button><button class="secondary compact" id="repurchaseAdd">+ 재구매양도</button></div><div id="transferUndo" class="connection-status" hidden></div><details class="transfer-history"><summary>최근 양도 기록</summary><div id="transferList" class="transfer-list"></div></details><div class="view-tabs"><button class="active" data-scope="mine">내 고객</button><button data-scope="shared">공유 고객</button><button id="dueOnly">🔔 알림 대상만</button></div><div class="customer-tools"><input id="customerSearch" type="search" placeholder="이름·전화번호·회원번호 검색"><select id="customerNetwork"><option value="">전체 통신사</option><option>KT</option><option>LG U+</option><option>SKT</option><option>알뜰폰</option></select></div><div id="customerSummary" class="org-summary"></div><div id="customerError" class="error"></div><div id="customerList" class="customer-list"></div></section><dialog id="customerDialog" class="customer-dialog"><form id="customerForm"><div class="dialog-head"><h2 id="customerTitle">고객 등록</h2><button id="customerClose" type="button">×</button></div><div class="customer-form"><input id="cId" type="hidden"><label>개통일<input id="cDate" type="date"></label><label>회원번호<input id="cMember"></label><label>고객명<input id="cName" required></label><label>전화번호<input id="cPhone" type="tel"></label><label>통신사<select id="cNetwork"><option value="">선택</option><option>KT</option><option>LG U+</option><option>SKT</option><option>알뜰폰</option></select></label><label>요금제<input id="cPlan"></label><label>개통유형<select id="cType"><option>신규</option><option>번호이동</option><option>기기변경</option></select></label><label>개통방법<select id="cMethod"><option>플랫폼</option><option>앤스마트</option><option>지점방문</option></select></label><label>유입경로<input id="cSource"></label><label>기여도<input id="cAttribution" type="number" min="0" value="0"></label><label class="full">메모<textarea id="cMemo" rows="3"></textarea></label></div><div class="customer-actions"><button class="secondary" id="customerCancel" type="button">취소</button><button class="primary" type="submit">저장</button></div></form></dialog><dialog id="amountDialog" class="customer-dialog small"><form id="amountForm"><div class="dialog-head"><h2 id="amountTitle">금액 입력</h2><button id="amountClose" type="button">×</button></div><p id="amountHint" class="help"></p><div id="amountCustomerBlock" hidden><label>고객 검색<input id="amountCustomerSearch" type="search" placeholder="이름·전화번호·회원번호로 검색"></label><div id="amountCustomerMatches" class="repurchase-matches"></div><p id="amountCustomerSelected" class="help"></p><button class="secondary compact" id="amountSkipCustomer" type="button">이름 없이 저장</button></div><label>금액(원)<input id="amountValue" type="number" min="0" step="1000"></label><div class="customer-actions"><button class="secondary" id="amountSkip" type="button">건너뛰기</button><button class="primary" type="submit">저장</button></div></form></dialog><dialog id="repurchaseDialog" class="customer-dialog small"><div class="dialog-head"><h2>재구매 등록</h2><button id="repurchaseClose" type="button">×</button></div><label>전화번호 뒷자리<input id="repurchasePhone" inputmode="numeric" placeholder="예: 1234" maxlength="4"></label><div id="repurchaseMatches" class="repurchase-matches"></div><button class="secondary compact repurchase-skip" id="repurchaseSkip" type="button">번호 없이 입력</button><form id="repurchaseAmountForm" hidden><p id="repurchaseSelected" class="help"></p><label>재구매 금액(원)<input id="repurchaseValue" type="number" min="0" step="1000" required></label><div class="customer-actions"><button class="secondary" id="repurchaseBack" type="button">다시 검색</button><button class="primary" type="submit">저장</button></div></form></dialog>`;
   const $=id=>document.getElementById(id),dialog=$('customerDialog'),amountDialog=$('amountDialog'),repurchaseDialog=$('repurchaseDialog'),viewOwner=options?.viewOwner||null;let rows=[],scope='mine',alertsOnly=false,repurchaseTarget=null;
   if(viewOwner){
     root.querySelector('.customer-header-actions').hidden=true;
@@ -27,31 +27,88 @@ export async function customersPage(root,me,options){
     root.querySelector('.section-head').insertAdjacentHTML('beforeend','<button class="secondary compact" id="viewOwnerBack" type="button">← 조직으로</button>');
     $('viewOwnerBack').onclick=()=>document.querySelector('[data-page="organization"]')?.click();
   }
-  async function bumpDailyActivity(field,amount){
+  async function bumpDailyActivity(field,amount,date=localDate()){
     if(!amount)return;
-    const date=localDate();
     const{data:existing}=await supabase.from('daily_activities').select(field).eq('owner_id',me.id).eq('activity_date',date).maybeSingle();
     const next=Number(existing?.[field]||0)+Number(amount);
     return supabase.from('daily_activities').upsert({owner_id:me.id,activity_date:date,[field]:next,updated_at:new Date().toISOString()},{onConflict:'owner_id,activity_date'});
   }
-  // 신규개통양도/재구매양도는 하루 총액만 저장되고 건별 기록이 없어서,
-  // 방금 잘못 더한 금액을 바로 취소(음수로 되돌리기)할 수 있게 안내한다.
+  const transferFieldLabel=field=>field==='new_transfer'?'신규개통양도':'재구매양도';
+  // 신규개통양도/재구매양도를 건별로(누구에게 얼마) transfer_records에
+  // 남긴다. daily_activities 총액도 같이 올려서 홈/마감 화면은 그대로
+  // 동작한다. RUN_032_TRANSFER_RECORDS.sql을 실행하지 않은 계정이면
+  // 총액만 올라가고 건별 기록은 조용히 건너뛴다.
+  async function recordTransfer(field,amount,customer){
+    if(!amount)return null;
+    const date=localDate();
+    await bumpDailyActivity(field,amount,date);
+    const{data,error}=await supabase.from('transfer_records').insert({
+      owner_id:me.id,activity_date:date,field,
+      customer_id:customer?.id||null,customer_name:customer?.name||null,amount,
+    }).select().single();
+    offerTransferUndo(field,amount,transferFieldLabel(field),error?null:data?.id,date);
+    renderTransferList();
+    return error?null:data;
+  }
   const undoBox=$('transferUndo');
-  const offerTransferUndo=(field,amount,label)=>{
+  const offerTransferUndo=(field,amount,label,recordId,date=localDate())=>{
     if(!undoBox||!amount)return;
     undoBox.hidden=false;
     undoBox.innerHTML=`${label} ${amount.toLocaleString('ko-KR')}원을 오늘 기록에 더했습니다. <button class="secondary compact" id="transferUndoBtn" type="button">방금 추가 취소</button>`;
     $('transferUndoBtn').onclick=async()=>{
-      await bumpDailyActivity(field,-amount);
+      await bumpDailyActivity(field,-amount,date);
+      if(recordId)await supabase.from('transfer_records').delete().eq('id',recordId);
       undoBox.hidden=true;
       undoBox.innerHTML='';
+      renderTransferList();
     };
   };
-  const askAmount=(title,hint)=>new Promise(resolve=>{
+  async function loadTransferRecords(){
+    const{data,error}=await supabase.from('transfer_records').select('*').eq('owner_id',me.id).order('created_at',{ascending:false}).limit(20);
+    return error?[]:(data||[]);
+  }
+  async function renderTransferList(){
+    const box=$('transferList');
+    if(!box)return;
+    const list=await loadTransferRecords();
+    box.innerHTML=list.length?list.map(r=>`<article class="transfer-item"><div><b>${esc(r.customer_name||'이름 없음')}</b><small>${esc(transferFieldLabel(r.field))} · ${esc(r.activity_date)} · ${Number(r.amount).toLocaleString('ko-KR')}원</small></div><button class="customer-delete" data-del-transfer="${esc(r.id)}" type="button">취소</button></article>`).join(''):'<p class="help">최근 양도 기록이 없습니다. (RUN_032_TRANSFER_RECORDS.sql을 아직 실행 안 하셨다면 여기 목록만 비어 있고, 총액은 정상 반영됩니다.)</p>';
+    box.querySelectorAll('[data-del-transfer]').forEach(btn=>btn.onclick=async()=>{
+      const record=list.find(r=>r.id===btn.dataset.delTransfer);
+      if(!record||!confirm(`${record.customer_name||'이름 없음'} · ${Number(record.amount).toLocaleString('ko-KR')}원 기록을 취소할까요? 그날 총액에서도 빠집니다.`))return;
+      await bumpDailyActivity(record.field,-Number(record.amount),record.activity_date);
+      await supabase.from('transfer_records').delete().eq('id',record.id);
+      renderTransferList();
+    });
+  }
+  const renderAmountCustomerMatches=query=>{
+    const box=$('amountCustomerMatches'),q=query.trim().toLowerCase();
+    if(!q){box.innerHTML='';return}
+    const matches=rows.filter(r=>r.owner_id===me.id&&[r.name,r.phone,r.member_no].some(v=>String(v||'').toLowerCase().includes(q))).slice(0,8);
+    box.innerHTML=matches.length?matches.map(r=>`<button type="button" class="repurchase-match" data-pick-customer="${esc(r.id)}">${esc(r.name)} <small>${esc(phone(r.phone))}</small></button>`).join(''):'<p class="help">일치하는 고객이 없습니다.</p>';
+    box.querySelectorAll('[data-pick-customer]').forEach(btn=>btn.onclick=()=>{
+      const picked=rows.find(r=>r.id===btn.dataset.pickCustomer);
+      amountCustomer=picked?{id:picked.id,name:picked.name}:null;
+      $('amountCustomerSelected').textContent=picked?`선택됨: ${picked.name}`:'';
+      box.innerHTML='';
+    });
+  };
+  let amountCustomer=null;
+  const askAmount=(title,hint,opts={})=>new Promise(resolve=>{
     $('amountTitle').textContent=title;$('amountHint').textContent=hint;$('amountValue').value='';
+    const needCustomer=Boolean(opts.needCustomer);
+    amountCustomer=opts.presetCustomer||null;
+    $('amountCustomerBlock').hidden=!needCustomer;
+    $('amountCustomerSearch').value='';$('amountCustomerMatches').innerHTML='';
+    $('amountCustomerSelected').textContent=amountCustomer?`선택됨: ${amountCustomer.name}`:'';
     let settled=false;
     const done=value=>{if(settled)return;settled=true;resolve(value);if(amountDialog.open)amountDialog.close()};
-    $('amountForm').onsubmit=e=>{e.preventDefault();done(Number($('amountValue').value||0))};
+    $('amountForm').onsubmit=e=>{
+      e.preventDefault();
+      if(needCustomer&&amountCustomer===null){alert('고객을 검색해서 선택하거나, "이름 없이 저장"을 눌러주세요.');return}
+      done({amount:Number($('amountValue').value||0),customer:amountCustomer});
+    };
+    $('amountCustomerSearch').oninput=()=>renderAmountCustomerMatches($('amountCustomerSearch').value);
+    $('amountSkipCustomer').onclick=()=>{amountCustomer={id:null,name:null};$('amountCustomerSelected').textContent='이름 없이 저장'};
     $('amountSkip').onclick=()=>done(null);
     $('amountClose').onclick=()=>done(null);
     amountDialog.onclose=()=>done(null);
@@ -89,8 +146,8 @@ export async function customersPage(root,me,options){
   $('entryFile').onchange=async e=>{const file=e.target.files[0];if(!file)return;try{if(file.type.startsWith('image/')){$('entryHint').textContent='OCR 엔진 준비 중...';const Tesseract=await loadOcr(),result=await Tesseract.recognize(file,'kor+eng',{logger:m=>{if(m.status==='recognizing text')$('entryHint').textContent=`텍스트 인식 중 ${Math.round((m.progress||0)*100)}%`}});applyParsed(parseActivation(result.data.text||''));return}const text=await file.text(),items=backupBlocks(text);if(!items.length)throw Error('개통 메시지를 찾지 못했습니다.');if(!confirm(`${items.length}건을 고객으로 일괄 등록할까요?`))return;const{error}=await supabase.from('customers').insert(items.map(importedRow));if(error)throw error;dialog.close();await load()}catch(error){$('entryHint').textContent=error.message}};
   $('entryParse').onclick=()=>applyParsed(parseActivation($('entryText').value));
   root.querySelectorAll('[data-scope]').forEach(b=>b.onclick=()=>{scope=b.dataset.scope;root.querySelectorAll('[data-scope]').forEach(x=>x.classList.toggle('active',x===b));render()});
-  $('customerForm').onsubmit=async e=>{e.preventDefault();const id=$('cId').value,value={owner_id:me.id,activation_date:$('cDate').value||null,member_no:$('cMember').value||null,seller:$('cSeller').value||null,name:$('cName').value.trim(),phone:$('cPhone').value||null,contact_phone:$('cContactPhone').value||null,network:$('cNetwork').value||null,plan:$('cPlan').value||null,activation_type:$('cType').value,subscription_type:$('cSubscription').value,activation_method:$('cMethod').value,source:$('cSource').value||null,manager:$('cManager').value||null,contract_months:Number($('cContract').value||0),process_no:$('cProcess').value||null,attribution:Number($('cAttribution').value||0),memo:$('cMemo').value||null,updated_at:new Date().toISOString()};const{error}=id?await supabase.from('customers').update(value).eq('id',id):await supabase.from('customers').insert(value);if(error)$('customerError').textContent=error.message;else{dialog.close();await load();if(!id){const amount=await askAmount('신규양도 금액 입력','새로 등록한 고객의 신규양도 금액을 입력하면 오늘 활동 기록에 자동으로 더해집니다.');if(amount){await bumpDailyActivity('new_transfer',amount);offerTransferUndo('new_transfer',amount,'신규개통양도')}}}};
-  $('transferAdd').onclick=async()=>{const amount=await askAmount('신규개통양도 입력','금액을 입력하면 오늘 활동 기록의 신규개통양도금에 자동으로 더해집니다.');if(amount){await bumpDailyActivity('new_transfer',amount);offerTransferUndo('new_transfer',amount,'신규개통양도')}};
+  $('customerForm').onsubmit=async e=>{e.preventDefault();const id=$('cId').value,value={owner_id:me.id,activation_date:$('cDate').value||null,member_no:$('cMember').value||null,seller:$('cSeller').value||null,name:$('cName').value.trim(),phone:$('cPhone').value||null,contact_phone:$('cContactPhone').value||null,network:$('cNetwork').value||null,plan:$('cPlan').value||null,activation_type:$('cType').value,subscription_type:$('cSubscription').value,activation_method:$('cMethod').value,source:$('cSource').value||null,manager:$('cManager').value||null,contract_months:Number($('cContract').value||0),process_no:$('cProcess').value||null,attribution:Number($('cAttribution').value||0),memo:$('cMemo').value||null,updated_at:new Date().toISOString()};const{data:savedRow,error}=id?await supabase.from('customers').update(value).eq('id',id).select().single():await supabase.from('customers').insert(value).select().single();if(error)$('customerError').textContent=error.message;else{dialog.close();await load();if(!id){const picked=await askAmount('신규양도 금액 입력','새로 등록한 고객의 신규양도 금액을 입력하면 오늘 활동 기록에 자동으로 더해집니다.',{presetCustomer:savedRow?{id:savedRow.id,name:savedRow.name}:null});if(picked?.amount)await recordTransfer('new_transfer',picked.amount,picked.customer)}}};
+  $('transferAdd').onclick=async()=>{const picked=await askAmount('신규개통양도 입력','고객을 선택하고 금액을 입력하면 오늘 활동 기록에 자동으로 더해집니다.',{needCustomer:true});if(picked?.amount)await recordTransfer('new_transfer',picked.amount,picked.customer)};
   $('repurchaseAdd').onclick=()=>{$('repurchasePhone').value='';$('repurchaseMatches').innerHTML='';$('repurchaseAmountForm').hidden=true;repurchaseTarget=null;repurchaseDialog.showModal();$('repurchasePhone').focus()};
   $('repurchaseClose').onclick=()=>repurchaseDialog.close();
   const selectRepurchase=row=>{repurchaseTarget=row;$('repurchaseSelected').textContent=`${row.name} (${phone(row.phone)}) 고객`;$('repurchaseAmountForm').hidden=false;$('repurchaseValue').value='';$('repurchaseValue').focus()};
@@ -104,7 +161,8 @@ export async function customersPage(root,me,options){
   };
   $('repurchaseBack').onclick=()=>{$('repurchaseAmountForm').hidden=true;repurchaseTarget=null};
   $('repurchaseSkip').onclick=()=>{repurchaseTarget=null;$('repurchaseSelected').textContent='특정 고객 지정 없이 등록합니다.';$('repurchaseAmountForm').hidden=false;$('repurchaseValue').value='';$('repurchaseValue').focus()};
-  $('repurchaseAmountForm').onsubmit=async e=>{e.preventDefault();const amount=Number($('repurchaseValue').value||0);if(amount>0){await bumpDailyActivity('repurchase',amount);offerTransferUndo('repurchase',amount,'재구매양도')}repurchaseDialog.close()};
+  $('repurchaseAmountForm').onsubmit=async e=>{e.preventDefault();const amount=Number($('repurchaseValue').value||0);if(amount>0)await recordTransfer('repurchase',amount,repurchaseTarget?{id:repurchaseTarget.id,name:repurchaseTarget.name}:null);repurchaseDialog.close()};
   await load();
+  renderTransferList();
   if(options?.openAdd)open();
 }

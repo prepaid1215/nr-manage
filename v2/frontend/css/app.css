@@ -17,6 +17,17 @@
 .repurchase-matches{display:grid;gap:6px;padding:0 20px;margin-top:8px}
 .repurchase-match{width:100%;text-align:left;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:#fff;margin:0}
 .repurchase-match small{display:block;color:var(--muted);margin-top:2px}
+.transfer-history{margin-top:10px;border:1px solid var(--line);border-radius:11px;background:#fff;overflow:hidden}
+.transfer-history>summary{padding:10px 13px;cursor:pointer;font-size:12px;font-weight:800;color:var(--brand);background:#f5f8ff}
+.transfer-list{display:grid;gap:7px;padding:10px}
+.transfer-item{display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid var(--line);border-radius:10px;padding:9px 11px;background:#fafbfc}
+.transfer-item b{display:block;font-size:12px}
+.transfer-item small{display:block;color:var(--muted);margin-top:2px}
+.transfer-item .customer-delete{align-self:auto;border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+#amountCustomerBlock{border-top:1px dashed var(--line);border-bottom:1px dashed var(--line);padding:12px 20px;margin:14px 0}
+#amountCustomerBlock label{display:block;margin:0 0 8px}
+#amountCustomerBlock .repurchase-matches{padding:0;margin-top:0;margin-bottom:8px}
+#amountCustomerBlock p{margin:8px 0}
 .repurchase-skip{display:block;margin:10px 20px 4px}
 @media(max-width:600px){.customer-tools,.customer-form{grid-template-columns:1fr}.customer-form .full{grid-column:auto}}
 .due-pill{display:inline!important;margin-left:6px;padding:3px 6px!important;border-radius:999px!important;background:#e9f1ff!important;color:var(--brand);font-size:10px;font-style:normal}.due-pill.alert{background:#fff0f0!important;color:var(--danger)}.customer-sms{align-self:stretch;display:grid;place-items:center;padding:10px;border-left:1px solid var(--line);color:var(--brand);font-size:12px;font-weight:700;text-decoration:none}
