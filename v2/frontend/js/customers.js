@@ -6,6 +6,37 @@ let rechargeCycleDays=Number(localStorage.getItem('nrc-recharge-cycle')||30);
 const dueInfo=value=>{if(!value)return null;const [y,m,d]=value.split('-').map(Number),today=new Date();today.setHours(0,0,0,0);let due=new Date(y,m-1,d);due.setDate(due.getDate()+rechargeCycleDays);while(due<today)due.setDate(due.getDate()+rechargeCycleDays);const diff=Math.round((due-today)/86400000),date=`${due.getFullYear()}-${String(due.getMonth()+1).padStart(2,'0')}-${String(due.getDate()).padStart(2,'0')}`;return{diff,date,label:diff===0?'D-DAY':`D-${diff}`,alert:diff<=3}};
 const phone=value=>{const d=String(value||'').replace(/\D/g,'');return d.length===11?`${d.slice(0,3)}-${d.slice(3,7)}-${d.slice(7)}`:d.length===10?`${d.slice(0,3)}-${d.slice(3,6)}-${d.slice(6)}`:value||''};
 function parseActivation(text){const field=label=>text.match(new RegExp(`${label}\\s*[:：]\\s*([^\\n\\r]+)`,'i'))?.[1]?.trim()||'',phones=(text.match(/01[016789][-\s]?\d{3,4}[-\s]?\d{4}/g)||[]).map(phone),carrier=/LG/i.test(text)?'LG U+':/SKT|SK텔레콤/i.test(text)?'SKT':/\bKT\b|케이티/i.test(text)?'KT':'';return{process_no:field('처리번호'),network:carrier,activation_type:/번호\s*이동/.test(text)?'번호이동':/기기\s*변경/.test(text)?'기기변경':'신규',subscription_type:/후\s*불/.test(text)?'후불':'선불',plan:field('가입\\s*요금제'),name:field('이름'),phone:phones[0]||field('개통번호'),contact_phone:phones[1]||field('연락번호')}}
+// 앤텔레콤 "센터방문 개통 요청서" 양식 OCR용 파서. 체크박스(V/☑ 등)는 인식률이
+// 낮아 최선 추정치이며, 전화번호는 이 양식 단계에선 아직 없어 채우지 않는다.
+const VISIT_FORM_LABELS=['성명','생년월일','연락번호','회원번호','회원명','매출자','정보','명의자','통신망','선택','가입요금제','가입','요금제','사전','설명','필수','신규개통','번호이동','신규','개통','방문','예약','시간','특이사항'];
+function parseVisitForm(text){
+  const lines=text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  const norm=text.replace(/\s+/g,' ');
+  const checkedNear=re=>new RegExp(`[✓VvⅤ☑■✔]\\s{0,3}${re}`).test(norm);
+  const network=checkedNear('L\\s*망')?'LG U+':checkedNear('K\\s*망')?'KT':'';
+  const subscription_type=checkedNear('후\\s*불')&&!checkedNear('선\\s*불')?'후불':'선불';
+  const activation_type=checkedNear('번호\\s*이동')&&!checkedNear('신규\\s*개통')?'번호이동':'신규';
+  // 표 형식 양식이라 라벨 줄 다음 줄에 실제 값이 오는 경우가 많음. 라벨
+  // 단어 자체가 다음 줄로 잘못 잡히지 않도록 걸러낸다.
+  const valueAfter=(labelRe,tokenRe)=>{
+    const idx=lines.findIndex(l=>labelRe.test(l));
+    if(idx<0)return'';
+    for(let i=idx;i<Math.min(idx+3,lines.length);i++){
+      const tokens=lines[i].match(tokenRe)||[];
+      const hit=tokens.find(t=>!VISIT_FORM_LABELS.includes(t)&&!labelRe.test(t));
+      if(hit)return hit;
+    }
+    return'';
+  };
+  const name=valueAfter(/명의자\s*성명/,/[가-힣]{2,6}/g);
+  const plan=valueAfter(/가입\s*요금제/,/[0-9][0-9가-힣.\s]{1,18}[0-9가-힣]/g).trim();
+  const member_no=valueAfter(/매출자\s*정보|회원번호/,/\d{6,8}/g);
+  const seller=valueAfter(/매출자\s*정보|회원명/,/[가-힣]{2,6}/g);
+  const visit_time=valueAfter(/방문\s*예약\s*시간/,/[0-9][0-9월일시분\s가-힣APap:]{1,18}/g).trim();
+  const memoLine=valueAfter(/특이사항/,/.+/g);
+  const memo=memoLine==='-'?'':memoLine;
+  return{network,subscription_type,activation_type,name,plan,member_no,seller,visit_time,memo};
+}
 let ocrLoader;
 const loadOcr=()=>window.Tesseract?Promise.resolve(window.Tesseract):(ocrLoader||=(new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';script.onload=()=>resolve(window.Tesseract);script.onerror=()=>reject(Error('OCR 모듈을 불러오지 못했습니다.'));document.head.appendChild(script)})));
 let xlsxLoader;
@@ -143,7 +174,7 @@ export async function customersPage(root,me,options){
     amountDialog.showModal();
   });
   if(!viewOwner)root.querySelector('.customer-tools').insertAdjacentHTML('afterend',`<div class="customer-export-tools"><label>충전주기 <input id="cycleDays" type="number" min="1" value="${rechargeCycleDays}"></label><button id="exportVcf" type="button">📇 전체 연락처</button><button id="exportCsv" type="button">📊 CSV 내보내기</button><button id="exportJson" type="button">💾 JSON 백업</button><button id="importJson" type="button">📂 JSON 복원</button><input id="importJsonFile" type="file" accept="application/json,.json" hidden></div>`);
-  dialog.querySelector('.customer-form').insertAdjacentHTML('beforebegin',`<div class="customer-entry-tabs"><button class="active" data-entry="paste" type="button">📋 카톡 문자 붙여넣기</button><button data-entry="direct" type="button">✍️ 직접 작성</button><button data-entry="capture" type="button">🖼️ 카톡 캡처본</button><button data-entry="backup" type="button">📄 카톡 백업본</button></div><div id="entryImport" class="entry-import"><textarea id="entryText" rows="7" placeholder="처리번호: 20260727000018\n통신사: LGU\n가입구분: 신규가입\n가입유형: 선불\n가입 요금제: 선불 LTE 기본1\n이름: 주땡땡\n개통번호: 010-0000-0000"></textarea><input id="entryFile" type="file" accept=".txt,image/*" hidden><button class="primary" id="entryParse" type="button">붙여넣은 텍스트로 채우기</button><p id="entryHint" class="help">카톡 메시지를 그대로 붙여넣으면 아래 항목을 자동으로 채웁니다.</p></div>`);
+  dialog.querySelector('.customer-form').insertAdjacentHTML('beforebegin',`<div class="customer-entry-tabs"><button class="active" data-entry="paste" type="button">📋 카톡 문자 붙여넣기</button><button data-entry="direct" type="button">✍️ 직접 작성</button><button data-entry="capture" type="button">🖼️ 카톡 캡처본</button><button data-entry="visit" type="button">🏢 방문개통</button><button data-entry="backup" type="button">📄 카톡 백업본</button></div><div id="entryImport" class="entry-import"><textarea id="entryText" rows="7" placeholder="처리번호: 20260727000018\n통신사: LGU\n가입구분: 신규가입\n가입유형: 선불\n가입 요금제: 선불 LTE 기본1\n이름: 주땡땡\n개통번호: 010-0000-0000"></textarea><input id="entryFile" type="file" accept=".txt,image/*" hidden><button class="primary" id="entryParse" type="button">붙여넣은 텍스트로 채우기</button><p id="entryHint" class="help">카톡 메시지를 그대로 붙여넣으면 아래 항목을 자동으로 채웁니다.</p></div>`);
   $('cPhone').closest('label').insertAdjacentHTML('afterend',`<label>연락번호<input id="cContactPhone" type="tel"></label><label>가입유형<select id="cSubscription"><option>선불</option><option>후불</option></select></label>`);$('cSource').closest('label').insertAdjacentHTML('afterend',`<label>담당<input id="cManager"></label><label>약정기간<select id="cContract"><option value="0">없음</option><option value="6">6개월</option><option value="12">12개월</option><option value="24">24개월</option></select></label><input id="cProcess" type="hidden">`);
   $('cMember').closest('label').insertAdjacentHTML('afterend',`<label>매출자<input id="cSeller" placeholder="예: 주땡땡"></label><div class="full fav-sellers-block"><div class="fav-header"><span>⭐ 자주 쓰는 매출자 (클릭시 즉시 입력)</span><button class="secondary compact" id="favSellerSave" type="button">현재 정보 저장</button></div><div id="favSellerList" class="fav-list"></div></div>`);
   const renderFavSellers=async()=>{const list=await loadFavSellers(me.id);$('favSellerList').innerHTML=list.length?list.map(item=>`<span class="fav-chip" data-fav="${item.id}">${esc(item.name)}<i class="del" data-fav-del="${item.id}">×</i></span>`).join(''):'<span class="help">등록된 매출자가 없습니다.</span>';
@@ -160,6 +191,21 @@ export async function customersPage(root,me,options){
   async function load(){const{data,error}=await supabase.from('customers').select('*').order('activation_date',{ascending:false,nullsFirst:false});if(error){$('customerError').textContent=friendlyError(error);return}rows=data||[];render()}
   async function remove(id){if(!confirm('고객 정보를 삭제할까요?'))return;const{error}=await supabase.from('customers').delete().eq('id',id);if(error)$('customerError').textContent=friendlyError(error);else load()}
   const applyParsed=p=>{$('cProcess').value=p.process_no;$('cName').value=p.name;$('cPhone').value=p.phone;$('cContactPhone').value=p.contact_phone;$('cNetwork').value=p.network;$('cPlan').value=p.plan;$('cType').value=p.activation_type;$('cSubscription').value=p.subscription_type;dialog.querySelector('[data-entry="direct"]').click()};
+  const applyParsedVisit=p=>{
+    $('cMethod').value='지점방문';
+    if(p.network)$('cNetwork').value=p.network;
+    if(p.subscription_type)$('cSubscription').value=p.subscription_type;
+    if(p.activation_type)$('cType').value=p.activation_type;
+    if(p.name)$('cName').value=p.name;
+    if(p.plan)$('cPlan').value=p.plan;
+    if(p.member_no)$('cMember').value=p.member_no;
+    if(p.seller)$('cSeller').value=p.seller;
+    $('cPhone').value='';
+    const memoParts=[p.visit_time?`방문예약: ${p.visit_time}`:'',p.memo].filter(Boolean);
+    if(memoParts.length)$('cMemo').value=[$('cMemo').value.trim(),...memoParts].filter(Boolean).join(' / ');
+    syncChoices();
+    dialog.querySelector('[data-entry="direct"]').click();
+  };
   const importedRow=p=>({owner_id:me.id,activation_date:new Date().toISOString().slice(0,10),name:p.name||'이름 미상',phone:p.phone||null,contact_phone:p.contact_phone||null,network:p.network||null,plan:p.plan||null,activation_type:p.activation_type,subscription_type:p.subscription_type,activation_method:'플랫폼',source:'메인블로그',manager:me.name||null,process_no:p.process_no||null,status:'사용중'});
   dialog.querySelectorAll('[data-choice] button').forEach(button=>button.onclick=()=>{const group=button.closest('[data-choice]');$(group.dataset.choice).value=button.dataset.value;syncChoices()});
   const exportRows=()=>rows.filter(row=>scope==='mine'?row.owner_id===me.id:row.owner_id!==me.id);
@@ -170,8 +216,8 @@ export async function customersPage(root,me,options){
   if(!viewOwner){$('importJson').onclick=()=>$('importJsonFile').click();
   $('importJsonFile').onchange=async event=>{try{const file=event.target.files[0];if(!file)return;const parsed=JSON.parse(await file.text()),source=Array.isArray(parsed)?parsed:parsed.customers;if(!Array.isArray(source))throw Error('고객 백업 JSON 형식이 아닙니다.');const keys=['activation_date','member_no','seller','name','phone','contact_phone','network','plan','activation_type','subscription_type','activation_method','source','manager','contract_months','process_no','status','last_reminder_sent_at','attribution','memo'],knownProcess=new Set(rows.map(row=>row.process_no).filter(Boolean)),knownPhone=new Set(rows.map(row=>String(row.phone||'').replace(/\D/g,'')).filter(Boolean));const restored=source.filter(row=>row?.name).filter(row=>!(row.process_no&&knownProcess.has(row.process_no))&&!knownPhone.has(String(row.phone||'').replace(/\D/g,''))).map(row=>Object.fromEntries([['owner_id',me.id],...keys.map(key=>[key,row[key]??null]),['updated_at',new Date().toISOString()]]));if(!restored.length)throw Error('새로 복원할 고객이 없습니다.');if(!confirm(`${restored.length}명을 기존 고객에 추가할까요?`))return;const{error}=await supabase.from('customers').insert(restored);if(error)throw error;$('customerError').textContent=`${restored.length}명을 복원했습니다.`;await load()}catch(error){$('customerError').textContent=error.message}finally{event.target.value=''}}};
   $('customerAdd').onclick=()=>open();$('customerClose').onclick=$('customerCancel').onclick=()=>dialog.close();$('customerSearch').oninput=$('customerNetwork').onchange=render;$('dueOnly').onclick=()=>{alertsOnly=!alertsOnly;$('dueOnly').classList.toggle('active',alertsOnly);render()};
-  dialog.querySelectorAll('[data-entry]').forEach(b=>b.onclick=()=>{const mode=b.dataset.entry;dialog.querySelectorAll('[data-entry]').forEach(x=>x.classList.toggle('active',x===b));$('entryImport').hidden=mode==='direct';$('entryFile').hidden=!['backup','capture'].includes(mode);$('entryText').hidden=mode==='capture';$('entryParse').hidden=mode==='capture';$('entryHint').textContent=mode==='backup'?'카톡 대화 내보내기 .txt에서 개통 메시지를 일괄 등록합니다.':mode==='capture'?'캡처본을 선택하면 OCR로 자동 인식합니다.':'카톡 메시지를 그대로 붙여넣으면 자동으로 채웁니다.';if(['backup','capture'].includes(mode))$('entryFile').click()});
-  $('entryFile').onchange=async e=>{const file=e.target.files[0];if(!file)return;try{if(file.type.startsWith('image/')){$('entryHint').textContent='OCR 엔진 준비 중...';const Tesseract=await loadOcr(),result=await Tesseract.recognize(file,'kor+eng',{logger:m=>{if(m.status==='recognizing text')$('entryHint').textContent=`텍스트 인식 중 ${Math.round((m.progress||0)*100)}%`}});applyParsed(parseActivation(result.data.text||''));return}const text=await file.text(),items=backupBlocks(text);if(!items.length)throw Error('개통 메시지를 찾지 못했습니다.');if(!confirm(`${items.length}건을 고객으로 일괄 등록할까요?`))return;const{error}=await supabase.from('customers').insert(items.map(importedRow));if(error)throw error;dialog.close();await load()}catch(error){$('entryHint').textContent=error.message}};
+  dialog.querySelectorAll('[data-entry]').forEach(b=>b.onclick=()=>{const mode=b.dataset.entry;dialog.querySelectorAll('[data-entry]').forEach(x=>x.classList.toggle('active',x===b));$('entryImport').hidden=mode==='direct';$('entryFile').hidden=!['backup','capture','visit'].includes(mode);$('entryText').hidden=['capture','visit'].includes(mode);$('entryParse').hidden=['capture','visit'].includes(mode);$('entryHint').textContent=mode==='backup'?'카톡 대화 내보내기 .txt에서 개통 메시지를 일괄 등록합니다.':mode==='capture'?'캡처본을 선택하면 OCR로 자동 인식합니다.':mode==='visit'?'센터방문 개통 요청서 이미지를 선택하면 OCR로 자동 인식합니다. 전화번호는 개통 완료 후 직접 입력해주세요.':'카톡 메시지를 그대로 붙여넣으면 자동으로 채웁니다.';if(['backup','capture','visit'].includes(mode))$('entryFile').click()});
+  $('entryFile').onchange=async e=>{const file=e.target.files[0];if(!file)return;const mode=dialog.querySelector('[data-entry].active')?.dataset.entry;try{if(file.type.startsWith('image/')){$('entryHint').textContent='OCR 엔진 준비 중...';const Tesseract=await loadOcr(),result=await Tesseract.recognize(file,'kor+eng',{logger:m=>{if(m.status==='recognizing text')$('entryHint').textContent=`텍스트 인식 중 ${Math.round((m.progress||0)*100)}%`}});const text=result.data.text||'';if(mode==='visit')applyParsedVisit(parseVisitForm(text));else applyParsed(parseActivation(text));return}const text=await file.text(),items=backupBlocks(text);if(!items.length)throw Error('개통 메시지를 찾지 못했습니다.');if(!confirm(`${items.length}건을 고객으로 일괄 등록할까요?`))return;const{error}=await supabase.from('customers').insert(items.map(importedRow));if(error)throw error;dialog.close();await load()}catch(error){$('entryHint').textContent=error.message}};
   $('entryParse').onclick=()=>applyParsed(parseActivation($('entryText').value));
   root.querySelectorAll('[data-scope]').forEach(b=>b.onclick=()=>{scope=b.dataset.scope;root.querySelectorAll('[data-scope]').forEach(x=>x.classList.toggle('active',x===b));render()});
   $('customerForm').onsubmit=async e=>{e.preventDefault();const id=$('cId').value,value={owner_id:me.id,activation_date:$('cDate').value||null,member_no:$('cMember').value||null,seller:$('cSeller').value||null,name:$('cName').value.trim(),phone:$('cPhone').value||null,contact_phone:$('cContactPhone').value||null,network:$('cNetwork').value||null,plan:$('cPlan').value||null,activation_type:$('cType').value,subscription_type:$('cSubscription').value,activation_method:$('cMethod').value,source:$('cSource').value||null,manager:$('cManager').value||null,contract_months:Number($('cContract').value||0),process_no:$('cProcess').value||null,attribution:Number($('cAttribution').value||0),memo:$('cMemo').value||null,updated_at:new Date().toISOString()};const{data:savedRow,error}=id?await supabase.from('customers').update(value).eq('id',id).select().single():await supabase.from('customers').insert(value).select().single();if(error)$('customerError').textContent=error.message;else{dialog.close();await load();if(!id){const picked=await askAmount('신규양도 금액 입력','새로 등록한 고객의 신규양도 금액을 입력하면 그 날짜의 활동 기록에 자동으로 더해집니다.',{presetCustomer:savedRow?{id:savedRow.id,name:savedRow.name}:null,date:value.activation_date});if(picked?.amount)await recordTransfer('new_transfer',picked.amount,picked.customer,picked.date)}}};
