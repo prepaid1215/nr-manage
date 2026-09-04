@@ -39,20 +39,36 @@ function parseVisitForm(text){
   const memo=memoLine==='-'?'':memoLine;
   return{network,subscription_type,activation_type,name,plan,member_no,seller,visit_time,memo};
 }
-// 방문개통 요청서 사진은 작은 표 글씨라 원본 그대로 Tesseract에 넣으면
-// 일부 줄이 통째로 누락되기도 한다. 확대 + 흑백 대비 강화로 인식률을 올린다.
+// 방문개통 요청서 표 글씨는 원본 그대로 Tesseract에 넣으면 일부 줄이
+// 통째로 누락되기도 한다. 확대 + Otsu 기준 흑백 이진화로 인식률을 올린다.
+function otsuThreshold(gray,len){
+  const hist=new Array(256).fill(0);
+  for(let i=0;i<len;i++)hist[gray[i]]++;
+  let sum=0;for(let t=0;t<256;t++)sum+=t*hist[t];
+  let sumB=0,wB=0,varMax=0,threshold=127;
+  for(let t=0;t<256;t++){
+    wB+=hist[t];if(!wB)continue;
+    const wF=len-wB;if(!wF)break;
+    sumB+=t*hist[t];
+    const mB=sumB/wB,mF=(sum-sumB)/wF,varBetween=wB*wF*(mB-mF)*(mB-mF);
+    if(varBetween>varMax){varMax=varBetween;threshold=t}
+  }
+  return threshold;
+}
 async function preprocessVisitImage(file){
   const bitmap=await createImageBitmap(file);
-  const scale=Math.min(3,Math.max(1,1600/bitmap.width));
+  const scale=Math.min(3,Math.max(1,1800/bitmap.width));
   const canvas=document.createElement('canvas');
   canvas.width=Math.round(bitmap.width*scale);
   canvas.height=Math.round(bitmap.height*scale);
   const ctx=canvas.getContext('2d');
   ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);
-  const img=ctx.getImageData(0,0,canvas.width,canvas.height),data=img.data;
-  for(let i=0;i<data.length;i+=4){
-    const gray=data[i]*0.299+data[i+1]*0.587+data[i+2]*0.114,boosted=gray<150?Math.max(0,gray-40):Math.min(255,gray+40);
-    data[i]=data[i+1]=data[i+2]=boosted;
+  const img=ctx.getImageData(0,0,canvas.width,canvas.height),data=img.data,pixelCount=data.length/4,gray=new Uint8ClampedArray(pixelCount);
+  for(let i=0,p=0;i<data.length;i+=4,p++)gray[p]=data[i]*0.299+data[i+1]*0.587+data[i+2]*0.114;
+  const threshold=otsuThreshold(gray,pixelCount);
+  for(let i=0,p=0;i<data.length;i+=4,p++){
+    const bw=gray[p]<threshold?0:255;
+    data[i]=data[i+1]=data[i+2]=bw;
   }
   ctx.putImageData(img,0,0);
   return new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
@@ -223,7 +239,7 @@ export async function customersPage(root,me,options){
     $('cPhone').value='';
     // 인식이 틀렸을 때 바로 눈으로 비교/수정할 수 있게 원문 OCR 텍스트를
     // 메모 맨 앞에 남겨둔다. 저장 전 검토 화면에서 지우거나 고치면 된다.
-    const rawSnippet=(rawText||'').replace(/\s+/g,' ').trim().slice(0,300);
+    const rawSnippet=(rawText||'').replace(/\s+/g,' ').trim().slice(0,1500);
     const memoParts=[p.visit_time?`방문예약: ${p.visit_time}`:'',p.memo,rawSnippet?`[OCR 원문] ${rawSnippet}`:''].filter(Boolean);
     if(memoParts.length)$('cMemo').value=[$('cMemo').value.trim(),...memoParts].filter(Boolean).join(' / ');
     syncChoices();
@@ -240,7 +256,7 @@ export async function customersPage(root,me,options){
   $('importJsonFile').onchange=async event=>{try{const file=event.target.files[0];if(!file)return;const parsed=JSON.parse(await file.text()),source=Array.isArray(parsed)?parsed:parsed.customers;if(!Array.isArray(source))throw Error('고객 백업 JSON 형식이 아닙니다.');const keys=['activation_date','member_no','seller','name','phone','contact_phone','network','plan','activation_type','subscription_type','activation_method','source','manager','contract_months','process_no','status','last_reminder_sent_at','attribution','memo'],knownProcess=new Set(rows.map(row=>row.process_no).filter(Boolean)),knownPhone=new Set(rows.map(row=>String(row.phone||'').replace(/\D/g,'')).filter(Boolean));const restored=source.filter(row=>row?.name).filter(row=>!(row.process_no&&knownProcess.has(row.process_no))&&!knownPhone.has(String(row.phone||'').replace(/\D/g,''))).map(row=>Object.fromEntries([['owner_id',me.id],...keys.map(key=>[key,row[key]??null]),['updated_at',new Date().toISOString()]]));if(!restored.length)throw Error('새로 복원할 고객이 없습니다.');if(!confirm(`${restored.length}명을 기존 고객에 추가할까요?`))return;const{error}=await supabase.from('customers').insert(restored);if(error)throw error;$('customerError').textContent=`${restored.length}명을 복원했습니다.`;await load()}catch(error){$('customerError').textContent=error.message}finally{event.target.value=''}}};
   $('customerAdd').onclick=()=>open();$('customerClose').onclick=$('customerCancel').onclick=()=>dialog.close();$('customerSearch').oninput=$('customerNetwork').onchange=render;$('dueOnly').onclick=()=>{alertsOnly=!alertsOnly;$('dueOnly').classList.toggle('active',alertsOnly);render()};
   dialog.querySelectorAll('[data-entry]').forEach(b=>b.onclick=()=>{const mode=b.dataset.entry;dialog.querySelectorAll('[data-entry]').forEach(x=>x.classList.toggle('active',x===b));$('entryImport').hidden=mode==='direct';$('entryFile').hidden=!['backup','capture','visit'].includes(mode);$('entryText').hidden=['capture','visit'].includes(mode);$('entryParse').hidden=['capture','visit'].includes(mode);$('entryHint').textContent=mode==='backup'?'카톡 대화 내보내기 .txt에서 개통 메시지를 일괄 등록합니다.':mode==='capture'?'캡처본을 선택하면 OCR로 자동 인식합니다.':mode==='visit'?'센터방문 개통 요청서 이미지를 선택하면 OCR로 자동 인식합니다. 전화번호는 개통 완료 후 직접 입력해주세요.':'카톡 메시지를 그대로 붙여넣으면 자동으로 채웁니다.';if(['backup','capture','visit'].includes(mode))$('entryFile').click()});
-  $('entryFile').onchange=async e=>{const file=e.target.files[0];if(!file)return;const mode=dialog.querySelector('[data-entry].active')?.dataset.entry;try{if(file.type.startsWith('image/')){$('entryHint').textContent='OCR 엔진 준비 중...';const Tesseract=await loadOcr(),ocrOptions={logger:m=>{if(m.status==='recognizing text')$('entryHint').textContent=`텍스트 인식 중 ${Math.round((m.progress||0)*100)}%`}};let ocrInput=file;if(mode==='visit'){ocrOptions.tessedit_pageseg_mode='6';try{ocrInput=await preprocessVisitImage(file)}catch{ocrInput=file}}const result=await Tesseract.recognize(ocrInput,'kor+eng',ocrOptions);const text=result.data.text||'';if(mode==='visit')applyParsedVisit(parseVisitForm(text),text);else applyParsed(parseActivation(text));return}const text=await file.text(),items=backupBlocks(text);if(!items.length)throw Error('개통 메시지를 찾지 못했습니다.');if(!confirm(`${items.length}건을 고객으로 일괄 등록할까요?`))return;const{error}=await supabase.from('customers').insert(items.map(importedRow));if(error)throw error;dialog.close();await load()}catch(error){$('entryHint').textContent=error.message}};
+  $('entryFile').onchange=async e=>{const file=e.target.files[0];if(!file)return;const mode=dialog.querySelector('[data-entry].active')?.dataset.entry;try{if(file.type.startsWith('image/')){$('entryHint').textContent='OCR 엔진 준비 중...';const Tesseract=await loadOcr(),ocrOptions={logger:m=>{if(m.status==='recognizing text')$('entryHint').textContent=`텍스트 인식 중 ${Math.round((m.progress||0)*100)}%`}};let ocrInput=file;if(mode==='visit'){try{ocrInput=await preprocessVisitImage(file)}catch{ocrInput=file}}const result=await Tesseract.recognize(ocrInput,'kor+eng',ocrOptions);const text=result.data.text||'';if(mode==='visit')applyParsedVisit(parseVisitForm(text),text);else applyParsed(parseActivation(text));return}const text=await file.text(),items=backupBlocks(text);if(!items.length)throw Error('개통 메시지를 찾지 못했습니다.');if(!confirm(`${items.length}건을 고객으로 일괄 등록할까요?`))return;const{error}=await supabase.from('customers').insert(items.map(importedRow));if(error)throw error;dialog.close();await load()}catch(error){$('entryHint').textContent=error.message}};
   $('entryParse').onclick=()=>applyParsed(parseActivation($('entryText').value));
   root.querySelectorAll('[data-scope]').forEach(b=>b.onclick=()=>{scope=b.dataset.scope;root.querySelectorAll('[data-scope]').forEach(x=>x.classList.toggle('active',x===b));render()});
   $('customerForm').onsubmit=async e=>{e.preventDefault();const id=$('cId').value,value={owner_id:me.id,activation_date:$('cDate').value||null,member_no:$('cMember').value||null,seller:$('cSeller').value||null,name:$('cName').value.trim(),phone:$('cPhone').value||null,contact_phone:$('cContactPhone').value||null,network:$('cNetwork').value||null,plan:$('cPlan').value||null,activation_type:$('cType').value,subscription_type:$('cSubscription').value,activation_method:$('cMethod').value,source:$('cSource').value||null,manager:$('cManager').value||null,contract_months:Number($('cContract').value||0),process_no:$('cProcess').value||null,attribution:Number($('cAttribution').value||0),memo:$('cMemo').value||null,updated_at:new Date().toISOString()};const{data:savedRow,error}=id?await supabase.from('customers').update(value).eq('id',id).select().single():await supabase.from('customers').insert(value).select().single();if(error)$('customerError').textContent=error.message;else{dialog.close();await load();if(!id){const picked=await askAmount('신규양도 금액 입력','새로 등록한 고객의 신규양도 금액을 입력하면 그 날짜의 활동 기록에 자동으로 더해집니다.',{presetCustomer:savedRow?{id:savedRow.id,name:savedRow.name}:null,date:value.activation_date});if(picked?.amount)await recordTransfer('new_transfer',picked.amount,picked.customer,picked.date)}}};
