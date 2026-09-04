@@ -239,7 +239,7 @@ export async function customersPage(root,me,options){
     $('cPhone').value='';
     // 인식이 틀렸을 때 바로 눈으로 비교/수정할 수 있게 원문 OCR 텍스트를
     // 메모 맨 앞에 남겨둔다. 저장 전 검토 화면에서 지우거나 고치면 된다.
-    const rawSnippet=(rawText||'').replace(/\s+/g,' ').trim().slice(0,1500);
+    const rawSnippet=(rawText||'').replace(/\s+/g,' ').trim();
     const memoParts=[p.visit_time?`방문예약: ${p.visit_time}`:'',p.memo,rawSnippet?`[OCR 원문] ${rawSnippet}`:''].filter(Boolean);
     if(memoParts.length)$('cMemo').value=[$('cMemo').value.trim(),...memoParts].filter(Boolean).join(' / ');
     syncChoices();
