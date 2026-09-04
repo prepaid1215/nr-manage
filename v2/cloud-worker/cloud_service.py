@@ -26,6 +26,8 @@ SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 ENCRYPTION_KEY = os.getenv("NRC_CREDENTIAL_ENCRYPTION_KEY", "")
 APP_ORIGIN = os.getenv("APP_ORIGIN", "https://prepaid1215.github.io")
+CLOVA_OCR_SECRET_KEY = os.getenv("CLOVA_OCR_SECRET_KEY", "")
+CLOVA_OCR_INVOKE_URL = os.getenv("CLOVA_OCR_INVOKE_URL", "")
 WORKER_ID = os.getenv("WORKER_ID", f"cloud-{uuid.uuid4().hex[:8]}")
 POLL_SECONDS = int(os.getenv("POLL_SECONDS", "4"))
 RUN_BROWSER_WORKER = os.getenv("RUN_BROWSER_WORKER", "false").lower() == "true"
@@ -236,6 +238,63 @@ def wake():
         return jsonify({"ok": True})
     except PermissionError as exc:
         return jsonify({"ok": False, "message": str(exc)}), 401
+
+
+@app.route("/ocr/visit-form", methods=["POST", "OPTIONS"])
+def ocr_visit_form():
+    """센터방문 개통 요청서 이미지를 네이버 CLOVA OCR(General)로 인식해
+    라벨-값 표를 줄 단위 텍스트로 재구성해 돌려준다. 프론트의 표 파서가
+    그대로 재사용할 수 있게, CLOVA가 주는 lineBreak 힌트로 줄바꿈을 만든다."""
+    if request.method == "OPTIONS":
+        return "", 204
+    try:
+        user_from_request()
+        if not (CLOVA_OCR_SECRET_KEY and CLOVA_OCR_INVOKE_URL):
+            return jsonify({"ok": False, "message": "CLOVA OCR이 아직 설정되지 않았습니다."}), 503
+        file = request.files.get("image")
+        if not file:
+            return jsonify({"ok": False, "message": "이미지 파일이 없습니다."}), 400
+        image_bytes = file.read()
+        if len(image_bytes) > 10 * 1024 * 1024:
+            return jsonify({"ok": False, "message": "이미지 파일이 너무 큽니다(10MB 이하만 가능)."}), 400
+        ext = (file.filename or "").rsplit(".", 1)[-1].lower() if "." in (file.filename or "") else ""
+        image_format = ext if ext in ("jpg", "jpeg", "png", "pdf", "tiff") else "jpg"
+        payload = {
+            "version": "V2",
+            "requestId": str(uuid.uuid4()),
+            "timestamp": int(time.time() * 1000),
+            "lang": "ko",
+            "images": [
+                {
+                    "format": image_format,
+                    "name": "visit-form",
+                    "data": base64.b64encode(image_bytes).decode("ascii"),
+                }
+            ],
+        }
+        response = requests.post(
+            CLOVA_OCR_INVOKE_URL,
+            headers={"X-OCR-SECRET": CLOVA_OCR_SECRET_KEY, "Content-Type": "application/json"},
+            json=payload,
+            timeout=30,
+        )
+        if response.status_code != 200:
+            return jsonify({"ok": False, "message": f"CLOVA OCR 요청 실패({response.status_code})"}), 502
+        result = response.json()
+        fields = (result.get("images") or [{}])[0].get("fields") or []
+        lines, current = [], []
+        for field in fields:
+            current.append(str(field.get("inferText", "")))
+            if field.get("lineBreak"):
+                lines.append(" ".join(current))
+                current = []
+        if current:
+            lines.append(" ".join(current))
+        return jsonify({"ok": True, "text": "\n".join(lines)})
+    except PermissionError as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 401
+    except Exception as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 500
 
 
 def patch_job(job_id, values):

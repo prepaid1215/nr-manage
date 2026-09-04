@@ -17,3 +17,7 @@ services:
         generateValue: true
       - key: APP_ORIGIN
         value: https://prepaid1215.github.io
+      - key: CLOVA_OCR_SECRET_KEY
+        sync: false
+      - key: CLOVA_OCR_INVOKE_URL
+        sync: false
