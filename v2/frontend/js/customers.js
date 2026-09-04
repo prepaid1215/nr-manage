@@ -48,14 +48,14 @@ function parseVisitForm(text,sellerBlockText='',rateBlockText=''){
     }
     return'';
   };
-  const visit_time=valueAfter(/방문\s*예약\s*시간/,/[0-9][0-9월일시분\s가-힣APap:]{1,18}/g,{window:3}).trim();
+  const visit_time=valueAfter(/방문\s*예약\s*시간/,/[0-9][0-9월일시분\s가-힣APap:]{1,18}/g,{window:5}).trim();
   const sellerTokens=koreanTokensOf(sellerBlockText);
-  const member_no=(sellerBlockText.match(/\d{6,8}/)||[])[0]||valueAfter(/매출자\s*정보|회원번호/,/\d{6,8}/g,{window:4});
-  const seller=sellerTokens[0]||valueAfter(/매출자\s*정보|회원명/,/[가-힣]{2,6}/g,{window:4});
-  const name=sellerTokens[1]||valueAfter(/명의자\s*성명/,/[가-힣]{2,6}/g,{window:3,reject:t=>t===seller});
+  const member_no=(sellerBlockText.match(/\d{6,8}/)||[])[0]||valueAfter(/매출자\s*정보|회원번호/,/\d{6,8}/g,{window:6});
+  const seller=sellerTokens[0]||valueAfter(/매출자\s*정보|회원명/,/[가-힣]{2,6}/g,{window:6});
+  const name=sellerTokens[1]||valueAfter(/명의자\s*성명/,/[가-힣]{2,6}/g,{window:6,reject:t=>t===seller});
   const rateToken=(rateBlockText.match(/[0-9][0-9가-힣.\s]{1,18}[0-9가-힣]/g)||[]).map(t=>t.trim()).find(t=>!VISIT_TIME_LIKE.test(t)&&!VISIT_FORM_LABELS.includes(t));
-  const plan=rateToken||valueAfter(/가입\s*요금제/,/[0-9][0-9가-힣.\s]{1,18}[0-9가-힣]/g,{window:4,reject:t=>t===visit_time||VISIT_TIME_LIKE.test(t)}).trim();
-  const memoLine=valueAfter(/특이사항/,/.+/g,{window:3});
+  const plan=rateToken||valueAfter(/가입\s*요금제/,/[0-9][0-9가-힣.\s]{1,18}[0-9가-힣]/g,{window:6,reject:t=>t===visit_time||VISIT_TIME_LIKE.test(t)}).trim();
+  const memoLine=valueAfter(/특이사항/,/.+/g,{window:5});
   const memo=memoLine==='-'?'':memoLine;
   return{network,subscription_type,activation_type,name,plan,member_no,seller,visit_time,memo};
 }
@@ -302,7 +302,7 @@ export async function customersPage(root,me,options){
     $('cPhone').value='';
     // 인식이 틀렸을 때 바로 눈으로 비교/수정할 수 있게 원문 OCR 텍스트를
     // 메모 맨 앞에 남겨둔다. 저장 전 검토 화면에서 지우거나 고치면 된다.
-    const rawSnippet=(rawText||'').replace(/\s+/g,' ').trim();
+    const rawSnippet=(rawText||'').split(/\r?\n/).map(l=>l.replace(/[ \t]+/g,' ').trim()).filter(Boolean).join(' ¶ ');
     const memoParts=[p.visit_time?`방문예약: ${p.visit_time}`:'',p.memo,rawSnippet?`[OCR 원문] ${rawSnippet}`:''].filter(Boolean);
     if(memoParts.length)$('cMemo').value=[$('cMemo').value.trim(),...memoParts].filter(Boolean).join(' / ');
     syncChoices();
