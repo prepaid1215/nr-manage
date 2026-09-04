@@ -10,13 +10,18 @@ function parseActivation(text){const field=label=>text.match(new RegExp(`${label
 // 낮아 최선 추정치이며, 전화번호는 이 양식 단계에선 아직 없어 채우지 않는다.
 const VISIT_FORM_LABELS=['성명','생년월일','연락번호','회원번호','회원명','매출자','정보','명의자','통신망','선택','가입요금제','가입','요금제','사전','설명','필수','신규개통','번호이동','신규','개통','방문','예약','시간','특이사항'];
 const VISIT_TIME_LIKE=/\d+\s*월|\d+\s*일|오전|오후|\d+\s*시|\d+\s*분/;
-function parseVisitForm(text){
+const koreanTokensOf=text=>(text.match(/[가-힣]{2,6}/g)||[]).filter(t=>!VISIT_FORM_LABELS.includes(t));
+// sellerBlockText/rateBlockText는 앵커 기반으로 잘라 확대 재인식한 구간
+// 텍스트(ocrVisitForm 참고). 있으면 그쪽을 우선 쓰고, 없으면 전체 텍스트
+// 라인 탐색으로 되돌아간다(이전 방식, 정확도는 더 낮음).
+function parseVisitForm(text,sellerBlockText='',rateBlockText=''){
   const lines=text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
   const norm=text.replace(/\s+/g,' ');
-  const checkedNear=re=>new RegExp(`[✓VvⅤ☑■✔]\\s{0,3}${re}`).test(norm);
-  const network=checkedNear('L\\s*망')?'LG U+':checkedNear('K\\s*망')?'KT':'';
-  const subscription_type=checkedNear('후\\s*불')&&!checkedNear('선\\s*불')?'후불':'선불';
-  const activation_type=checkedNear('번호\\s*이동')&&!checkedNear('신규\\s*개통')?'번호이동':'신규';
+  const checkedNear=(src,re)=>new RegExp(`[✓VvⅤ☑■✔]\\s{0,3}${re}`).test(src);
+  const rateNorm=rateBlockText.replace(/\s+/g,' ');
+  const network=checkedNear(rateNorm,'L\\s*망')?'LG U+':checkedNear(rateNorm,'K\\s*망')?'KT':checkedNear(norm,'L\\s*망')?'LG U+':checkedNear(norm,'K\\s*망')?'KT':'';
+  const subscription_type=checkedNear(norm,'후\\s*불')&&!checkedNear(norm,'선\\s*불')?'후불':'선불';
+  const activation_type=checkedNear(norm,'번호\\s*이동')&&!checkedNear(norm,'신규\\s*개통')?'번호이동':'신규';
   // 표 형식 양식이라 라벨 줄 다음 줄에 실제 값이 오는 경우가 많지만, 사진
   // OCR는 칸을 블록 단위로 뒤섞어 읽기도 해서 창을 넓게 보고 다른 필드
   // 값(reject)이 잘못 섞여 들어오지 않게 걸러낸다.
@@ -31,10 +36,12 @@ function parseVisitForm(text){
     return'';
   };
   const visit_time=valueAfter(/방문\s*예약\s*시간/,/[0-9][0-9월일시분\s가-힣APap:]{1,18}/g,{window:3}).trim();
-  const name=valueAfter(/명의자\s*성명/,/[가-힣]{2,6}/g,{window:3});
-  const plan=valueAfter(/가입\s*요금제/,/[0-9][0-9가-힣.\s]{1,18}[0-9가-힣]/g,{window:4,reject:t=>t===visit_time||VISIT_TIME_LIKE.test(t)}).trim();
-  const member_no=valueAfter(/매출자\s*정보|회원번호/,/\d{6,8}/g,{window:4});
-  const seller=valueAfter(/매출자\s*정보|회원명/,/[가-힣]{2,6}/g,{window:4,reject:t=>t===name});
+  const sellerTokens=koreanTokensOf(sellerBlockText);
+  const member_no=(sellerBlockText.match(/\d{6,8}/)||[])[0]||valueAfter(/매출자\s*정보|회원번호/,/\d{6,8}/g,{window:4});
+  const seller=sellerTokens[0]||valueAfter(/매출자\s*정보|회원명/,/[가-힣]{2,6}/g,{window:4});
+  const name=sellerTokens[1]||valueAfter(/명의자\s*성명/,/[가-힣]{2,6}/g,{window:3,reject:t=>t===seller});
+  const rateToken=(rateBlockText.match(/[0-9][0-9가-힣.\s]{1,18}[0-9가-힣]/g)||[]).map(t=>t.trim()).find(t=>!VISIT_TIME_LIKE.test(t)&&!VISIT_FORM_LABELS.includes(t));
+  const plan=rateToken||valueAfter(/가입\s*요금제/,/[0-9][0-9가-힣.\s]{1,18}[0-9가-힣]/g,{window:4,reject:t=>t===visit_time||VISIT_TIME_LIKE.test(t)}).trim();
   const memoLine=valueAfter(/특이사항/,/.+/g,{window:3});
   const memo=memoLine==='-'?'':memoLine;
   return{network,subscription_type,activation_type,name,plan,member_no,seller,visit_time,memo};
@@ -55,7 +62,7 @@ function otsuThreshold(gray,len){
   }
   return threshold;
 }
-async function preprocessVisitImage(file){
+async function preprocessVisitCanvas(file){
   const bitmap=await createImageBitmap(file);
   const scale=Math.min(3,Math.max(1,1800/bitmap.width));
   const canvas=document.createElement('canvas');
@@ -71,7 +78,50 @@ async function preprocessVisitImage(file){
     data[i]=data[i+1]=data[i+2]=bw;
   }
   ctx.putImageData(img,0,0);
-  return new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+  return canvas;
+}
+const canvasToBlob=canvas=>new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+function cropCanvasRegion(sourceCanvas,top,bottom,upscale=3){
+  const w=sourceCanvas.width,h=Math.max(1,Math.round(Math.min(bottom,sourceCanvas.height)-Math.max(0,top)));
+  const canvas=document.createElement('canvas');
+  canvas.width=w*upscale;canvas.height=h*upscale;
+  const ctx=canvas.getContext('2d');
+  ctx.imageSmoothingEnabled=false;
+  ctx.drawImage(sourceCanvas,0,Math.max(0,top),w,h,0,0,canvas.width,canvas.height);
+  return canvas;
+}
+function findAnchorBbox(words,patterns){
+  for(const w of words||[]){
+    const t=(w.text||'').replace(/\s+/g,'');
+    if(patterns.some(p=>t.includes(p)))return w.bbox;
+  }
+  return null;
+}
+// 라벨(매출자/통신망/방문 등)은 전체 페이지 OCR에서도 곧잘 읽히지만 그
+// 옆/아래 값 칸은 통째로 누락되는 경우가 많았다. 1차 인식에서 찾은 라벨
+// 위치를 기준으로 그 구간만 잘라 확대해서 2차로 다시 읽는다.
+async function ocrVisitForm(file,Tesseract,onProgress){
+  const preCanvas=await preprocessVisitCanvas(file);
+  const blob1=await canvasToBlob(preCanvas);
+  const result1=await Tesseract.recognize(blob1,'kor+eng',{logger:onProgress});
+  const fullText=result1.data.text||'';
+  const words=result1.data.words||result1.data.lines?.flatMap(l=>l.words||[])||[];
+  const anchorSeller=findAnchorBbox(words,['매출자','정보']);
+  const anchorRate=findAnchorBbox(words,['통신망','가입요금제','요금제']);
+  const anchorVisit=findAnchorBbox(words,['방문예약','방문','예약시간']);
+  const rowHeight=anchorSeller?Math.max(20,anchorSeller.y1-anchorSeller.y0):40;
+  let sellerBlockText='',rateBlockText='';
+  if(anchorSeller){
+    const top=Math.max(0,anchorSeller.y0-rowHeight*0.6);
+    const bottom=anchorRate?Math.max(top+rowHeight,anchorRate.y0-rowHeight*0.3):anchorSeller.y1+rowHeight*4.5;
+    try{const crop=cropCanvasRegion(preCanvas,top,bottom),blob=await canvasToBlob(crop),r=await Tesseract.recognize(blob,'kor+eng',{});sellerBlockText=r.data.text||''}catch{}
+  }
+  if(anchorRate){
+    const top=anchorRate.y1+rowHeight*0.2;
+    const bottom=anchorVisit?Math.max(top+rowHeight,anchorVisit.y0-rowHeight*0.3):anchorRate.y1+rowHeight*3;
+    try{const crop=cropCanvasRegion(preCanvas,top,bottom),blob=await canvasToBlob(crop),r=await Tesseract.recognize(blob,'kor+eng',{});rateBlockText=r.data.text||''}catch{}
+  }
+  return{fullText,sellerBlockText,rateBlockText};
 }
 let ocrLoader;
 const loadOcr=()=>window.Tesseract?Promise.resolve(window.Tesseract):(ocrLoader||=(new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';script.onload=()=>resolve(window.Tesseract);script.onerror=()=>reject(Error('OCR 모듈을 불러오지 못했습니다.'));document.head.appendChild(script)})));
@@ -256,7 +306,7 @@ export async function customersPage(root,me,options){
   $('importJsonFile').onchange=async event=>{try{const file=event.target.files[0];if(!file)return;const parsed=JSON.parse(await file.text()),source=Array.isArray(parsed)?parsed:parsed.customers;if(!Array.isArray(source))throw Error('고객 백업 JSON 형식이 아닙니다.');const keys=['activation_date','member_no','seller','name','phone','contact_phone','network','plan','activation_type','subscription_type','activation_method','source','manager','contract_months','process_no','status','last_reminder_sent_at','attribution','memo'],knownProcess=new Set(rows.map(row=>row.process_no).filter(Boolean)),knownPhone=new Set(rows.map(row=>String(row.phone||'').replace(/\D/g,'')).filter(Boolean));const restored=source.filter(row=>row?.name).filter(row=>!(row.process_no&&knownProcess.has(row.process_no))&&!knownPhone.has(String(row.phone||'').replace(/\D/g,''))).map(row=>Object.fromEntries([['owner_id',me.id],...keys.map(key=>[key,row[key]??null]),['updated_at',new Date().toISOString()]]));if(!restored.length)throw Error('새로 복원할 고객이 없습니다.');if(!confirm(`${restored.length}명을 기존 고객에 추가할까요?`))return;const{error}=await supabase.from('customers').insert(restored);if(error)throw error;$('customerError').textContent=`${restored.length}명을 복원했습니다.`;await load()}catch(error){$('customerError').textContent=error.message}finally{event.target.value=''}}};
   $('customerAdd').onclick=()=>open();$('customerClose').onclick=$('customerCancel').onclick=()=>dialog.close();$('customerSearch').oninput=$('customerNetwork').onchange=render;$('dueOnly').onclick=()=>{alertsOnly=!alertsOnly;$('dueOnly').classList.toggle('active',alertsOnly);render()};
   dialog.querySelectorAll('[data-entry]').forEach(b=>b.onclick=()=>{const mode=b.dataset.entry;dialog.querySelectorAll('[data-entry]').forEach(x=>x.classList.toggle('active',x===b));$('entryImport').hidden=mode==='direct';$('entryFile').hidden=!['backup','capture','visit'].includes(mode);$('entryText').hidden=['capture','visit'].includes(mode);$('entryParse').hidden=['capture','visit'].includes(mode);$('entryHint').textContent=mode==='backup'?'카톡 대화 내보내기 .txt에서 개통 메시지를 일괄 등록합니다.':mode==='capture'?'캡처본을 선택하면 OCR로 자동 인식합니다.':mode==='visit'?'센터방문 개통 요청서 이미지를 선택하면 OCR로 자동 인식합니다. 전화번호는 개통 완료 후 직접 입력해주세요.':'카톡 메시지를 그대로 붙여넣으면 자동으로 채웁니다.';if(['backup','capture','visit'].includes(mode))$('entryFile').click()});
-  $('entryFile').onchange=async e=>{const file=e.target.files[0];if(!file)return;const mode=dialog.querySelector('[data-entry].active')?.dataset.entry;try{if(file.type.startsWith('image/')){$('entryHint').textContent='OCR 엔진 준비 중...';const Tesseract=await loadOcr(),ocrOptions={logger:m=>{if(m.status==='recognizing text')$('entryHint').textContent=`텍스트 인식 중 ${Math.round((m.progress||0)*100)}%`}};let ocrInput=file;if(mode==='visit'){try{ocrInput=await preprocessVisitImage(file)}catch{ocrInput=file}}const result=await Tesseract.recognize(ocrInput,'kor+eng',ocrOptions);const text=result.data.text||'';if(mode==='visit')applyParsedVisit(parseVisitForm(text),text);else applyParsed(parseActivation(text));return}const text=await file.text(),items=backupBlocks(text);if(!items.length)throw Error('개통 메시지를 찾지 못했습니다.');if(!confirm(`${items.length}건을 고객으로 일괄 등록할까요?`))return;const{error}=await supabase.from('customers').insert(items.map(importedRow));if(error)throw error;dialog.close();await load()}catch(error){$('entryHint').textContent=error.message}};
+  $('entryFile').onchange=async e=>{const file=e.target.files[0];if(!file)return;const mode=dialog.querySelector('[data-entry].active')?.dataset.entry;try{if(file.type.startsWith('image/')){$('entryHint').textContent='OCR 엔진 준비 중...';const Tesseract=await loadOcr(),onProgress=m=>{if(m.status==='recognizing text')$('entryHint').textContent=`텍스트 인식 중 ${Math.round((m.progress||0)*100)}%`};if(mode==='visit'){const{fullText,sellerBlockText,rateBlockText}=await ocrVisitForm(file,Tesseract,onProgress);const debugText=[fullText,sellerBlockText?`[매출자/명의자 구간 확대재인식] ${sellerBlockText}`:'',rateBlockText?`[통신망/요금제 구간 확대재인식] ${rateBlockText}`:''].filter(Boolean).join(' / ');applyParsedVisit(parseVisitForm(fullText,sellerBlockText,rateBlockText),debugText);return}const result=await Tesseract.recognize(file,'kor+eng',{logger:onProgress});applyParsed(parseActivation(result.data.text||''));return}const text=await file.text(),items=backupBlocks(text);if(!items.length)throw Error('개통 메시지를 찾지 못했습니다.');if(!confirm(`${items.length}건을 고객으로 일괄 등록할까요?`))return;const{error}=await supabase.from('customers').insert(items.map(importedRow));if(error)throw error;dialog.close();await load()}catch(error){$('entryHint').textContent=error.message}};
   $('entryParse').onclick=()=>applyParsed(parseActivation($('entryText').value));
   root.querySelectorAll('[data-scope]').forEach(b=>b.onclick=()=>{scope=b.dataset.scope;root.querySelectorAll('[data-scope]').forEach(x=>x.classList.toggle('active',x===b));render()});
   $('customerForm').onsubmit=async e=>{e.preventDefault();const id=$('cId').value,value={owner_id:me.id,activation_date:$('cDate').value||null,member_no:$('cMember').value||null,seller:$('cSeller').value||null,name:$('cName').value.trim(),phone:$('cPhone').value||null,contact_phone:$('cContactPhone').value||null,network:$('cNetwork').value||null,plan:$('cPlan').value||null,activation_type:$('cType').value,subscription_type:$('cSubscription').value,activation_method:$('cMethod').value,source:$('cSource').value||null,manager:$('cManager').value||null,contract_months:Number($('cContract').value||0),process_no:$('cProcess').value||null,attribution:Number($('cAttribution').value||0),memo:$('cMemo').value||null,updated_at:new Date().toISOString()};const{data:savedRow,error}=id?await supabase.from('customers').update(value).eq('id',id).select().single():await supabase.from('customers').insert(value).select().single();if(error)$('customerError').textContent=error.message;else{dialog.close();await load();if(!id){const picked=await askAmount('신규양도 금액 입력','새로 등록한 고객의 신규양도 금액을 입력하면 그 날짜의 활동 기록에 자동으로 더해집니다.',{presetCustomer:savedRow?{id:savedRow.id,name:savedRow.name}:null,date:value.activation_date});if(picked?.amount)await recordTransfer('new_transfer',picked.amount,picked.customer,picked.date)}}};
