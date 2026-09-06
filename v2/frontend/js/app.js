@@ -10,7 +10,7 @@ import { activityPage } from "./activity.js?v=20260829-25";
 import {
   checklistItemCount,
   checklistPage,
-} from "./checklist.js?v=20260829-29";
+} from "./checklist.js?v=20260906-30";
 import { closingPage, commissionPage } from "./finance.js?v=20260831-41";
 import { performancePage } from "./performance.js?v=20260831-100";
 import { teamPage } from "./team.js?v=20260831-3";
