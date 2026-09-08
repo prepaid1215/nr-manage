@@ -6,6 +6,7 @@ import {
   calculatePerformance,
   cancelCompletionCascade,
   closingPeriodForDate,
+  completionWhenAchieved,
   evaluatePromotion,
   evaluatePromotionPath,
   planSignature,
@@ -357,27 +358,51 @@ export async function performancePage(root) {
     renderClosers();
   };
 
+  const collapsedCloserBranches = new Set();
   const renderClosers = () => {
-    const rows = descendantsOf(plan.topMemberId);
+    const top = model.byId.get(String(plan.topMemberId));
+    const container = $("closingOptions");
+    container.classList.add("closing-genealogy-picker");
     $("closingCount").textContent =
       `${plan.closingMemberIds.filter((id) => id !== plan.topMemberId).length}명`;
-    $("closingOptions").innerHTML = rows.length
-      ? rows
-          .map(
-            (row) => {
-              const id = String(row.userId);
-              const checked = plan.closingMemberIds.includes(id);
-              const targets = plan.targetOverrides[id] || {};
-              const collected = collectedPerformance.get(id) || {};
-              const manual = plan.manualPerformance[id] || {};
-              const actualInputs = period.round === 1
-                ? `<label>1차 현재 대실적<input data-member-current-major="${safe(id)}" type="number" min="0" step="1" value="${manual.majorNv ?? collected.majorNv ?? 0}"></label><label>1차 현재 소실적<input data-member-current-minor="${safe(id)}" type="number" min="0" step="1" value="${manual.minorNv ?? collected.minorNv ?? 0}"></label>`
-                : "";
-              return `<article class="closing-member-setting"><label class="check"><input data-closing-enabled type="checkbox" value="${safe(id)}" ${checked ? "checked" : ""}> <span>${safe(row.userName)} <small>(${safe(id)})</small></span></label><div class="closing-member-targets" ${checked ? "" : "hidden"}><label>대 목표 NV<input data-member-major="${safe(id)}" type="number" min="1" step="1000" value="${targets.majorTarget ?? ""}" placeholder="직접 입력"></label><label>소 목표 NV<input data-member-minor="${safe(id)}" type="number" min="1" step="1000" value="${targets.minorTarget ?? ""}" placeholder="직접 입력"></label>${actualInputs}</div></article>`;
-            },
-          )
-          .join("")
-      : '<p class="help">이 사업자 아래에는 하위 회원이 없습니다.</p>';
+    if (!top) {
+      container.innerHTML = '<p class="help">표시할 계보가 없습니다.</p>';
+      return;
+    }
+    const nodeHtml = (row, level, path) => {
+      const id = String(row.userId);
+      if (path.has(id) || level >= 10) return "";
+      const nextPath = new Set(path);
+      nextPath.add(id);
+      const isTop = id === String(plan.topMemberId);
+      const children = (model.children.get(id) || []).filter(
+        (child) => !nextPath.has(String(child.userId)),
+      );
+      const hasChildren = level < 9 && children.length > 0;
+      const collapsed = collapsedCloserBranches.has(id);
+      const checked = isTop || plan.closingMemberIds.includes(id);
+      const targets = plan.targetOverrides[id] || {};
+      const collected = collectedPerformance.get(id) || {};
+      const manual = plan.manualPerformance[id] || {};
+      const actualInputs =
+        !isTop && period.round === 1
+          ? `<label>1차 현재 대실적<input data-member-current-major="${safe(id)}" type="number" min="0" step="1" value="${manual.majorNv ?? collected.majorNv ?? 0}"></label><label>1차 현재 소실적<input data-member-current-minor="${safe(id)}" type="number" min="0" step="1" value="${manual.minorNv ?? collected.minorNv ?? 0}"></label>`
+          : "";
+      const targetInputs = isTop
+        ? ""
+        : `<div class="closing-member-targets" ${checked ? "" : "hidden"}><label>대 목표 NV<input data-member-major="${safe(id)}" type="number" min="1" step="1000" value="${targets.majorTarget ?? ""}" placeholder="직접 입력"></label><label>소 목표 NV<input data-member-minor="${safe(id)}" type="number" min="1" step="1000" value="${targets.minorTarget ?? ""}" placeholder="직접 입력"></label>${actualInputs}</div>`;
+      const toggle = hasChildren
+        ? `<button class="closing-tree-toggle" data-closing-tree-toggle="${safe(id)}" type="button" aria-label="${collapsed ? "하위 계보 펼치기" : "하위 계보 접기"}">${collapsed ? "+" : "−"}</button>`
+        : '<span class="closing-tree-spacer"></span>';
+      const checkbox = isTop
+        ? '<input type="checkbox" checked disabled>'
+        : `<input data-closing-enabled type="checkbox" value="${safe(id)}" ${checked ? "checked" : ""}>`;
+      const childrenHtml = hasChildren
+        ? `<div class="closing-tree-children" data-closing-tree-children="${safe(id)}" ${collapsed ? "hidden" : ""}>${children.map((child) => nodeHtml(child, level + 1, nextPath)).join("")}</div>`
+        : "";
+      return `<div class="closing-selector-node" style="--closing-depth:${level}"><div class="closing-selector-row">${toggle}<article class="closing-member-setting"><label class="check">${checkbox}<span>${safe(row.userName)} <small>(${safe(id)}) · ${safe(row.rankName || "회원")}${isTop ? " · 최상위" : ""}</small></span></label>${targetInputs}</article></div>${childrenHtml}</div>`;
+    };
+    container.innerHTML = nodeHtml(top, 0, new Set());
   };
 
   const lineHtml = (item, index) => {
@@ -770,6 +795,19 @@ export async function performancePage(root) {
       const currentAchieved =
         currentMajorNv >= plan.topMajorTarget &&
         currentMinorNv >= plan.topMinorTarget;
+      if (currentAchieved && !topItem.completion) {
+        const automaticCompletion = completionWhenAchieved(
+          actualTop,
+          lastSignature,
+        );
+        if (automaticCompletion) {
+          plan.completions[plan.topMemberId] = automaticCompletion;
+          topItem.completion = automaticCompletion;
+          $("perfNotice").textContent =
+            "하위 마감 완료 NV가 목표를 채워 최상위 사업자도 자동으로 마감 완료되었습니다.";
+          queueMicrotask(() => persistPlan());
+        }
+      }
       lastRun = {
         allocation: {
           mode: "explicit",
@@ -891,9 +929,26 @@ export async function performancePage(root) {
       .querySelectorAll(".closing-member-setting")
       .forEach((setting) => {
         const checkbox = setting.querySelector("[data-closing-enabled]");
-        setting.querySelector(".closing-member-targets").hidden =
-          !checkbox.checked;
+        const targets = setting.querySelector(".closing-member-targets");
+        if (checkbox && targets) targets.hidden = !checkbox.checked;
       });
+  };
+  $("closingOptions").onclick = (event) => {
+    const toggle = event.target.closest("[data-closing-tree-toggle]");
+    if (!toggle) return;
+    const id = toggle.dataset.closingTreeToggle;
+    const children = $("closingOptions").querySelector(
+      `[data-closing-tree-children="${CSS.escape(id)}"]`,
+    );
+    if (!children) return;
+    children.hidden = !children.hidden;
+    toggle.textContent = children.hidden ? "+" : "−";
+    toggle.setAttribute(
+      "aria-label",
+      children.hidden ? "하위 계보 펼치기" : "하위 계보 접기",
+    );
+    if (children.hidden) collapsedCloserBranches.add(id);
+    else collapsedCloserBranches.delete(id);
   };
   $("perfDate").onchange = async () => {
     period = closingPeriodForDate($("perfDate").value);

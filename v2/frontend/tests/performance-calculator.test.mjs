@@ -7,6 +7,7 @@ import {
   cancelClosingCompletion,
   cancelCompletionCascade,
   closingPeriodForDate,
+  completionWhenAchieved,
   evaluatePromotion,
   evaluatePromotionPath,
   normalizeClosingConfigs,
@@ -28,6 +29,38 @@ assert.deepEqual(closingPeriodForDate("2026-09-01"), {
   endDate: "2026-09-08",
 });
 assert.equal(closingPeriodForDate("2026-09-09").round, 2);
+assert.equal(
+  completionWhenAchieved(
+    {
+      achieved: false,
+      majorIndex: 0,
+      minorIndex: 1,
+      effectiveTotals: [400000, 399999],
+    },
+    "plan",
+  ),
+  null,
+);
+assert.deepEqual(
+  completionWhenAchieved(
+    {
+      achieved: true,
+      majorIndex: 1,
+      minorIndex: 0,
+      effectiveTotals: [400140, 400545],
+    },
+    "plan",
+    "2026-09-08T00:00:00.000Z",
+  ),
+  {
+    majorNv: 400545,
+    minorNv: 400140,
+    completedNv: 800685,
+    completedAt: "2026-09-08T00:00:00.000Z",
+    signature: "plan",
+    automatic: true,
+  },
+);
 assert.equal(closingPeriodForDate("2026-09-16").round, 3);
 assert.deepEqual(closingPeriodForDate("2026-09-30"), {
   periodId: "2026-09-4",

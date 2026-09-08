@@ -243,6 +243,24 @@ export function projectClosingCompletion(result) {
   };
 }
 
+export function completionWhenAchieved(
+  result,
+  signature,
+  completedAt = new Date().toISOString(),
+) {
+  if (!result?.achieved) return null;
+  const majorNv = numeric(result.effectiveTotals?.[result.majorIndex]);
+  const minorNv = numeric(result.effectiveTotals?.[result.minorIndex]);
+  return {
+    majorNv,
+    minorNv,
+    completedNv: majorNv + minorNv,
+    completedAt,
+    signature,
+    automatic: true,
+  };
+}
+
 export function applyClosingCompletion(model, memberUserId, completion) {
   const row = model.byId.get(String(memberUserId));
   if (!row) throw new Error("마감 완료 사업자를 찾지 못했습니다.");
