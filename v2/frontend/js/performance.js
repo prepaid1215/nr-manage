@@ -876,8 +876,9 @@ export async function performancePage(root) {
         }
         const inherited = inheritedOwnNv.get(node.memberId);
         if (inherited?.amount > 0) {
-          const receivingIndex =
-            result.effectiveTotals[0] < result.effectiveTotals[1] ? 0 : 1;
+          // 소실적 라인을 먼저 정한 뒤 그 라인에 본인매출을 합산하고,
+          // 합산이 끝난 후에 대·소실적을 다시 판정한다.
+          const receivingIndex = result.ownContributionIndex;
           result.effectiveTotals[receivingIndex] += inherited.amount;
           result.inheritedOwnNv = inherited.amount;
           result.inheritedOwnFromMemberId = inherited.fromMemberId;
