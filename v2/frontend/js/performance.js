@@ -543,7 +543,7 @@ export async function performancePage(root) {
         ? `<small>본인 매출 ${fmt(result.minorOwnContribution)} NV가 이 라인에 합산됩니다.</small>`
         : "";
     const balancedSaleLine = balanced
-      ? `<span class="sale-hint"><b>${safe(subMember.userName)} 균형 입력 안내</b> · 현재 대 ${fmt(balanced.currentMajorNv)} / 소 ${fmt(balanced.currentMinorNv)} · 새 목표 양쪽 각 ${fmt(balanced.balancedTargetNv)} NV</span>${balanced.projection.topUps
+      ? `<span class="sale-hint"><b>${safe(subMember.userName)} ${isMajor ? "대실적" : "소실적"} 라인 ${fmt(deficit)} NV 부족</b></span><span class="sale-hint">균형 목표 · 대실적 ${fmt(balanced.balancedTargetNv)} / 소실적 ${fmt(balanced.balancedTargetNv)} NV</span><small>현재 ${safe(subMember.userName)} 실적 · 대 ${fmt(balanced.currentMajorNv)} / 소 ${fmt(balanced.currentMinorNv)}</small>${balanced.projection.topUps
           .map((nestedTopUp, nestedIndex) => {
             if (nestedTopUp.salesWon <= 0) return "";
             const nestedPlacement = balanced.result.placements[nestedIndex];
@@ -555,11 +555,11 @@ export async function performancePage(root) {
       : "";
     const saleLine =
       balancedSaleLine ||
-      topUp.salesWon > 0
+      (topUp.salesWon > 0
         ? `<span class="sale-hint">매출 넣을 곳: ${safe(placement.target?.userName || "-")} (${safe(placement.target?.userId || "-")}) · ${fmt(topUp.salesWon)}원 → +${fmt(topUp.addedNv)} NV</span>`
         : deficit > 0
-          ? `<span class="sale-hint">부족하지만 매출을 넣을 코드가 없습니다.</span>`
-          : `<span>추가 매출이 필요 없습니다.</span>`;
+          ? `<span class="sale-hint">${isMajor ? "대실적" : "소실적"} 라인 ${fmt(deficit)} NV 부족 · 매출을 넣을 수 있는 하위 코드를 확인하세요.</span>`
+          : `<span>추가 매출이 필요 없습니다.</span>`);
     return `<article class="closing-line"><b>서브${index + 1} · ${isMajor ? "대실적" : "소실적"}</b><small>${role}</small>${ownNote}<small>지금 ${fmt(result.effectiveTotals[index])} NV · 라인 목표 ${fmt(line.lineTarget)} · ${deficit > 0 ? `${fmt(deficit)} NV 부족` : "목표를 채웠습니다"}</small>${saleLine}</article>`;
   };
 
