@@ -442,7 +442,7 @@ export async function performancePage(root) {
         `본인 매출 ${fmt(result.minorOwnContribution)} NV는 서브${ownIndex + 1} 라인에 합산`;
     }
     return `<details class="closing-tree"${item.canComplete ? " open" : ""}><summary>계보도로 확인하기</summary><div class="box-tree compact">${boxTreeHtml(model, node.memberId, {
-      depth: 3,
+      depth: 10,
       badges,
       notes,
       hideDate: true,
