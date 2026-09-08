@@ -541,7 +541,11 @@ export async function performancePage(root) {
     const ownNote =
       index === result.ownContributionIndex && result.minorOwnContribution > 0
         ? `<small>본인 매출 ${fmt(result.minorOwnContribution)} NV가 이 라인에 합산됩니다.</small>`
-        : "";
+        : index === result.inheritedOwnIndex && result.inheritedOwnNv > 0
+          ? `<small>상위 ${safe(model.byId.get(result.inheritedOwnFromMemberId)?.userName || "")} 본인매출 ${fmt(result.inheritedOwnNv)} NV가 이 작은 라인에 합산됩니다.</small>`
+          : result.transferredOwnNv > 0 && index === result.ownContributionIndex
+            ? `<small>본인매출 ${fmt(result.transferredOwnNv)} NV는 아래 마감자의 작은 라인으로 전달되어 여기서는 중복 합산하지 않습니다.</small>`
+            : "";
     const balancedSaleLine = balanced
       ? `<span class="sale-hint"><b>${safe(subMember.userName)} ${isMajor ? "대실적" : "소실적"} 라인 ${fmt(deficit)} NV 부족</b></span><span class="sale-hint">균형 목표 · 대실적 ${fmt(balanced.balancedTargetNv)} / 소실적 ${fmt(balanced.balancedTargetNv)} NV</span><small>현재 ${safe(subMember.userName)} 실적 · 대 ${fmt(balanced.currentMajorNv)} / 소 ${fmt(balanced.currentMinorNv)}</small>${balanced.projection.topUps
           .map((nestedTopUp, nestedIndex) => {
@@ -786,6 +790,40 @@ export async function performancePage(root) {
           };
         },
       );
+      const selectedCloserIds = new Set(nodes.map((node) => node.memberId));
+      const inheritedOwnNv = new Map();
+      const transferredOwnIds = new Set();
+      const nearestSelectedCloser = (start) => {
+        const queue = start ? [start] : [];
+        const visited = new Set();
+        while (queue.length) {
+          const row = queue.shift();
+          const id = String(row.userId);
+          if (visited.has(id)) continue;
+          visited.add(id);
+          if (selectedCloserIds.has(id)) return id;
+          (model.children.get(id) || []).forEach((child) => queue.push(child));
+        }
+        return null;
+      };
+      nodes.forEach((node) => {
+        const row = model.byId.get(node.memberId);
+        const ownNv = Math.max(0, Number(row?.ordPv || 0));
+        if (ownNv <= 0) return;
+        const base = calculatePerformance(model, node.memberId, {
+          majorTarget: node.majorTarget,
+          minorTarget: node.minorTarget,
+        });
+        const receivingCloserId = nearestSelectedCloser(
+          base.subMembers[base.ownContributionIndex],
+        );
+        if (!receivingCloserId || receivingCloserId === node.memberId) return;
+        inheritedOwnNv.set(receivingCloserId, {
+          amount: Number(inheritedOwnNv.get(receivingCloserId)?.amount || 0) + ownNv,
+          fromMemberId: node.memberId,
+        });
+        transferredOwnIds.add(node.memberId);
+      });
       const resetCalculated = () =>
         model.rows.forEach((row) => {
           delete row.completedClosingMajorNv;
@@ -827,6 +865,39 @@ export async function performancePage(root) {
               ? 0
               : 1;
         }
+        if (transferredOwnIds.has(node.memberId) && result.minorOwnContribution > 0) {
+          result.effectiveTotals[result.ownContributionIndex] = Math.max(
+            0,
+            result.effectiveTotals[result.ownContributionIndex] -
+              result.minorOwnContribution,
+          );
+          result.transferredOwnNv = result.minorOwnContribution;
+          result.minorOwnContribution = 0;
+        }
+        const inherited = inheritedOwnNv.get(node.memberId);
+        if (inherited?.amount > 0) {
+          const receivingIndex =
+            result.effectiveTotals[0] < result.effectiveTotals[1] ? 0 : 1;
+          result.effectiveTotals[receivingIndex] += inherited.amount;
+          result.inheritedOwnNv = inherited.amount;
+          result.inheritedOwnFromMemberId = inherited.fromMemberId;
+          result.inheritedOwnIndex = receivingIndex;
+        }
+        result.majorIndex =
+          result.effectiveTotals[0] >= result.effectiveTotals[1] ? 0 : 1;
+        result.minorIndex = result.majorIndex === 0 ? 1 : 0;
+        result.branchTargets = [];
+        result.branchTargets[result.majorIndex] = node.majorTarget;
+        result.branchTargets[result.minorIndex] = node.minorTarget;
+        result.deficits = result.effectiveTotals.map((total, index) =>
+          Math.max(0, result.branchTargets[index] - total),
+        );
+        result.achieved = result.deficits.every((deficit) => deficit === 0);
+        result.priority = result.achieved
+          ? null
+          : result.deficits[0] >= result.deficits[1]
+            ? 0
+            : 1;
         return result;
       };
       const actualResults = new Map();
@@ -1079,6 +1150,15 @@ export async function performancePage(root) {
     if (!ownerId) {
       $("perfLinkError").textContent = "로그인 후 수동 계보를 저장할 수 있습니다.";
       return;
+    }
+    if (result.inheritedOwnNv > 0 && result.inheritedOwnIndex != null) {
+      const receiving = result.subMembers[result.inheritedOwnIndex];
+      if (receiving) {
+        const fromName =
+          model.byId.get(result.inheritedOwnFromMemberId)?.userName || "상위";
+        notes[String(receiving.userId)] =
+          `${fromName} 본인매출 ${fmt(result.inheritedOwnNv)} NV 합산 · 합산 후 대·소실적 재비교`;
+      }
     }
     if (!model.byId.has(parentId)) {
       $("perfLinkError").textContent = "현재 계보에서 상위 회원번호를 찾지 못했습니다.";
