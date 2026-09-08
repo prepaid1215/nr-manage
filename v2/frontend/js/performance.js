@@ -1,5 +1,6 @@
 import { supabase } from "./supabase.js?v=20260829-34";
 import {
+  attachPerformanceSubtree,
   applyClosingCompletion,
   branchBreakdown,
   buildPerformanceModel,
@@ -13,8 +14,13 @@ import {
   projectClosingCompletion,
   pruneInvalidCompletions,
   sortMembersDeepestFirst,
-} from "./performance-calculator.js?v=20260908-54";
+} from "./performance-calculator.js?v=20260908-55";
 import { boxTreeHtml } from "./box-tree.js?v=20260831-60";
+import {
+  addManualLink,
+  loadManualLinks,
+  removeManualLink,
+} from "./genealogy-links.js?v=20260831-1";
 
 const PLAN_TABLE = "nrc_closing_plans";
 const MIN_TREE_ZOOM = 0.72;
@@ -45,7 +51,7 @@ export async function performancePage(root) {
   const now = new Date();
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   const initialPeriod = closingPeriodForDate(today);
-  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>마감 실적 계산기</h2><p class="help">이번 차수에 실제로 마감할 사업자만 선택하고, 각 사업자의 대·소목표를 직접 입력하세요.</p></div><label>기준일<input id="perfDate" type="date" value="${initialPeriod.endDate}"></label></div><p id="perfPeriod" class="connection-status"></p><p id="perfSource" class="help"></p><p id="perfStorage" class="help"></p><div class="closing-target-row"><label>최상위 마감 사업자<select id="topMemberSelect"></select></label><label>대실적 목표 (NV)<input id="topMajor" type="number" min="1" step="1000"></label><label>소실적 목표 (NV)<input id="topMinor" type="number" min="1" step="1000"></label></div><div id="firstRoundTop" class="closing-target-row" hidden><label>1차 현재 대실적 직접 입력<input id="topCurrentMajor" type="number" min="0" step="1"></label><label>1차 현재 소실적 직접 입력<input id="topCurrentMinor" type="number" min="0" step="1"></label></div><details class="closing-member-picker" open><summary>이번 차수 마감 사업자 <b id="closingCount">0명</b></summary><p class="help">체크한 사업자만 별도로 마감합니다. 체크하지 않은 회원은 목표를 만들지 않고 현재 조직실적과 하위 증가분만 상위로 전달합니다.</p><div id="closingOptions" class="closing-member-options"></div></details><button id="perfRun" class="primary">현재 실적과 추천 매출 계산</button><p id="perfNotice" class="help"></p><div id="perfError" class="error"></div></section><section id="perfSummary"></section><section id="perfResult"></section>`;
+  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>마감 실적 계산기</h2><p class="help">이번 차수에 실제로 마감할 사업자만 선택하고, 각 사업자의 대·소목표를 직접 입력하세요.</p></div><label>기준일<input id="perfDate" type="date" value="${initialPeriod.endDate}"></label></div><p id="perfPeriod" class="connection-status"></p><p id="perfSource" class="help"></p><p id="perfStorage" class="help"></p><div class="closing-target-row"><label>최상위 마감 사업자<select id="topMemberSelect"></select></label><label>대실적 목표 (NV)<input id="topMajor" type="number" min="1" step="1000"></label><label>소실적 목표 (NV)<input id="topMinor" type="number" min="1" step="1000"></label></div><div id="firstRoundTop" class="closing-target-row" hidden><label>1차 현재 대실적 직접 입력<input id="topCurrentMajor" type="number" min="0" step="1"></label><label>1차 현재 소실적 직접 입력<input id="topCurrentMinor" type="number" min="0" step="1"></label></div><details class="closing-member-picker" open><summary>이번 차수 마감 사업자 <b id="closingCount">0명</b></summary><p class="help">체크한 사업자만 별도로 마감합니다. 체크하지 않은 회원은 목표를 만들지 않고 현재 조직실적과 하위 증가분만 상위로 전달합니다.</p><div id="closingOptions" class="closing-member-options"></div><details class="performance-link-manager"><summary>끊긴 계보 수동으로 잇기</summary><p class="help">중간 회원이 수집자료에 보이지 않을 때 상위와 하위 사업자 회원번호를 직접 연결합니다. 같은 회원번호는 한 번만 계산됩니다.</p><form id="perfManualLinkForm" class="inline-form"><input id="perfLinkParent" placeholder="상위 회원번호" required><input id="perfLinkChild" placeholder="하위 사업자 회원번호" required><input id="perfLinkName" placeholder="하위 사업자 이름"><button class="primary compact" type="submit">계보 연결</button></form><div id="perfLinkError" class="error"></div><div id="perfLinkList" class="fav-list"></div></details></details><button id="perfRun" class="primary">현재 실적과 추천 매출 계산</button><p id="perfNotice" class="help"></p><div id="perfError" class="error"></div></section><section id="perfSummary"></section><section id="perfResult"></section>`;
   const $ = (id) => document.getElementById(id);
   let { data, error } = await supabase
     .from("nrc_sync_snapshots")
@@ -93,6 +99,82 @@ export async function performancePage(root) {
   let period = initialPeriod;
   let previousPerformance = {};
   let firstRoundPerformance = {};
+  let manualLinks = [];
+  const snapshotModels = [];
+  if (ownerId) {
+    const { data: snapshots } = await supabase
+      .from("nrc_sync_snapshots")
+      .select("payload,collected_at,source_account_id")
+      .eq("snapshot_type", "combined")
+      .order("collected_at", { ascending: false })
+      .limit(100);
+    const seenSources = new Set();
+    (snapshots || []).forEach((snapshot) => {
+      const sourceId = String(snapshot.source_account_id || "");
+      if (seenSources.has(sourceId)) return;
+      seenSources.add(sourceId);
+      try {
+        const payload =
+          typeof snapshot.payload === "string"
+            ? JSON.parse(snapshot.payload)
+            : snapshot.payload;
+        snapshotModels.push({
+          sourceId,
+          collectedAt: snapshot.collected_at,
+          model: buildPerformanceModel(payload),
+        });
+      } catch {}
+    });
+    let changed = true;
+    let passes = 0;
+    while (changed && passes <= snapshotModels.length) {
+      changed = false;
+      passes += 1;
+      snapshotModels.forEach(({ model: sourceModel }) => {
+        const overlaps = [...model.byId.keys()].filter((id) =>
+          sourceModel.byId.has(id),
+        );
+        overlaps.forEach((id) => {
+          if (attachPerformanceSubtree(model, sourceModel, id) > 0)
+            changed = true;
+        });
+      });
+    }
+    manualLinks = await loadManualLinks(ownerId);
+    manualLinks.forEach((link) => {
+      const childId = String(link.member_id);
+      const source =
+        snapshotModels.find(({ model: sourceModel }) =>
+          sourceModel.byId.has(childId),
+        )?.model || (model.byId.has(childId) ? model : null);
+      if (source) {
+        attachPerformanceSubtree(model, source, childId, link.parent_id);
+      } else if (model.byId.has(String(link.parent_id))) {
+        const placeholder = buildPerformanceModel({
+          rstLst: [
+            {
+              userId: childId,
+              userName: link.member_name,
+              ppId: String(link.parent_id),
+              manualLink: true,
+            },
+          ],
+        });
+        attachPerformanceSubtree(
+          model,
+          placeholder,
+          childId,
+          link.parent_id,
+        );
+      }
+    });
+    collectedPerformance = new Map(
+      model.rows.map((row) => [
+        String(row.userId),
+        { majorNv: Number(row.maxPv || 0), minorNv: Number(row.minPv || 0) },
+      ]),
+    );
+  }
 
   const legacyPlan = () => {
     const selected = readJson("nrc-closing-members", [])
@@ -403,6 +485,17 @@ export async function performancePage(root) {
       return `<div class="closing-selector-node" style="--closing-depth:${level}"><div class="closing-selector-row">${toggle}<article class="closing-member-setting"><label class="check">${checkbox}<span>${safe(row.userName)} <small>(${safe(id)}) · ${safe(row.rankName || "회원")}${isTop ? " · 최상위" : ""}</small></span></label>${targetInputs}</article></div>${childrenHtml}</div>`;
     };
     container.innerHTML = nodeHtml(top, 0, new Set());
+  };
+
+  const renderManualLinks = () => {
+    $("perfLinkList").innerHTML = manualLinks.length
+      ? manualLinks
+          .map(
+            (link) =>
+              `<span>${safe(link.member_name || link.member_id)} (${safe(link.member_id)}) → 상위 ${safe(link.parent_id)} <button type="button" data-remove-perf-link="${safe(link.id)}">×</button></span>`,
+          )
+          .join("")
+      : '<small class="help">수동으로 연결한 계보가 없습니다.</small>';
   };
 
   const lineHtml = (item, index) => {
@@ -950,6 +1043,76 @@ export async function performancePage(root) {
     if (children.hidden) collapsedCloserBranches.add(id);
     else collapsedCloserBranches.delete(id);
   };
+  $("perfManualLinkForm").onsubmit = async (event) => {
+    event.preventDefault();
+    const parentId = $("perfLinkParent").value.trim();
+    const childId = $("perfLinkChild").value.trim();
+    const childName = $("perfLinkName").value.trim();
+    $("perfLinkError").textContent = "";
+    if (!ownerId) {
+      $("perfLinkError").textContent = "로그인 후 수동 계보를 저장할 수 있습니다.";
+      return;
+    }
+    if (!model.byId.has(parentId)) {
+      $("perfLinkError").textContent = "현재 계보에서 상위 회원번호를 찾지 못했습니다.";
+      return;
+    }
+    if (!childId || childId === parentId) {
+      $("perfLinkError").textContent = "서로 다른 상위·하위 회원번호를 입력하세요.";
+      return;
+    }
+    let cursor = model.byId.get(parentId);
+    const visited = new Set();
+    while (cursor && !visited.has(String(cursor.userId))) {
+      const id = String(cursor.userId);
+      if (id === childId) {
+        $("perfLinkError").textContent = "순환되는 계보는 연결할 수 없습니다.";
+        return;
+      }
+      visited.add(id);
+      cursor = model.byId.get(String(cursor.ppId || ""));
+    }
+    const source =
+      snapshotModels.find(({ model: sourceModel }) =>
+        sourceModel.byId.has(childId),
+      )?.model || (model.byId.has(childId) ? model : null);
+    if (!source) {
+      $("perfLinkError").textContent =
+        "하위 사업자의 수집자료를 찾지 못했습니다. 해당 계정에서 먼저 매출받기를 실행하세요.";
+      return;
+    }
+    const child = source.byId.get(childId);
+    const { error: linkError } = await addManualLink(ownerId, {
+      memberId: childId,
+      memberName: childName || child?.userName || childId,
+      parentId,
+      note: "실적 탭 수동 연결",
+    });
+    if (linkError && !/duplicate|unique/i.test(linkError.message || "")) {
+      $("perfLinkError").textContent =
+        linkError.message || "수동 계보를 저장하지 못했습니다.";
+      return;
+    }
+    attachPerformanceSubtree(model, source, childId, parentId);
+    manualLinks = await loadManualLinks(ownerId);
+    renderManualLinks();
+    renderControls();
+    runPlan();
+    $("perfLinkError").textContent =
+      "계보를 연결했습니다. 같은 회원번호는 한 번만 계산됩니다.";
+  };
+  $("perfLinkList").onclick = async (event) => {
+    const button = event.target.closest("[data-remove-perf-link]");
+    if (!button) return;
+    const { error: removeError } = await removeManualLink(
+      button.dataset.removePerfLink,
+    );
+    if (removeError) {
+      $("perfLinkError").textContent = removeError.message;
+      return;
+    }
+    await performancePage(root);
+  };
   $("perfDate").onchange = async () => {
     period = closingPeriodForDate($("perfDate").value);
     if (period.round > 1) {
@@ -1040,6 +1203,7 @@ export async function performancePage(root) {
     }
   };
 
+  renderManualLinks();
   renderControls();
   runPlan();
 }

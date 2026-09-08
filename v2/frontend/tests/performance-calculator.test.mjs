@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   allocateClosingTargets,
   applyClosingCompletion,
+  attachPerformanceSubtree,
   buildPerformanceModel,
   calculatePerformance,
   cancelClosingCompletion,
@@ -61,6 +62,48 @@ assert.deepEqual(
     automatic: true,
   },
 );
+
+{
+  const upper = buildPerformanceModel({
+    rstLst: [
+      { userId: "top", ppId: "", lv: 0 },
+      { userId: "bridge", ppId: "top", lv: 1 },
+    ],
+  });
+  const lower = buildPerformanceModel({
+    rstLst: [
+      { userId: "bridge", ppId: "", lv: 0, userName: "주영돈" },
+      { userId: "child", ppId: "bridge", lv: 1, ordPv: 8100 },
+    ],
+  });
+  assert.equal(attachPerformanceSubtree(upper, lower, "bridge"), 1);
+  assert.equal(upper.byId.get("bridge").ppId, "top");
+  assert.equal(upper.children.get("bridge")[0].userId, "child");
+  const disconnected = buildPerformanceModel({
+    rstLst: [
+      { userId: "closer", ppId: "", lv: 0 },
+      { userId: "leaf", ppId: "closer", lv: 1 },
+    ],
+  });
+  assert.equal(
+    attachPerformanceSubtree(upper, disconnected, "closer", "top"),
+    2,
+  );
+  const rowCount = upper.rows.length;
+  assert.equal(
+    attachPerformanceSubtree(upper, disconnected, "closer", "top"),
+    0,
+  );
+  assert.equal(upper.rows.length, rowCount);
+  assert.equal(
+    [...upper.children.values()]
+      .flat()
+      .filter((row) => row.userId === "closer").length,
+    1,
+  );
+  assert.equal(upper.byId.get("closer").ppId, "top");
+  assert.equal(upper.children.get("top").some((row) => row.userId === "closer"), true);
+}
 assert.equal(closingPeriodForDate("2026-09-16").round, 3);
 assert.deepEqual(closingPeriodForDate("2026-09-30"), {
   periodId: "2026-09-4",

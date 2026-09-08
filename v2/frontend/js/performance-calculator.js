@@ -396,6 +396,54 @@ export function buildPerformanceModel(payload) {
   };
 }
 
+export function attachPerformanceSubtree(
+  targetModel,
+  sourceModel,
+  anchorMemberId,
+  parentMemberId = null,
+) {
+  const anchorId = String(anchorMemberId ?? "");
+  const anchor = sourceModel?.byId?.get(anchorId);
+  if (!targetModel?.byId || !targetModel?.children || !anchor) return 0;
+  const stack = [anchor];
+  const seen = new Set();
+  let added = 0;
+  while (stack.length) {
+    const sourceRow = stack.pop();
+    const id = String(sourceRow.userId ?? "");
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    const existing = targetModel.byId.get(id);
+    const row = {
+      ...(existing || {}),
+      ...sourceRow,
+      userId: id,
+      ppId:
+        id === anchorId && parentMemberId != null
+          ? String(parentMemberId)
+          : existing?.ppId ?? sourceRow.ppId,
+    };
+    if (existing) {
+      const index = targetModel.rows.indexOf(existing);
+      if (index >= 0) targetModel.rows[index] = row;
+    } else {
+      targetModel.rows.push(row);
+      added += 1;
+    }
+    targetModel.byId.set(id, row);
+    (sourceModel.children.get(id) || []).forEach((child) => stack.push(child));
+  }
+  const children = new Map();
+  targetModel.rows.forEach((row) => {
+    const parentId = String(row.ppId ?? "");
+    if (!children.has(parentId)) children.set(parentId, []);
+    children.get(parentId).push(row);
+  });
+  children.forEach((items) => items.sort(comparePosition));
+  targetModel.children = children;
+  return added;
+}
+
 function genealogyDepth(model, row) {
   let depth = 0;
   let current = row;
