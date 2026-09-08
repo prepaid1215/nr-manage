@@ -626,11 +626,20 @@ export function calculatePerformance(
   };
 }
 
-export function planBalancedClosingTopUp(model, closerMemberId, upstreamDeficitNv) {
+export function planBalancedClosingTopUp(
+  model,
+  closerMemberId,
+  upstreamDeficitNv,
+  plannedCompletion = null,
+) {
   const member = model.byId.get(String(closerMemberId));
   if (!member) throw new Error("재계산할 하위 마감 사업자를 찾지 못했습니다.");
-  const currentMajorNv = numeric(member.completedClosingMajorNv);
-  const currentMinorNv = numeric(member.completedClosingMinorNv);
+  const currentMajorNv = numeric(
+    plannedCompletion?.majorNv ?? member.completedClosingMajorNv,
+  );
+  const currentMinorNv = numeric(
+    plannedCompletion?.minorNv ?? member.completedClosingMinorNv,
+  );
   const currentCompletedNv = currentMajorNv + currentMinorNv;
   const upstreamDeficit = Math.max(0, numeric(upstreamDeficitNv));
   if (currentCompletedNv <= 0 || upstreamDeficit <= 0) return null;

@@ -1091,4 +1091,20 @@ assert.deepEqual(
   [10000, 50000],
 );
 assert.equal(balancedModel.byId.get("closer").completedClosingNv, 154800);
+const projectedOnlyModel = buildPerformanceModel({
+  rstLst: balancedModel.rows.map(({ userId, userName, ppId, abPos }) => ({
+    userId, userName, ppId, abPos,
+  })),
+  members: balancedModel.rows.map(({ userId, ordPv, maxPv, minPv }) => ({
+    userId, ordPv, maxPv, minPv,
+  })),
+});
+const projectedOnly = planBalancedClosingTopUp(
+  projectedOnlyModel,
+  "closer",
+  45200,
+  { majorNv: 94770, minorNv: 60030, completedNv: 154800 },
+);
+assert.equal(projectedOnly.balancedTargetNv, 100000);
+assert.equal(projectedOnly.projection.topUps[projectedOnly.result.minorIndex].salesWon, 50000);
 console.log("balanced completed closer top-up tests passed");

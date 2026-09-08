@@ -508,9 +508,19 @@ export async function performancePage(root) {
     const topUp = projection.topUps[index];
     const placement = result.placements[index];
     const deficit = result.deficits[index];
+    const downstreamItem = subMember
+      ? items.find((candidate) => candidate.node.memberId === String(subMember.userId))
+      : null;
+    const downstreamCompletion =
+      downstreamItem?.completion || downstreamItem?.projection || null;
     const balanced =
-      deficit > 0 && Number(subMember?.completedClosingNv || 0) > 0
-        ? planBalancedClosingTopUp(model, subMember.userId, deficit)
+      deficit > 0 && Number(downstreamCompletion?.completedNv || 0) > 0
+        ? planBalancedClosingTopUp(
+            model,
+            subMember.userId,
+            deficit,
+            downstreamCompletion,
+          )
         : null;
     let role;
     if (!subMember) {
