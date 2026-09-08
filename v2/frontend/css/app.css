@@ -364,3 +364,15 @@ input:focus,select:focus,textarea:focus{border-color:#837ce0;box-shadow:0 0 0 4p
 .error:not(:empty){border-color:#ffd7df;background:#fff5f7;color:#c94d64}
 #bottomNav button.active{background:#f0efff;color:#5751ae}
 @media(max-width:720px){header h1{font-size:23px}.card{border-radius:19px}.view-tabs button{padding:10px 15px}}
+.closing-member-setting{padding:8px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.closing-member-setting>.check{border:0;padding:4px}
+.closing-member-targets{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px}
+.closing-member-targets label{margin:0;color:var(--muted);font-size:11px}
+.closing-member-targets input{margin-top:3px;padding:8px}
+.closing-member-targets[hidden]{display:none}
+@media(max-width:700px){.closing-member-options{grid-template-columns:1fr}.closing-member-targets{grid-template-columns:1fr 1fr}}
+.period-performance{display:grid;grid-template-columns:auto repeat(3,minmax(80px,1fr));gap:1px;margin:12px 0;overflow:hidden;border:1px solid #ffffff55;border-radius:9px;background:#ffffff44;text-align:center}
+.period-performance>*{padding:8px;background:#ffffff18}
+.period-performance b,.period-performance strong{font-size:12px}
+.promotion-status{padding:10px;border-radius:9px;background:#ffffff18}
+@media(max-width:500px){.period-performance>*{padding:6px 3px;font-size:11px}}
