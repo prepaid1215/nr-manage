@@ -376,3 +376,6 @@ input:focus,select:focus,textarea:focus{border-color:#837ce0;box-shadow:0 0 0 4p
 .period-performance b,.period-performance strong{font-size:12px}
 .promotion-status{padding:10px;border-radius:9px;background:#ffffff18}
 @media(max-width:500px){.period-performance>*{padding:6px 3px;font-size:11px}}
+.customer-vcard{order:-1;min-width:72px;display:grid;place-items:center;gap:3px;border-left:0;border-right:1px solid var(--line);font-size:18px;cursor:pointer}
+.customer-vcard span{font-size:10px;white-space:nowrap}
+@media(max-width:560px){.customer-item{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-items:stretch}.customer-main{grid-column:1/-1;grid-row:1}.customer-vcard,.customer-sms,.customer-delete,.customer-status{grid-row:2;min-width:0;min-height:50px;padding:9px 5px;border-top:1px solid var(--line);border-left:1px solid var(--line);border-right:0;display:grid;place-items:center}.customer-vcard{grid-column:1;border-left:0}.customer-sms{grid-column:2}.customer-delete{grid-column:3}.customer-status{grid-column:4}.customer-vcard span{font-size:11px}}
