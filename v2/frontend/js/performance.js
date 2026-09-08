@@ -11,10 +11,11 @@ import {
   evaluatePromotion,
   evaluatePromotionPath,
   planSignature,
+  planBalancedClosingTopUp,
   projectClosingCompletion,
   pruneInvalidCompletions,
   sortMembersDeepestFirst,
-} from "./performance-calculator.js?v=20260908-55";
+} from "./performance-calculator.js?v=20260908-56";
 import { boxTreeHtml } from "./box-tree.js?v=20260831-60";
 import {
   addManualLink,
@@ -507,6 +508,10 @@ export async function performancePage(root) {
     const topUp = projection.topUps[index];
     const placement = result.placements[index];
     const deficit = result.deficits[index];
+    const balanced =
+      deficit > 0 && Number(subMember?.completedClosingNv || 0) > 0
+        ? planBalancedClosingTopUp(model, subMember.userId, deficit)
+        : null;
     let role;
     if (!subMember) {
       role =
@@ -527,7 +532,19 @@ export async function performancePage(root) {
       index === result.ownContributionIndex && result.minorOwnContribution > 0
         ? `<small>본인 매출 ${fmt(result.minorOwnContribution)} NV가 이 라인에 합산됩니다.</small>`
         : "";
+    const balancedSaleLine = balanced
+      ? `<span class="sale-hint"><b>${safe(subMember.userName)} 균형 입력 안내</b> · 현재 대 ${fmt(balanced.currentMajorNv)} / 소 ${fmt(balanced.currentMinorNv)} · 새 목표 양쪽 각 ${fmt(balanced.balancedTargetNv)} NV</span>${balanced.projection.topUps
+          .map((nestedTopUp, nestedIndex) => {
+            if (nestedTopUp.salesWon <= 0) return "";
+            const nestedPlacement = balanced.result.placements[nestedIndex];
+            const side =
+              nestedIndex === balanced.result.majorIndex ? "대실적" : "소실적";
+            return `<span class="sale-hint">${side} ${fmt(balanced.result.deficits[nestedIndex])} NV 부족 → ${safe(nestedPlacement.target?.userName || "-")} (${safe(nestedPlacement.target?.userId || "-")})에 <b>${fmt(nestedTopUp.salesWon)}원</b> 입력 (+${fmt(nestedTopUp.addedNv)} NV)</span>`;
+          })
+          .join("")}<small>표시된 금액을 실제 매출에 입력한 뒤 다시 수집해 주세요.</small>`
+      : "";
     const saleLine =
+      balancedSaleLine ||
       topUp.salesWon > 0
         ? `<span class="sale-hint">매출 넣을 곳: ${safe(placement.target?.userName || "-")} (${safe(placement.target?.userId || "-")}) · ${fmt(topUp.salesWon)}원 → +${fmt(topUp.addedNv)} NV</span>`
         : deficit > 0

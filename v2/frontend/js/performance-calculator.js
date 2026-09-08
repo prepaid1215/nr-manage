@@ -626,6 +626,68 @@ export function calculatePerformance(
   };
 }
 
+export function planBalancedClosingTopUp(model, closerMemberId, upstreamDeficitNv) {
+  const member = model.byId.get(String(closerMemberId));
+  if (!member) throw new Error("재계산할 하위 마감 사업자를 찾지 못했습니다.");
+  const currentMajorNv = numeric(member.completedClosingMajorNv);
+  const currentMinorNv = numeric(member.completedClosingMinorNv);
+  const currentCompletedNv = currentMajorNv + currentMinorNv;
+  const upstreamDeficit = Math.max(0, numeric(upstreamDeficitNv));
+  if (currentCompletedNv <= 0 || upstreamDeficit <= 0) return null;
+
+  const balancedTargetNv = Math.ceil((currentCompletedNv + upstreamDeficit) / 2);
+  const clonedRows = model.rows.map((row) => ({ ...row }));
+  const clonedById = new Map(clonedRows.map((row) => [memberId(row), row]));
+  const clonedChildren = new Map();
+  clonedRows.forEach((row) => {
+    const parentId = String(row.ppId ?? "");
+    if (!clonedChildren.has(parentId)) clonedChildren.set(parentId, []);
+    clonedChildren.get(parentId).push(row);
+  });
+  clonedChildren.forEach((rows) => rows.sort(comparePosition));
+  const clonedModel = {
+    rows: clonedRows,
+    byId: clonedById,
+    children: clonedChildren,
+    missingSalesIds: [...(model.missingSalesIds || [])],
+  };
+  const clonedMember = clonedById.get(String(closerMemberId));
+  delete clonedMember.completedClosingMajorNv;
+  delete clonedMember.completedClosingMinorNv;
+  delete clonedMember.completedClosingNv;
+  delete clonedMember.completedClosingPreviousTotal;
+
+  const result = calculatePerformance(clonedModel, closerMemberId, {
+    majorTarget: balancedTargetNv,
+    minorTarget: balancedTargetNv,
+  });
+  result.effectiveTotals[result.majorIndex] = currentMajorNv;
+  result.effectiveTotals[result.minorIndex] = currentMinorNv;
+  result.deficits = result.effectiveTotals.map((total, index) =>
+    Math.max(0, result.branchTargets[index] - total),
+  );
+  result.placements = result.subMembers.map((subMember, index) => {
+    if (subMember) return { kind: "line", target: deepestLeaf(subMember, clonedChildren) };
+    if (index === result.ownContributionIndex) {
+      return { kind: "self", target: clonedMember };
+    }
+    return { kind: "none", target: null };
+  });
+  result.feasible = result.deficits.every(
+    (deficit, index) => deficit === 0 || result.placements[index].kind !== "none",
+  );
+  return {
+    closerMemberId: String(closerMemberId),
+    currentMajorNv,
+    currentMinorNv,
+    currentCompletedNv,
+    upstreamDeficitNv: upstreamDeficit,
+    balancedTargetNv,
+    result,
+    projection: projectClosingCompletion(result),
+  };
+}
+
 function shallowestClosingDescendant(start, children, closingSet) {
   if (!start) return null;
   const queue = [start];

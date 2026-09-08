@@ -14,6 +14,7 @@ import {
   normalizeClosingConfigs,
   planClosing,
   planExplicitClosings,
+  planBalancedClosingTopUp,
   planSignature,
   projectClosingCompletion,
   pruneInvalidCompletions,
@@ -1052,3 +1053,42 @@ assert.throws(
 );
 
 console.log("explicit closing target tests passed");
+
+const balancedModel = buildPerformanceModel({
+  rstLst: [
+    { userId: "closer", userName: "김정경", ppId: "", abPos: 0 },
+    { userId: "major-code", userName: "대라인", ppId: "closer", abPos: 1 },
+    { userId: "minor-code", userName: "소라인", ppId: "closer", abPos: 2 },
+  ],
+  members: [
+    { userId: "closer", ordPv: 0, maxPv: 94770, minPv: 60030 },
+    { userId: "major-code", ordPv: 0, maxPv: 0, minPv: 94770 },
+    { userId: "minor-code", ordPv: 0, maxPv: 0, minPv: 60030 },
+  ],
+});
+applyClosingCompletion(balancedModel, "closer", {
+  majorNv: 94770,
+  minorNv: 60030,
+});
+const balancedTopUp = planBalancedClosingTopUp(
+  balancedModel,
+  "closer",
+  45200,
+);
+assert.equal(balancedTopUp.balancedTargetNv, 100000);
+assert.deepEqual(
+  [
+    balancedTopUp.result.deficits[balancedTopUp.result.majorIndex],
+    balancedTopUp.result.deficits[balancedTopUp.result.minorIndex],
+  ],
+  [5230, 39970],
+);
+assert.deepEqual(
+  [
+    balancedTopUp.projection.topUps[balancedTopUp.result.majorIndex].salesWon,
+    balancedTopUp.projection.topUps[balancedTopUp.result.minorIndex].salesWon,
+  ],
+  [10000, 50000],
+);
+assert.equal(balancedModel.byId.get("closer").completedClosingNv, 154800);
+console.log("balanced completed closer top-up tests passed");
