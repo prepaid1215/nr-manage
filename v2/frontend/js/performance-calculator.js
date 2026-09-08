@@ -626,6 +626,51 @@ export function calculatePerformance(
   };
 }
 
+export function applyOwnSalesFlow(
+  originalResult,
+  requestedTargets,
+  { inheritedOwnNv = 0, suppressOwn = false } = {},
+) {
+  const result = {
+    ...originalResult,
+    effectiveTotals: [...originalResult.effectiveTotals],
+    branchTargets: [...originalResult.branchTargets],
+    deficits: [...originalResult.deficits],
+  };
+  if (suppressOwn && result.minorOwnContribution > 0) {
+    result.effectiveTotals[result.ownContributionIndex] = Math.max(
+      0,
+      result.effectiveTotals[result.ownContributionIndex] -
+        result.minorOwnContribution,
+    );
+    result.transferredOwnNv = result.minorOwnContribution;
+    result.minorOwnContribution = 0;
+  }
+  const inherited = Math.max(0, numeric(inheritedOwnNv));
+  if (inherited > 0) {
+    result.effectiveTotals[result.ownContributionIndex] += inherited;
+    result.inheritedOwnNv = inherited;
+    result.inheritedOwnIndex = result.ownContributionIndex;
+  }
+  result.majorIndex =
+    result.effectiveTotals[0] >= result.effectiveTotals[1] ? 0 : 1;
+  result.minorIndex = result.majorIndex === 0 ? 1 : 0;
+  const { majorTarget, minorTarget } = normalizeTargets(requestedTargets);
+  result.branchTargets = [];
+  result.branchTargets[result.majorIndex] = majorTarget;
+  result.branchTargets[result.minorIndex] = minorTarget;
+  result.deficits = result.effectiveTotals.map((total, index) =>
+    Math.max(0, result.branchTargets[index] - total),
+  );
+  result.achieved = result.deficits.every((deficit) => deficit === 0);
+  result.priority = result.achieved
+    ? null
+    : result.deficits[0] >= result.deficits[1]
+      ? 0
+      : 1;
+  return result;
+}
+
 export function planBalancedClosingTopUp(
   model,
   closerMemberId,

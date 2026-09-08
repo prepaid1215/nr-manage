@@ -2,6 +2,7 @@ import { supabase } from "./supabase.js?v=20260829-34";
 import {
   attachPerformanceSubtree,
   applyClosingCompletion,
+  applyOwnSalesFlow,
   branchBreakdown,
   buildPerformanceModel,
   calculatePerformance,
@@ -15,7 +16,7 @@ import {
   projectClosingCompletion,
   pruneInvalidCompletions,
   sortMembersDeepestFirst,
-} from "./performance-calculator.js?v=20260908-56";
+} from "./performance-calculator.js?v=20260908-57";
 import { boxTreeHtml } from "./box-tree.js?v=20260831-60";
 import {
   addManualLink,
@@ -833,7 +834,7 @@ export async function performancePage(root) {
           delete row.closingDescendantDeltaNv;
         });
       const calculateNode = (node) => {
-        const result = calculatePerformance(model, node.memberId, {
+        let result = calculatePerformance(model, node.memberId, {
           majorTarget: node.majorTarget,
           minorTarget: node.minorTarget,
         });
@@ -865,40 +866,18 @@ export async function performancePage(root) {
               ? 0
               : 1;
         }
-        if (transferredOwnIds.has(node.memberId) && result.minorOwnContribution > 0) {
-          result.effectiveTotals[result.ownContributionIndex] = Math.max(
-            0,
-            result.effectiveTotals[result.ownContributionIndex] -
-              result.minorOwnContribution,
-          );
-          result.transferredOwnNv = result.minorOwnContribution;
-          result.minorOwnContribution = 0;
-        }
         const inherited = inheritedOwnNv.get(node.memberId);
-        if (inherited?.amount > 0) {
-          // 소실적 라인을 먼저 정한 뒤 그 라인에 본인매출을 합산하고,
-          // 합산이 끝난 후에 대·소실적을 다시 판정한다.
-          const receivingIndex = result.ownContributionIndex;
-          result.effectiveTotals[receivingIndex] += inherited.amount;
-          result.inheritedOwnNv = inherited.amount;
-          result.inheritedOwnFromMemberId = inherited.fromMemberId;
-          result.inheritedOwnIndex = receivingIndex;
-        }
-        result.majorIndex =
-          result.effectiveTotals[0] >= result.effectiveTotals[1] ? 0 : 1;
-        result.minorIndex = result.majorIndex === 0 ? 1 : 0;
-        result.branchTargets = [];
-        result.branchTargets[result.majorIndex] = node.majorTarget;
-        result.branchTargets[result.minorIndex] = node.minorTarget;
-        result.deficits = result.effectiveTotals.map((total, index) =>
-          Math.max(0, result.branchTargets[index] - total),
+        result = applyOwnSalesFlow(
+          result,
+          { majorTarget: node.majorTarget, minorTarget: node.minorTarget },
+          {
+            inheritedOwnNv: inherited?.amount || 0,
+            suppressOwn: transferredOwnIds.has(node.memberId),
+          },
         );
-        result.achieved = result.deficits.every((deficit) => deficit === 0);
-        result.priority = result.achieved
-          ? null
-          : result.deficits[0] >= result.deficits[1]
-            ? 0
-            : 1;
+        if (inherited?.amount > 0) {
+          result.inheritedOwnFromMemberId = inherited.fromMemberId;
+        }
         return result;
       };
       const actualResults = new Map();

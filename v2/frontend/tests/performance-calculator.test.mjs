@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   allocateClosingTargets,
   applyClosingCompletion,
+  applyOwnSalesFlow,
   attachPerformanceSubtree,
   buildPerformanceModel,
   calculatePerformance,
@@ -300,6 +301,65 @@ assert.deepEqual(ownNvCompletion.topUps, [
 assert.equal(ownNvCompletion.majorNv, 400140);
 assert.equal(ownNvCompletion.minorNv, 400771);
 assert.equal(ownNvCompletion.completedNv, 800911);
+
+// Google Sheets 원본: 대 = 큰 하위, 본+소 = 본인 + 작은 하위, 이후 재비교.
+const sheetFormulaResult = calculatePerformance(
+  buildPerformanceModel({
+    rstLst: [
+      { userId: "sheet-root", ppId: "" },
+      { userId: "sheet-a", ppId: "sheet-root", abPos: 1 },
+      { userId: "sheet-b", ppId: "sheet-root", abPos: 2 },
+    ],
+    members: [
+      { userId: "sheet-root", ordPv: 1000000 },
+      { userId: "sheet-a", ordPv: 500000, maxPv: 0, minPv: 0 },
+      { userId: "sheet-b", ordPv: 0, maxPv: 0, minPv: 0 },
+    ],
+  }),
+  "sheet-root",
+  { majorTarget: 1000000, minorTarget: 500000 },
+);
+assert.deepEqual(
+  [
+    sheetFormulaResult.effectiveTotals[sheetFormulaResult.majorIndex],
+    sheetFormulaResult.effectiveTotals[sheetFormulaResult.minorIndex],
+  ],
+  [1000000, 500000],
+);
+
+// 실제 계보 예: 주영돈 본인 81,000 NV를 신주영의 최초 소실적 2918877에 먼저 합산.
+const inheritedBase = calculatePerformance(
+  buildPerformanceModel({
+    rstLst: [
+      { userId: "2918875", ppId: "" },
+      { userId: "2918876", ppId: "2918875", abPos: 1 },
+      { userId: "2918877", ppId: "2918875", abPos: 2 },
+    ],
+    members: [
+      { userId: "2918875", ordPv: 0 },
+      { userId: "2918876", ordPv: 24300, maxPv: 32400, minPv: 0 },
+      { userId: "2918877", ordPv: 40500, maxPv: 8100, minPv: 0 },
+    ],
+  }),
+  "2918875",
+  { majorTarget: 60000, minorTarget: 60000 },
+);
+assert.equal(inheritedBase.ownContributionIndex, 1);
+const inheritedResult = applyOwnSalesFlow(
+  inheritedBase,
+  { majorTarget: 60000, minorTarget: 60000 },
+  { inheritedOwnNv: 81000 },
+);
+assert.deepEqual(inheritedResult.effectiveTotals, [56700, 129600]);
+assert.equal(inheritedResult.majorIndex, 1);
+assert.equal(inheritedResult.minorIndex, 0);
+assert.deepEqual(inheritedResult.deficits, [3300, 0]);
+const inheritedProjection = projectClosingCompletion(inheritedResult);
+assert.deepEqual(inheritedProjection.topUps, [
+  { salesWon: 10000, addedNv: 8100, excessNv: 4800 },
+  { salesWon: 0, addedNv: 0, excessNv: 0 },
+]);
+assert.equal(inheritedProjection.completedNv, 194400);
 
 const propagationModel = buildPerformanceModel({
   rstLst: [
