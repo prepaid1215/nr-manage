@@ -2,7 +2,7 @@ import { supabase } from "./supabase.js?v=20260829-34";
 import { localDate, monthRange } from "./date.js?v=20260829-25";
 import { friendlyError } from "./errors.js?v=20260830-1";
 const postingFields = [
-  ["blog_sloom", "슬룸"],
+  ["blog_sloom", "슬롭"],
   ["blog_modoo", "모두"],
   ["blog_main", "메인"],
   ["cafe", "카페"],
