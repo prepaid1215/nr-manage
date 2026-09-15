@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>59만모바일 캡처 도구</title>
+<style>
+  body { width: 320px; font-family: system-ui, sans-serif; margin: 0; padding: 16px; color: #202038; background: #f6f5ff; }
+  h1 { font-size: 15px; margin: 0 0 4px; color: #5b55b9; }
+  p.help { font-size: 12px; color: #6e7191; line-height: 1.5; margin: 0 0 14px; }
+  label { display: block; font-size: 12px; color: #6e7191; margin: 12px 0 4px; }
+  textarea { box-sizing: border-box; width: 100%; min-height: 60px; padding: 8px; border: 1px solid #d8d8ea; border-radius: 8px; font-size: 13px; font-family: inherit; resize: vertical; }
+  button { width: 100%; margin-top: 6px; padding: 10px; border: 0; border-radius: 8px; background: #655cc8; color: white; font-weight: 700; font-size: 13px; cursor: pointer; }
+  button.secondary { background: #eef1fb; color: #5b55b9; }
+  #status { margin-top: 10px; font-size: 12px; color: #176b4d; min-height: 16px; }
+  #status.error { color: #b42318; }
+</style>
+</head>
+<body>
+  <h1>59만모바일 캡처 도구</h1>
+  <p class="help">지금 열린 페이지의 제목이나 드래그해서 선택한 내용을 복사합니다. 앱의 "제목 메모"나 NRC Sync의 "오늘 제목 메모장"에 붙여넣으면 됩니다.</p>
+
+  <label>페이지 제목</label>
+  <textarea id="titleText" rows="2"></textarea>
+  <button id="copyTitle" type="button">제목 복사</button>
+
+  <label>선택한 텍스트</label>
+  <textarea id="selectionText" rows="3" placeholder="페이지에서 텍스트를 드래그해 선택한 뒤 이 팝업을 다시 열면 여기 나타납니다."></textarea>
+  <button id="copySelection" class="secondary" type="button">선택한 텍스트 복사</button>
+
+  <div id="status"></div>
+  <script src="popup.js"></script>
+</body>
+</html>

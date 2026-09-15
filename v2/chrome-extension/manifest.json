@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "59만모바일 캡처 도구",
+  "version": "1.0.0",
+  "description": "자동 수집이 안 되는 채널(인스타 등)에서 글 제목·방문자수 등을 수동으로 캡처해 복사합니다.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": ["activeTab", "scripting", "clipboardWrite"],
+  "host_permissions": ["<all_urls>"]
+}
