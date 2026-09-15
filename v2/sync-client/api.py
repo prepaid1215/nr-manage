@@ -28,8 +28,11 @@ from flask_cors import CORS
 import keyring
 import scraper as scraper_module
 import queue_worker
+import naver_login
 from scraper import run_daily, run_sales_now, run_closings, run_combined
 from queue_worker import configure_worker, configure_worker_from_session, worker_configuration, worker_loop
+
+NAVER_KEYRING_SERVICE = "NRC-Management-Naver"
 
 if getattr(sys, "frozen", False) and (sys.stdout is None or not hasattr(sys.stdout, "write")):
     # --windowed 빌드는 콘솔이 없어 sys.stdout/stderr가 None이라 print()가 죽는다.
@@ -203,6 +206,82 @@ def notes_save():
         notes_page(f"제목 {len(titles)}개를 오늘 기록에 저장했습니다."),
         content_type="text/html; charset=utf-8",
     )
+
+
+def naver_page(message="", error=False):
+    accounts = naver_login.list_sessions()
+    notice = ""
+    if message:
+        color = "#b42318" if error else "#176b4d"
+        notice = f'<div style="padding:12px;border-radius:12px;background:#f5f3ff;color:{color};margin-bottom:16px">{html.escape(message)}</div>'
+    rows = "".join(
+        f'<li>{html.escape(label)} '
+        f'<form method="post" action="/naver/delete" style="display:inline">'
+        f'<input type="hidden" name="label" value="{html.escape(label)}">'
+        f'<button type="submit">삭제</button></form></li>'
+        for label in accounts
+    ) or '<li style="color:#8386a3">저장된 계정이 없습니다.</li>'
+    return f'''<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>네이버 계정 로그인</title><style>
+    body{{font-family:system-ui,sans-serif;background:#f6f5ff;margin:0;padding:24px;color:#202038}}
+    main{{max-width:560px;margin:24px auto;background:white;padding:28px;border-radius:24px;box-shadow:0 18px 50px #5048a51f}}
+    h1{{color:#5b55b9}}h2{{font-size:16px;color:#5b55b9;margin-top:28px}}p{{color:#6e7191;line-height:1.55}}
+    label{{display:block;margin:15px 0 6px}}
+    input{{box-sizing:border-box;width:100%;padding:13px;border:1px solid #d8d8ea;border-radius:12px;font-size:16px}}
+    button{{padding:10px 14px;border:0;border-radius:10px;background:#655cc8;color:white;font-weight:700;font-size:14px}}
+    form#naverForm button{{width:100%;margin-top:22px;padding:14px;font-size:16px}}
+    ul{{list-style:none;padding:0}}li{{padding:8px 0;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center}}
+    small{{display:block;margin-top:16px;color:#8386a3;line-height:1.5}}</style>
+    <main><h1>네이버 계정 로그인</h1><p>블로그 통계·글 목록을 자동 수집할 네이버 계정을 등록합니다. 저장 버튼을 누르면 이 PC에 로그인 창이 뜨고, 로그인에 성공하면 쿠키가 <b>이 PC에만</b> 저장됩니다(다른 PC나 클라우드로 전송되지 않음).</p>{notice}
+    <form id="naverForm" method="post" action="/naver/accounts/save">
+    <label>계정 별명(채널 구분용)</label><input name="label" placeholder="예: 슬룸" required>
+    <label>네이버 아이디</label><input name="naverId" autocomplete="off" required>
+    <label>네이버 비밀번호</label><input name="password" type="password" autocomplete="new-password" required>
+    <button type="submit">로그인 창 열고 쿠키 저장</button></form>
+    <small>로그인 창에서 자동입력 방지문자(캡차)나 새 기기 확인이 뜨면 그 창에서 직접 완료하면 됩니다. 최대 3분까지 기다립니다.</small>
+    <h2>저장된 계정</h2><ul>{rows}</ul>
+    </main></html>'''
+
+
+@app.route("/naver/accounts", methods=["GET"])
+def naver_accounts_get():
+    return Response(naver_page(), content_type="text/html; charset=utf-8")
+
+
+@app.route("/naver/accounts/save", methods=["POST"])
+def naver_accounts_save():
+    label = request.form.get("label", "").strip()
+    naver_id = request.form.get("naverId", "").strip()
+    password = request.form.get("password", "")
+    if not label or len(naver_id) < 2 or len(password) < 2:
+        return Response(
+            naver_page("계정 별명·아이디·비밀번호를 확인하세요.", True),
+            status=400,
+            content_type="text/html; charset=utf-8",
+        )
+    try:
+        naver_login.login_and_save_cookies(label, naver_id, password)
+        keyring.set_password(
+            NAVER_KEYRING_SERVICE, label, json.dumps({"naverId": naver_id, "password": password})
+        )
+    except Exception as exc:
+        return Response(naver_page(f"로그인 실패: {exc}", True), status=400, content_type="text/html; charset=utf-8")
+    return Response(
+        naver_page(f'"{label}" 계정 로그인 쿠키를 이 PC에 저장했습니다.'),
+        content_type="text/html; charset=utf-8",
+    )
+
+
+@app.route("/naver/delete", methods=["POST"])
+def naver_accounts_delete():
+    label = request.form.get("label", "").strip()
+    if label:
+        naver_login.delete_session(label)
+        try:
+            keyring.delete_password(NAVER_KEYRING_SERVICE, label)
+        except keyring.errors.PasswordDeleteError:
+            pass
+    return Response(naver_page(f'"{label}" 계정을 삭제했습니다.'), content_type="text/html; charset=utf-8")
 
 
 @app.route("/register-device-auto", methods=["POST", "OPTIONS"])
@@ -688,6 +767,9 @@ def run_with_tray():
     def open_notes(icon_obj=None, item=None):
         webbrowser.open("http://127.0.0.1:5050/notes")
 
+    def open_naver(icon_obj=None, item=None):
+        webbrowser.open("http://127.0.0.1:5050/naver/accounts")
+
     def quit_app(icon_obj=None, item=None):
         icon_obj.stop()
         os._exit(0)
@@ -695,6 +777,7 @@ def run_with_tray():
     menu = pystray.Menu(
         pystray.MenuItem("앱 열기", open_setup, default=True),
         pystray.MenuItem("오늘 제목 메모장", open_notes),
+        pystray.MenuItem("네이버 계정 로그인", open_naver),
         pystray.MenuItem("종료", quit_app),
     )
     icon = pystray.Icon("NRCSync", _tray_icon_image(), "NRC Sync 실행 중", menu)
@@ -723,6 +806,7 @@ if __name__ == "__main__":
     print("  POST /api/sync/daily      - 소비자현황+실적 즉시 수집")
     print("  POST /api/sync/sales      - 매출내역 즉시 수집")
     print("  GET  /notes               - 오늘 제목 메모장")
+    print("  GET  /naver/accounts      - 네이버 계정 로그인 쿠키 저장")
     print()
     ensure_chromium_installed()
     open_setup_page_if_needed()
