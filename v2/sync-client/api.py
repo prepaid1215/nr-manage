@@ -170,42 +170,120 @@ def clean_titles(raw_text):
     return cleaned
 
 
-@app.route("/notes/save", methods=["POST"])
-def notes_save():
+def load_today_titles():
+    """이 PC에 등록된 계정의 오늘 postTitles를 읽어온다. 미등록이면 None."""
     device = queue_worker._load_device()
     if not device:
-        return Response(
-            notes_page("이 PC가 아직 앱 계정에 등록되지 않았습니다. 먼저 웹 앱에서 \"이 PC 자동 등록\"을 진행하세요.", True),
-            status=400,
-            content_type="text/html; charset=utf-8",
-        )
+        return None
+    today = datetime.now().date().isoformat()
+    rows = queue_worker._rest(
+        f"daily_activities?owner_id=eq.{device['owner_id']}&activity_date=eq.{today}&select=content"
+    )
+    content = (rows[0].get("content") or {}) if rows else {}
+    return content.get("postTitles") or []
+
+
+def save_today_titles(titles):
+    """오늘 postTitles를 저장한다(다른 필드는 보존). 미등록 PC면 RuntimeError."""
+    device = queue_worker._load_device()
+    if not device:
+        raise RuntimeError('이 PC가 아직 앱 계정에 등록되지 않았습니다. 먼저 웹 앱에서 "이 PC 자동 등록"을 진행하세요.')
+    today = datetime.now().date().isoformat()
+    existing_rows = queue_worker._rest(
+        f"daily_activities?owner_id=eq.{device['owner_id']}&activity_date=eq.{today}&select=content"
+    )
+    existing_content = (existing_rows[0].get("content") or {}) if existing_rows else {}
+    existing_content["postTitles"] = titles
+    queue_worker._rest(
+        "daily_activities?on_conflict=owner_id,activity_date",
+        "POST",
+        {
+            "owner_id": device["owner_id"],
+            "activity_date": today,
+            "content": existing_content,
+            "updated_at": queue_worker.utc_now(),
+        },
+        "resolution=merge-duplicates,return=minimal",
+    )
+
+
+@app.route("/notes/save", methods=["POST"])
+def notes_save():
     titles = clean_titles(request.form.get("titles", ""))
     if not titles:
         return Response(notes_page("저장할 제목이 없습니다.", True), status=400, content_type="text/html; charset=utf-8")
-    today = datetime.now().date().isoformat()
     try:
-        existing_rows = queue_worker._rest(
-            f"daily_activities?owner_id=eq.{device['owner_id']}&activity_date=eq.{today}&select=content"
-        )
-        existing_content = (existing_rows[0].get("content") or {}) if existing_rows else {}
-        existing_content["postTitles"] = titles
-        queue_worker._rest(
-            "daily_activities?on_conflict=owner_id,activity_date",
-            "POST",
-            {
-                "owner_id": device["owner_id"],
-                "activity_date": today,
-                "content": existing_content,
-                "updated_at": queue_worker.utc_now(),
-            },
-            "resolution=merge-duplicates,return=minimal",
-        )
+        save_today_titles(titles)
     except Exception as exc:
         return Response(notes_page(f"저장 실패: {exc}", True), status=400, content_type="text/html; charset=utf-8")
     return Response(
         notes_page(f"제목 {len(titles)}개를 오늘 기록에 저장했습니다."),
         content_type="text/html; charset=utf-8",
     )
+
+
+def open_sticky_note():
+    """트레이에서 누르면 브라우저 대신 늘 위에 떠 있는 작은 메모장 창을 연다."""
+    def _run():
+        import tkinter as tk
+
+        root = tk.Tk()
+        root.title("오늘 제목 메모장")
+        root.geometry("360x430")
+        root.attributes("-topmost", True)
+        root.configure(bg="#f7f7fb")
+
+        tk.Label(
+            root,
+            text="오늘 쓴 글 제목을 한 줄에 하나씩 적으세요.",
+            wraplength=330,
+            justify="left",
+            bg="#f7f7fb",
+            fg="#6e7191",
+            font=("맑은 고딕", 9),
+        ).pack(padx=14, pady=(14, 6), anchor="w")
+
+        text = tk.Text(root, wrap="word", font=("맑은 고딕", 11), relief="solid", borderwidth=1)
+        text.pack(fill="both", expand=True, padx=14, pady=4)
+
+        try:
+            existing = load_today_titles()
+            if existing:
+                text.insert("1.0", "\n".join(existing))
+        except Exception:
+            pass
+
+        status_var = tk.StringVar(value="")
+        tk.Label(root, textvariable=status_var, bg="#f7f7fb", fg="#5b55b9", font=("맑은 고딕", 9)).pack(pady=(2, 2))
+
+        def save():
+            titles = clean_titles(text.get("1.0", "end"))
+            if not titles:
+                status_var.set("저장할 제목이 없습니다.")
+                return
+            try:
+                save_today_titles(titles)
+                status_var.set(f"{len(titles)}개 저장했습니다.")
+                root.after(900, root.destroy)
+            except Exception as exc:
+                status_var.set(str(exc))
+
+        tk.Button(
+            root,
+            text="오늘 기록에 저장",
+            command=save,
+            bg="#5b55b9",
+            fg="white",
+            activebackground="#6c63d1",
+            activeforeground="white",
+            relief="flat",
+            font=("맑은 고딕", 10, "bold"),
+            pady=9,
+        ).pack(fill="x", padx=14, pady=(4, 14))
+
+        root.mainloop()
+
+    threading.Thread(target=_run, daemon=True).start()
 
 
 def naver_page(message="", error=False):
@@ -765,7 +843,7 @@ def run_with_tray():
         webbrowser.open(APP_URL)
 
     def open_notes(icon_obj=None, item=None):
-        webbrowser.open("http://127.0.0.1:5050/notes")
+        open_sticky_note()
 
     def open_naver(icon_obj=None, item=None):
         webbrowser.open("http://127.0.0.1:5050/naver/accounts")
