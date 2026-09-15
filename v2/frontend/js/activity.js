@@ -18,7 +18,7 @@ const postingFields = [
 ];
 const today = localDate;
 export async function activityPage(root, me) {
-  root.innerHTML = `<section class="card"><h2>일일업무일지</h2><label>기록할 날짜<input id="activityDate" type="date" value="${today()}"></label></section><section class="activity-hero"><span>오늘 개통</span><b id="activationTotal">0건</b></section><form id="activityForm"><section class="card"><div class="section-head"><h2>포스팅 / SNS 기록</h2><b id="postingTotal">총 0건</b></div><div class="activity-grid">${postingFields.map(([key, label]) => `<label>${label}<input type="number" min="0" value="0" data-posting="${key}"></label>`).join("")}</div></section><section class="card"><div class="section-head"><h2>제목 메모</h2><button class="secondary compact" id="copyTitles" type="button">복사하기</button></div><p class="help">한 줄에 제목 하나씩 입력하세요. 저장 시 이 날짜 기록에 함께 저장됩니다.</p><textarea id="postTitles" rows="6" placeholder="정지된 휴대폰 본인인증 방법"></textarea><div id="copyTitlesStatus" class="connection-status" hidden></div></section><section class="card"><h2>개통·매출 기록</h2><div class="activity-grid two"><label>신규개통양도금(원)<input id="newTransfer" type="number" min="0" value="0"></label><label>재구매요금양도금(원)<input id="repurchase" type="number" min="0" value="0"></label><label>현재요금잔액(원)<input id="balance" type="number" min="0" value="0"></label><label>앤보임 수강생<input id="attendance" type="number" min="0" value="0"></label><label>A 자동매출(NV)<input id="aSales" type="number" min="0" value="0"></label><label>B 자동매출(NV)<input id="bSales" type="number" min="0" value="0"></label></div></section><section class="card"><h2>오늘 할 일</h2><div class="task-list">${Array.from({ length: 10 }, (_, i) => `<label><span>${i + 1}</span><input data-task="${i}" placeholder="예: 앤텔고객 충전"></label>`).join("")}</div></section><button class="primary activity-save" type="submit">이 날짜 기록 저장</button><div id="activityStatus" class="connection-status" hidden></div><div id="activityError" class="error"></div></form>`;
+  root.innerHTML = `<section class="card"><h2>일일업무일지</h2><label>기록할 날짜<input id="activityDate" type="date" value="${today()}"></label></section><section class="activity-hero"><span>오늘 개통</span><b id="activationTotal">0건</b></section><form id="activityForm"><section class="card"><div class="section-head"><h2>포스팅 / SNS 기록</h2><b id="postingTotal">총 0건</b></div><div class="activity-grid">${postingFields.map(([key, label]) => `<label>${label}<input type="number" min="0" value="0" data-posting="${key}"></label>`).join("")}</div></section><section class="card"><div class="section-head"><h2>제목 메모</h2><button class="secondary compact" id="copyTitles" type="button">복사하기</button></div><p class="help">한 줄에 제목 하나씩 입력하세요. 저장 시 이 날짜 기록에 함께 저장됩니다.</p><textarea id="postTitles" rows="6" placeholder="정지된 휴대폰 본인인증 방법"></textarea><div id="copyTitlesStatus" class="connection-status" hidden></div></section><section class="card"><h2>개통·매출 기록</h2><div class="activity-grid two"><label>신규개통양도금(원)<input id="newTransfer" type="number" min="0" value="0"></label><label>재구매요금양도금(원)<input id="repurchase" type="number" min="0" value="0"></label><label>현재요금잔액(원)<input id="balance" type="number" min="0" value="0"></label><label>앤보임 수강생<input id="attendance" type="number" min="0" value="0"></label><label>A 자동매출(NV)<input id="aSales" type="number" min="0" value="0"></label><label>B 자동매출(NV)<input id="bSales" type="number" min="0" value="0"></label></div></section><section class="card"><div class="section-head"><h2>오늘 할 일</h2><button class="secondary compact" id="downloadActivityIcs" type="button">📅 캘린더 파일 저장</button></div><div class="task-list">${Array.from({ length: 10 }, (_, i) => `<label><span>${i + 1}</span><input data-task="${i}" placeholder="예: 앤텔고객 충전"></label>`).join("")}</div></section><button class="primary activity-save" type="submit">이 날짜 기록 저장</button><div id="activityStatus" class="connection-status" hidden></div><div id="activityError" class="error"></div></form>`;
   root.firstElementChild.insertAdjacentHTML(
     "beforebegin",
     `<div class="view-tabs activity-tabs"><button class="active" data-activity-view="record">기록하기</button><button data-activity-view="stats">활동 통계</button></div>`,
@@ -193,6 +193,29 @@ export async function activityPage(root, me) {
   );
   $("statsMonth").onchange = loadStats;
   $("activityDate").onchange = load;
+  $("downloadActivityIcs").onclick = () => {
+    const date = $("activityDate").value.replaceAll("-", ""),
+      tasks = taskInputs.map((input) => input.value.trim()).filter(Boolean);
+    if (!date) return;
+    const next = new Date(`${$("activityDate").value}T00:00:00`);
+    next.setDate(next.getDate() + 1);
+    const nextDate = `${next.getFullYear()}${String(next.getMonth() + 1).padStart(2, "0")}${String(next.getDate()).padStart(2, "0")}`,
+      description = tasks.length
+        ? tasks.map((task, i) => `${i + 1}. ${task}`).join("\n")
+        : "등록된 할 일이 없습니다.",
+      escaped = description
+        .replaceAll("\\", "\\\\")
+        .replaceAll("\n", "\\n")
+        .replaceAll(",", "\\,"),
+      calendar = `BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//NRC//Daily Activity//KO\r\nBEGIN:VEVENT\r\nDTSTART;VALUE=DATE:${date}\r\nDTEND;VALUE=DATE:${nextDate}\r\nSUMMARY:오늘 할 일\r\nDESCRIPTION:${escaped}\r\nEND:VEVENT\r\nEND:VCALENDAR`,
+      link = document.createElement("a");
+    link.href = URL.createObjectURL(
+      new Blob([calendar], { type: "text/calendar;charset=utf-8" }),
+    );
+    link.download = `오늘할일-${$("activityDate").value}.ics`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
   $("copyTitles").onclick = async () => {
     const status = $("copyTitlesStatus"),
       titles = $("postTitles")
