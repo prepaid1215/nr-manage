@@ -21,6 +21,7 @@ import threading
 import webbrowser
 import urllib.error
 import urllib.request
+from urllib.parse import quote
 from datetime import datetime
 from pathlib import Path
 from flask import Flask, Response, jsonify, request
@@ -29,6 +30,8 @@ import keyring
 import scraper as scraper_module
 import queue_worker
 import naver_login
+import naver_stats
+import naver_exposure
 from scraper import run_daily, run_sales_now, run_closings, run_combined
 from queue_worker import configure_worker, configure_worker_from_session, worker_configuration, worker_loop
 
@@ -286,6 +289,11 @@ def open_sticky_note():
     threading.Thread(target=_run, daemon=True).start()
 
 
+def naver_credential(label):
+    saved = keyring.get_password(NAVER_KEYRING_SERVICE, label)
+    return json.loads(saved) if saved else {}
+
+
 def naver_page(message="", error=False):
     accounts = naver_login.list_sessions()
     notice = ""
@@ -293,10 +301,15 @@ def naver_page(message="", error=False):
         color = "#b42318" if error else "#176b4d"
         notice = f'<div style="padding:12px;border-radius:12px;background:#f5f3ff;color:{color};margin-bottom:16px">{html.escape(message)}</div>'
     rows = "".join(
-        f'<li>{html.escape(label)} '
+        f'<li><div class="acct-row"><b>{html.escape(label)}</b>'
+        f'<div class="acct-actions">'
+        f'<a class="btn" href="/naver/stats/{quote(label)}/uv">방문자</a>'
+        f'<a class="btn" href="/naver/stats/{quote(label)}/today">통계</a>'
+        f'<a class="btn" href="/naver/exposure/{quote(label)}">노출</a>'
         f'<form method="post" action="/naver/delete" style="display:inline">'
         f'<input type="hidden" name="label" value="{html.escape(label)}">'
-        f'<button type="submit">삭제</button></form></li>'
+        f'<button class="btn danger" type="submit">삭제</button></form>'
+        f'</div></div></li>'
         for label in accounts
     ) or '<li style="color:#8386a3">저장된 계정이 없습니다.</li>'
     return f'''<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -306,13 +319,18 @@ def naver_page(message="", error=False):
     h1{{color:#5b55b9}}h2{{font-size:16px;color:#5b55b9;margin-top:28px}}p{{color:#6e7191;line-height:1.55}}
     label{{display:block;margin:15px 0 6px}}
     input{{box-sizing:border-box;width:100%;padding:13px;border:1px solid #d8d8ea;border-radius:12px;font-size:16px}}
-    button{{padding:10px 14px;border:0;border-radius:10px;background:#655cc8;color:white;font-weight:700;font-size:14px}}
+    button{{padding:10px 14px;border:0;border-radius:10px;background:#655cc8;color:white;font-weight:700;font-size:14px;cursor:pointer}}
     form#naverForm button{{width:100%;margin-top:22px;padding:14px;font-size:16px}}
-    ul{{list-style:none;padding:0}}li{{padding:8px 0;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center}}
+    ul{{list-style:none;padding:0}}li{{padding:10px 0;border-bottom:1px solid #eee}}
+    .acct-row{{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}}
+    .acct-actions{{display:flex;gap:6px;flex-wrap:wrap}}
+    .btn{{display:inline-block;padding:8px 12px;border-radius:8px;background:#f0efff;color:#5b55b9;font-size:13px;font-weight:700;text-decoration:none;border:0}}
+    .btn.danger{{background:#fff0f0;color:#b42318}}
     small{{display:block;margin-top:16px;color:#8386a3;line-height:1.5}}</style>
     <main><h1>네이버 계정 로그인</h1><p>블로그 통계·글 목록을 자동 수집할 네이버 계정을 등록합니다. 저장 버튼을 누르면 이 PC에 로그인 창이 뜨고, 로그인에 성공하면 쿠키가 <b>이 PC에만</b> 저장됩니다(다른 PC나 클라우드로 전송되지 않음).</p>{notice}
     <form id="naverForm" method="post" action="/naver/accounts/save">
-    <label>계정 별명(채널 구분용)</label><input name="label" placeholder="예: 슬룸" required>
+    <label>계정 별명(채널 구분용)</label><input name="label" placeholder="예: 프로필1" required>
+    <label>네이버 블로그 주소(blogId)</label><input name="blogId" placeholder="예: donatele (blog.naver.com/뒤에 오는 부분)" required>
     <label>네이버 아이디</label><input name="naverId" autocomplete="off" required>
     <label>네이버 비밀번호</label><input name="password" type="password" autocomplete="new-password" required>
     <button type="submit">로그인 창 열고 쿠키 저장</button></form>
@@ -329,18 +347,20 @@ def naver_accounts_get():
 @app.route("/naver/accounts/save", methods=["POST"])
 def naver_accounts_save():
     label = request.form.get("label", "").strip()
+    blog_id = request.form.get("blogId", "").strip()
     naver_id = request.form.get("naverId", "").strip()
     password = request.form.get("password", "")
-    if not label or len(naver_id) < 2 or len(password) < 2:
+    if not label or not blog_id or len(naver_id) < 2 or len(password) < 2:
         return Response(
-            naver_page("계정 별명·아이디·비밀번호를 확인하세요.", True),
+            naver_page("계정 별명·블로그 주소·아이디·비밀번호를 확인하세요.", True),
             status=400,
             content_type="text/html; charset=utf-8",
         )
     try:
         naver_login.login_and_save_cookies(label, naver_id, password)
         keyring.set_password(
-            NAVER_KEYRING_SERVICE, label, json.dumps({"naverId": naver_id, "password": password})
+            NAVER_KEYRING_SERVICE, label,
+            json.dumps({"naverId": naver_id, "password": password, "blogId": blog_id}),
         )
     except Exception as exc:
         return Response(naver_page(f"로그인 실패: {exc}", True), status=400, content_type="text/html; charset=utf-8")
@@ -348,6 +368,73 @@ def naver_accounts_save():
         naver_page(f'"{label}" 계정 로그인 쿠키를 이 PC에 저장했습니다.'),
         content_type="text/html; charset=utf-8",
     )
+
+
+def naver_result_page(title, back_label, body_html):
+    return f'''<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>{html.escape(title)}</title><style>
+    body{{font-family:system-ui,sans-serif;background:#f6f5ff;margin:0;padding:24px;color:#202038}}
+    main{{max-width:480px;margin:24px auto;background:white;padding:28px;border-radius:24px;box-shadow:0 18px 50px #5048a51f}}
+    h1{{color:#5b55b9;font-size:18px}}
+    .num{{font-size:40px;font-weight:800;color:#5b55b9;margin:18px 0}}
+    table{{width:100%;border-collapse:collapse;margin-top:8px}}
+    td{{padding:8px 0;border-bottom:1px solid #eee;font-size:14px}}
+    td:last-child{{text-align:right;font-weight:700;color:#5b55b9}}
+    a.back{{display:inline-block;margin-top:20px;color:#8386a3;text-decoration:none;font-size:13px}}
+    .error{{color:#b42318}}
+    input{{box-sizing:border-box;width:100%;padding:13px;border:1px solid #d8d8ea;border-radius:12px;font-size:16px;margin:10px 0}}
+    button{{padding:12px 16px;border:0;border-radius:10px;background:#655cc8;color:white;font-weight:700;font-size:14px;width:100%}}
+    </style><main><h1>{html.escape(title)}</h1>{body_html}
+    <a class="back" href="/naver/accounts">&larr; {html.escape(back_label)}</a></main></html>'''
+
+
+@app.route("/naver/stats/<label>/<kind>", methods=["GET"])
+def naver_stats_view(label, kind):
+    credential = naver_credential(label)
+    blog_id = credential.get("blogId", "")
+    if not blog_id:
+        return Response(
+            naver_result_page("통계", "계정 목록으로", '<p class="error">이 계정에 등록된 블로그 주소가 없습니다.</p>'),
+            content_type="text/html; charset=utf-8",
+        )
+    try:
+        if kind == "uv":
+            data = naver_stats.fetch_visitors(label, blog_id)
+            body = f'<p>{html.escape(label)} · 오늘 순방문자수</p><div class="num">{html.escape(str(data.get("순방문자수") or "확인 안 됨"))}명</div>'
+        else:
+            data = naver_stats.fetch_today(label, blog_id)
+            rows = "".join(f"<tr><td>{html.escape(k)}</td><td>{html.escape(str(v) if v else '-')}</td></tr>" for k, v in data.items())
+            body = f'<p>{html.escape(label)} · 오늘 현황</p><table>{rows}</table>'
+    except Exception as exc:
+        body = f'<p class="error">불러오지 못했습니다: {html.escape(str(exc))}</p>'
+    return Response(naver_result_page("통계" if kind != "uv" else "방문자", "계정 목록으로", body), content_type="text/html; charset=utf-8")
+
+
+@app.route("/naver/exposure/<label>", methods=["GET"])
+def naver_exposure_form(label):
+    body = '''<form method="post"><label>확인할 검색 키워드<input name="keyword" placeholder="예: 수원 선불폰" required></label>
+    <button type="submit">노출 확인</button></form><p style="color:#8386a3;font-size:12px">모바일 검색에서 스크롤하며 실제로 확인하므로 1~2분 걸릴 수 있습니다.</p>'''
+    return Response(naver_result_page(f"{label} · 노출 확인", "계정 목록으로", body), content_type="text/html; charset=utf-8")
+
+
+@app.route("/naver/exposure/<label>", methods=["POST"])
+def naver_exposure_run(label):
+    credential = naver_credential(label)
+    blog_id = credential.get("blogId", "")
+    keyword = request.form.get("keyword", "").strip()
+    if not blog_id or not keyword:
+        return Response(naver_result_page("노출 확인", "계정 목록으로", '<p class="error">블로그 주소 또는 키워드가 없습니다.</p>'), content_type="text/html; charset=utf-8")
+    try:
+        result = naver_exposure.check_keyword(label, blog_id, keyword)
+        rows = ""
+        for stage_name, stage_key in (("통합검색", "integrated"), ("블로그탭", "blog_tab")):
+            found = result.get(stage_key)
+            value = f"{found['rank']}번째 (스크롤 {found['scroll']})" if found else "미노출"
+            rows += f"<tr><td>{stage_name}</td><td>{html.escape(value)}</td></tr>"
+        body = f'<p>"{html.escape(keyword)}" 검색 결과</p><table>{rows}</table>'
+    except Exception as exc:
+        body = f'<p class="error">확인 실패: {html.escape(str(exc))}</p>'
+    return Response(naver_result_page(f"{label} · 노출 확인", "계정 목록으로", body), content_type="text/html; charset=utf-8")
 
 
 @app.route("/naver/delete", methods=["POST"])
