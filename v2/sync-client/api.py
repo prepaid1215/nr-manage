@@ -11,6 +11,7 @@ import json
 import hmac
 import html
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -26,6 +27,7 @@ from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 import keyring
 import scraper as scraper_module
+import queue_worker
 from scraper import run_daily, run_sales_now, run_closings, run_combined
 from queue_worker import configure_worker, configure_worker_from_session, worker_configuration, worker_loop
 
@@ -122,6 +124,85 @@ def worker_setup_save():
         )
     except Exception as exc:
         return Response(setup_page(str(exc), True), status=400, content_type="text/html; charset=utf-8")
+
+
+def notes_page(message="", error=False):
+    configured = worker_configuration()
+    notice = ""
+    if message:
+        color = "#b42318" if error else "#176b4d"
+        notice = f'<div style="padding:12px;border-radius:12px;background:#f5f3ff;color:{color};margin-bottom:16px">{html.escape(message)}</div>'
+    if not configured.get("configured"):
+        notice = f'<div style="padding:12px;border-radius:12px;background:#fff4f2;color:#b42318;margin-bottom:16px">이 PC가 아직 앱 계정에 등록되지 않았습니다. 먼저 웹 앱에서 "이 PC 자동 등록"을 진행하세요.</div>' + notice
+    return f'''<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>오늘 제목 메모장</title><style>
+    body{{font-family:system-ui,sans-serif;background:#f6f5ff;margin:0;padding:24px;color:#202038}}
+    main{{max-width:560px;margin:24px auto;background:white;padding:28px;border-radius:24px;box-shadow:0 18px 50px #5048a51f}}
+    h1{{color:#5b55b9}}p{{color:#6e7191;line-height:1.55}}
+    textarea{{box-sizing:border-box;width:100%;min-height:220px;padding:13px;border:1px solid #d8d8ea;border-radius:12px;font-size:15px;line-height:1.6}}
+    button{{width:100%;margin-top:16px;padding:14px;border:0;border-radius:13px;background:#655cc8;color:white;font-weight:700;font-size:16px}}
+    small{{display:block;margin-top:16px;color:#8386a3;line-height:1.5}}</style>
+    <main><h1>오늘 제목 메모장</h1><p>오늘 쓴 글 제목을 한 줄에 하나씩 붙여넣으면 번호를 지우고 정리해서 활동 기록에 저장합니다.</p>{notice}
+    <form method="post" action="/notes/save">
+    <textarea name="titles" placeholder="정지된 휴대폰 본인인증 방법&#10;편의점 유심으로 10분 만에 개통하기" autofocus></textarea>
+    <button type="submit">오늘 기록에 저장</button></form>
+    <small>이 컴퓨터에 등록된 앱 계정의 오늘({datetime.now().date().isoformat()}) 활동 기록에 저장됩니다.</small></main></html>'''
+
+
+@app.route("/notes", methods=["GET"])
+def notes_get():
+    return Response(notes_page(), content_type="text/html; charset=utf-8")
+
+
+def clean_titles(raw_text):
+    lines = str(raw_text or "").replace("\r\n", "\n").split("\n")
+    cleaned = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        line = re.sub(r"^\s*(?:[0-9]+[.)]|[-*•])\s*", "", line).strip()
+        if line:
+            cleaned.append(line)
+    return cleaned
+
+
+@app.route("/notes/save", methods=["POST"])
+def notes_save():
+    device = queue_worker._load_device()
+    if not device:
+        return Response(
+            notes_page("이 PC가 아직 앱 계정에 등록되지 않았습니다. 먼저 웹 앱에서 \"이 PC 자동 등록\"을 진행하세요.", True),
+            status=400,
+            content_type="text/html; charset=utf-8",
+        )
+    titles = clean_titles(request.form.get("titles", ""))
+    if not titles:
+        return Response(notes_page("저장할 제목이 없습니다.", True), status=400, content_type="text/html; charset=utf-8")
+    today = datetime.now().date().isoformat()
+    try:
+        existing_rows = queue_worker._rest(
+            f"daily_activities?owner_id=eq.{device['owner_id']}&activity_date=eq.{today}&select=content"
+        )
+        existing_content = (existing_rows[0].get("content") or {}) if existing_rows else {}
+        existing_content["postTitles"] = titles
+        queue_worker._rest(
+            "daily_activities?on_conflict=owner_id,activity_date",
+            "POST",
+            {
+                "owner_id": device["owner_id"],
+                "activity_date": today,
+                "content": existing_content,
+                "updated_at": queue_worker.utc_now(),
+            },
+            "resolution=merge-duplicates,return=minimal",
+        )
+    except Exception as exc:
+        return Response(notes_page(f"저장 실패: {exc}", True), status=400, content_type="text/html; charset=utf-8")
+    return Response(
+        notes_page(f"제목 {len(titles)}개를 오늘 기록에 저장했습니다."),
+        content_type="text/html; charset=utf-8",
+    )
 
 
 @app.route("/register-device-auto", methods=["POST", "OPTIONS"])
@@ -604,12 +685,16 @@ def run_with_tray():
     def open_setup(icon_obj=None, item=None):
         webbrowser.open(APP_URL)
 
+    def open_notes(icon_obj=None, item=None):
+        webbrowser.open("http://127.0.0.1:5050/notes")
+
     def quit_app(icon_obj=None, item=None):
         icon_obj.stop()
         os._exit(0)
 
     menu = pystray.Menu(
         pystray.MenuItem("앱 열기", open_setup, default=True),
+        pystray.MenuItem("오늘 제목 메모장", open_notes),
         pystray.MenuItem("종료", quit_app),
     )
     icon = pystray.Icon("NRCSync", _tray_icon_image(), "NRC Sync 실행 중", menu)
@@ -637,6 +722,7 @@ if __name__ == "__main__":
     print("  GET  /api/stats           - 메인 실적 요약")
     print("  POST /api/sync/daily      - 소비자현황+실적 즉시 수집")
     print("  POST /api/sync/sales      - 매출내역 즉시 수집")
+    print("  GET  /notes               - 오늘 제목 메모장")
     print()
     ensure_chromium_installed()
     open_setup_page_if_needed()

@@ -6,7 +6,7 @@ import {
   setRememberLogin,
 } from "./supabase.js?v=20260829-34";
 import { customersPage } from "./customers.js?v=20260908-47";
-import { activityPage } from "./activity.js?v=20260829-25";
+import { activityPage } from "./activity.js?v=20260915-1";
 import {
   checklistItemCount,
   checklistPage,
@@ -16,7 +16,7 @@ import { performancePage } from "./performance.js?v=20260908-110";
 import { teamPage } from "./team.js?v=20260831-3";
 import { localDate, monthRange } from "./date.js?v=20260829-25";
 import { friendlyError } from "./errors.js?v=20260830-1";
-import { adminPage, isAppAdmin } from "./admin.js?v=20260831-16";
+import { adminPage, isAppAdmin } from "./admin.js?v=20260915-1";
 import {
   loadManualLinks,
   mergeManualLinks,
@@ -45,7 +45,7 @@ const menus = [
   ["closing", "마감"],
   ["team", "팀"],
   ["settings", "설정"],
-  ["admin", "관리자"],
+  ["admin", "오류확인"],
 ];
 const visibleMenus = () => menus.filter(([id]) => id !== "admin" || appAdmin);
 function nav() {
@@ -807,7 +807,7 @@ function setupAdminToggle() {
   };
   async function refreshAdminToggleLabel() {
     const { data } = await supabase.rpc("is_app_admin").catch(() => ({ data: false }));
-    button.textContent = data ? "관리자 모드 끄기" : "관리자 모드 켜기";
+    button.textContent = data ? "오류확인 모드 끄기" : "오류확인 모드 켜기";
   }
   button.onclick = async () => {
     status.hidden = false;
@@ -815,8 +815,8 @@ function setupAdminToggle() {
     try {
       const { data, error } = await supabase.rpc("toggle_self_admin");
       if (error) throw error;
-      button.textContent = data ? "관리자 모드 끄기" : "관리자 모드 켜기";
-      status.textContent = data ? "관리자 모드 켜짐" : "관리자 모드 꺼짐";
+      button.textContent = data ? "오류확인 모드 끄기" : "오류확인 모드 켜기";
+      status.textContent = data ? "오류확인 모드 켜짐" : "오류확인 모드 꺼짐";
       appAdmin = Boolean(data);
       nav();
     } catch (err) {

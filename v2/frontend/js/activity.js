@@ -18,7 +18,7 @@ const postingFields = [
 ];
 const today = localDate;
 export async function activityPage(root, me) {
-  root.innerHTML = `<section class="card"><h2>일일업무일지</h2><label>기록할 날짜<input id="activityDate" type="date" value="${today()}"></label></section><section class="activity-hero"><span>오늘 개통</span><b id="activationTotal">0건</b></section><form id="activityForm"><section class="card"><div class="section-head"><h2>포스팅 / SNS 기록</h2><b id="postingTotal">총 0건</b></div><div class="activity-grid">${postingFields.map(([key, label]) => `<label>${label}<input type="number" min="0" value="0" data-posting="${key}"></label>`).join("")}</div></section><section class="card"><h2>개통·매출 기록</h2><div class="activity-grid two"><label>신규개통양도금(원)<input id="newTransfer" type="number" min="0" value="0"></label><label>재구매요금양도금(원)<input id="repurchase" type="number" min="0" value="0"></label><label>현재요금잔액(원)<input id="balance" type="number" min="0" value="0"></label><label>앤보임 수강생<input id="attendance" type="number" min="0" value="0"></label><label>A 자동매출(NV)<input id="aSales" type="number" min="0" value="0"></label><label>B 자동매출(NV)<input id="bSales" type="number" min="0" value="0"></label></div></section><section class="card"><h2>오늘 할 일</h2><div class="task-list">${Array.from({ length: 10 }, (_, i) => `<label><span>${i + 1}</span><input data-task="${i}" placeholder="예: 앤텔고객 충전"></label>`).join("")}</div></section><button class="primary activity-save" type="submit">이 날짜 기록 저장</button><div id="activityStatus" class="connection-status" hidden></div><div id="activityError" class="error"></div></form>`;
+  root.innerHTML = `<section class="card"><h2>일일업무일지</h2><label>기록할 날짜<input id="activityDate" type="date" value="${today()}"></label></section><section class="activity-hero"><span>오늘 개통</span><b id="activationTotal">0건</b></section><form id="activityForm"><section class="card"><div class="section-head"><h2>포스팅 / SNS 기록</h2><b id="postingTotal">총 0건</b></div><div class="activity-grid">${postingFields.map(([key, label]) => `<label>${label}<input type="number" min="0" value="0" data-posting="${key}"></label>`).join("")}</div></section><section class="card"><div class="section-head"><h2>제목 메모</h2><button class="secondary compact" id="copyTitles" type="button">복사하기</button></div><p class="help">한 줄에 제목 하나씩 입력하세요. 저장 시 이 날짜 기록에 함께 저장됩니다.</p><textarea id="postTitles" rows="6" placeholder="정지된 휴대폰 본인인증 방법"></textarea><div id="copyTitlesStatus" class="connection-status" hidden></div></section><section class="card"><h2>개통·매출 기록</h2><div class="activity-grid two"><label>신규개통양도금(원)<input id="newTransfer" type="number" min="0" value="0"></label><label>재구매요금양도금(원)<input id="repurchase" type="number" min="0" value="0"></label><label>현재요금잔액(원)<input id="balance" type="number" min="0" value="0"></label><label>앤보임 수강생<input id="attendance" type="number" min="0" value="0"></label><label>A 자동매출(NV)<input id="aSales" type="number" min="0" value="0"></label><label>B 자동매출(NV)<input id="bSales" type="number" min="0" value="0"></label></div></section><section class="card"><h2>오늘 할 일</h2><div class="task-list">${Array.from({ length: 10 }, (_, i) => `<label><span>${i + 1}</span><input data-task="${i}" placeholder="예: 앤텔고객 충전"></label>`).join("")}</div></section><button class="primary activity-save" type="submit">이 날짜 기록 저장</button><div id="activityStatus" class="connection-status" hidden></div><div id="activityError" class="error"></div></form>`;
   root.firstElementChild.insertAdjacentHTML(
     "beforebegin",
     `<div class="view-tabs activity-tabs"><button class="active" data-activity-view="record">기록하기</button><button data-activity-view="stats">활동 통계</button></div>`,
@@ -71,6 +71,7 @@ export async function activityPage(root, me) {
     taskInputs.forEach(
       (input, i) => (input.value = (data?.tasks || [])[i] || ""),
     );
+    $("postTitles").value = (content.postTitles || []).join("\n");
     totals();
     $("activityStatus").hidden = !data;
     if (data) {
@@ -192,6 +193,25 @@ export async function activityPage(root, me) {
   );
   $("statsMonth").onchange = loadStats;
   $("activityDate").onchange = load;
+  $("copyTitles").onclick = async () => {
+    const status = $("copyTitlesStatus"),
+      titles = $("postTitles")
+        .value.split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
+    status.hidden = false;
+    if (!titles.length) {
+      status.textContent = "복사할 제목이 없습니다.";
+      return;
+    }
+    const text = titles.map((title, i) => `${i + 1}. ${title}`).join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      status.textContent = `${titles.length}개 제목을 복사했습니다.`;
+    } catch {
+      status.textContent = "클립보드 복사에 실패했습니다. 직접 선택해 복사해 주세요.";
+    }
+  };
   $("activityForm").onsubmit = async (event) => {
     event.preventDefault();
     $("activityError").textContent = "";
@@ -201,6 +221,10 @@ export async function activityPage(root, me) {
           Number(input.value || 0),
         ]),
       ),
+      postTitles = $("postTitles")
+        .value.split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean),
       value = {
         owner_id: me.id,
         activity_date: $("activityDate").value,
@@ -211,7 +235,7 @@ export async function activityPage(root, me) {
         a_sales: number("aSales"),
         b_sales: number("bSales"),
         tasks: taskInputs.map((input) => input.value.trim()),
-        content: { postings },
+        content: { postings, postTitles },
         updated_at: new Date().toISOString(),
       },
       { error } = await supabase
