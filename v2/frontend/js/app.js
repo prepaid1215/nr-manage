@@ -88,14 +88,101 @@ async function quickAmountEntry(field, label) {
   );
   await home();
 }
+let homeEditing = false;
+const homeHiddenKey = () => `home-hidden-${me.id}`;
+function getHiddenCards() {
+  try {
+    return JSON.parse(localStorage.getItem(homeHiddenKey()) || "[]");
+  } catch {
+    return [];
+  }
+}
+function setHiddenCards(list) {
+  try {
+    localStorage.setItem(homeHiddenKey(), JSON.stringify(list));
+  } catch {}
+}
+function renderHomeCustomization() {
+  const zone = $("homeSummary");
+  if (!zone) return;
+  const cards = Array.from(zone.querySelectorAll(".removable")),
+    hidden = getHiddenCards();
+  cards.forEach((card) => {
+    card.hidden = hidden.includes(card.dataset.key);
+    const btn = card.querySelector(".card-remove");
+    if (btn)
+      btn.onclick = () => {
+        setHiddenCards([...new Set([...getHiddenCards(), card.dataset.key])]);
+        renderHomeCustomization();
+      };
+  });
+  zone.classList.toggle("editing", homeEditing);
+  const hiddenCards = cards.filter((c) => hidden.includes(c.dataset.key)),
+    tray = $("addTray");
+  tray.innerHTML = hiddenCards
+    .map(
+      (c) =>
+        `<button class="add-chip" type="button" data-key="${c.dataset.key}">+ ${safe(c.dataset.label)}</button>`,
+    )
+    .join("");
+  tray.hidden = !homeEditing || !hiddenCards.length;
+  tray.querySelectorAll("[data-key]").forEach((chip) => {
+    chip.onclick = () => {
+      setHiddenCards(getHiddenCards().filter((k) => k !== chip.dataset.key));
+      renderHomeCustomization();
+    };
+  });
+}
+function computeBankBalance(currentBalance) {
+  return (
+    Number(me.bank_balance_base || 0) +
+    (Number(me.bank_balance_anchor || 0) - currentBalance)
+  );
+}
+async function editBankBalance() {
+  const { data: existing } = await supabase
+    .from("daily_activities")
+    .select("balance")
+    .eq("owner_id", me.id)
+    .eq("activity_date", localDate())
+    .maybeSingle();
+  const currentBalance = Number(existing?.balance || 0);
+  const raw = prompt(
+    "현재 은행잔액(카카오뱅크 충전계좌)을 입력하세요.\n다음부터는 요금 충전/차감에 따라 자동으로 반영됩니다.",
+    String(Math.round(computeBankBalance(currentBalance))),
+  );
+  if (raw === null) return;
+  const amount = Number(String(raw).replace(/[^0-9]/g, ""));
+  if (!Number.isFinite(amount)) return;
+  const { error } = await supabase
+    .from("profiles")
+    .update({ bank_balance_base: amount, bank_balance_anchor: currentBalance })
+    .eq("id", me.id);
+  if (error) {
+    alert(friendlyError(error, "은행잔액을 저장하지 못했습니다."));
+    return;
+  }
+  me.bank_balance_base = amount;
+  me.bank_balance_anchor = currentBalance;
+  await home();
+}
 async function home() {
+  homeEditing = false;
+  $("content").classList.add("home-view");
+  $("editHomeBtn").hidden = false;
+  $("editHomeBtn").classList.remove("active");
+  $("editHomeBtn").onclick = () => {
+    homeEditing = !homeEditing;
+    $("editHomeBtn").classList.toggle("active", homeEditing);
+    renderHomeCustomization();
+  };
   const frag = $("homeTemplate").content.cloneNode(true);
   $("content").replaceChildren(frag);
-  $("content").insertAdjacentHTML(
-    "afterbegin",
+  $("content").querySelector(".hero").insertAdjacentHTML(
+    "afterend",
     `<section class="card home-actions"><button class="primary" id="homeAddCustomer" type="button">+ 고객 등록</button><div class="customer-quick-actions"><button class="secondary compact" id="homeQuickTransfer" type="button">+ 신규개통양도</button><button class="secondary compact" id="homeQuickRepurchase" type="button">+ 재구매양도</button></div></section>`,
   );
-  $("content").querySelector(".kpis").insertAdjacentHTML(
+  $("content").querySelector(".home-summary").insertAdjacentHTML(
     "afterend",
     `<details class="card home-nrc" id="homeNrcSection"${localStorage.getItem("homeNrcOpen") === "1" ? " open" : ""}><summary><h2>NRC 매출 대시보드</h2><p class="help" id="homeNrcUpdated">최근 수집 데이터를 불러오는 중...</p></summary><div id="homePcStatus" class="pc-status-badge"><span class="device-dot"></span><span>수집 PC 상태 확인 중...</span></div><div id="homeCollectStatus" class="connection-status" hidden></div><div id="homeCollectError" class="error"></div><button class="secondary home-collect-btn" id="homeCollect" type="button">매출받기 (마감할 때만 눌러도 됩니다)</button><div id="homeNrcDashboard"><p class="help">수집된 매출 데이터가 없습니다.</p></div></details>`,
   );
@@ -113,42 +200,36 @@ async function home() {
     quickAmountEntry("new_transfer", "신규개통양도");
   $("homeQuickRepurchase").onclick = () =>
     quickAmountEntry("repurchase", "재구매양도");
+  $("bankBalance").onclick = editBankBalance;
   const date = new Date(),
     today = localDate(date),
     month = today.slice(0, 7),
     { start, end } = monthRange(month),
-    [customers, activity, checks, closing, commissions, snapshot] =
-      await Promise.all([
-        supabase.from("customers").select("*").eq("owner_id", me.id),
-        supabase
-          .from("daily_activities")
-          .select("*")
-          .eq("owner_id", me.id)
-          .gte("activity_date", start)
-          .lte("activity_date", end)
-          .order("activity_date", { ascending: true }),
-        supabase.from("checklist_progress").select("*").eq("owner_id", me.id),
-        supabase
-          .from("closing_sales")
-          .select("*")
-          .eq("owner_id", me.id)
-          .eq("year", date.getFullYear())
-          .eq("month", date.getMonth() + 1),
-        supabase
-          .from("commissions")
-          .select("*")
-          .eq("owner_id", me.id)
-          .eq("year", date.getFullYear())
-          .eq("month", date.getMonth() + 1),
-        supabase
-          .from("nrc_sync_snapshots")
-          .select("source_account_id,payload,collected_at")
-          .eq("snapshot_type", "combined")
-          .order("collected_at", { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-      ]);
-  const failed = [customers, activity, checks, closing, commissions, snapshot]
+    [customers, activity, checks, closing, snapshot] = await Promise.all([
+      supabase.from("customers").select("*").eq("owner_id", me.id),
+      supabase
+        .from("daily_activities")
+        .select("*")
+        .eq("owner_id", me.id)
+        .gte("activity_date", start)
+        .lte("activity_date", end)
+        .order("activity_date", { ascending: true }),
+      supabase.from("checklist_progress").select("*").eq("owner_id", me.id),
+      supabase
+        .from("closing_sales")
+        .select("*")
+        .eq("owner_id", me.id)
+        .eq("year", date.getFullYear())
+        .eq("month", date.getMonth() + 1),
+      supabase
+        .from("nrc_sync_snapshots")
+        .select("source_account_id,payload,collected_at")
+        .eq("snapshot_type", "combined")
+        .order("collected_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+  const failed = [customers, activity, checks, closing, snapshot]
     .map((result) => result.error)
     .find(Boolean);
   if (failed) {
@@ -189,17 +270,54 @@ async function home() {
     $("homeNrcDashboard").innerHTML =
       `<div class="nrc-overview"><article><h3>본인 매출 현황</h3><div><span>본인매출 NV<b>${number(own)}</b></span><span>대실적<b>${number(major)}</b></span><span>소실적<b>${number(minor)}</b></span></div></article><article><h3>직급 현황</h3><div><span>현재직급<b>${safe(rank)}</b></span><span>인증직급<b>${safe(certified)}</b></span></div></article><article><h3>소비자회선 현황</h3><div class="consumer-kpis"><span>총회선<b>${consumer ? number(consumer["총회선"]) : "미수집"}</b></span><span>실인증회선<b>${consumer ? number(consumer["실인증회선"]) : "-"}</b></span><span>실회선<b>${consumer ? number(consumer["실회선"]) : "-"}</b></span><span>KT / LG<b>${consumer ? `${number(consumer["KT망"])} / ${number(consumer["LG망"])}` : "-"}</b></span></div></article><article><h3>조직 현황</h3><div><span>전체 회원<b>${treeRows.length.toLocaleString()}명</b></span><span>활동 회원<b>${treeRows.filter((item) => String(item.status) === "1" && !item.dormant).length.toLocaleString()}명</b></span></div></article></div><div class="nrc-gauges"><article><div class="nrc-gauge major"><span>대실적<b>${number(major)}</b></span></div></article><article><div class="nrc-gauge minor"><span>소실적<b>${number(minor)}</b></span></div></article></div>`;
   }
-  $("todayActivations").textContent =
-    `${cs.filter((c) => c.activation_date === today).length}건`;
+  const todayActivationCount = cs.filter(
+    (c) => c.activation_date === today,
+  ).length;
+  $("todayActivations").textContent = `${todayActivationCount}건`;
+  $("heroSub").textContent =
+    `신규 ${Number(todayAct?.new_transfer || 0) ? 1 : 0}건 · 재구매 ${Number(todayAct?.repurchase || 0) ? 1 : 0}건`;
   $("newTransfer").textContent =
     `${Number(todayAct?.new_transfer || 0).toLocaleString()}원`;
   $("repurchase").textContent =
     `${Number(todayAct?.repurchase || 0).toLocaleString()}원`;
-  $("balance").textContent =
-    `${Number(todayAct?.balance || 0).toLocaleString()}원`;
+  const currentBalance = Number(todayAct?.balance || 0);
+  $("balance").textContent = `${currentBalance.toLocaleString()}원`;
+  $("bankBalance").textContent =
+    `${Math.round(computeBankBalance(currentBalance)).toLocaleString()}원`;
   $("attendance").textContent = `${Number(todayAct?.attendance || 0)}명`;
-  $("monthlySummary").textContent =
-    `개통 ${monthActivation}건 · 포스팅 ${acts.reduce((s, r) => s + Object.values(r.content?.postings || {}).reduce((a, b) => a + Number(b || 0), 0), 0)}건 · 마감매출 ${(closing.data || []).reduce((s, r) => s + Number(r.closing_sales_a || 0) + Number(r.closing_sales_b || 0), 0).toLocaleString()}원 · 수당 ${(commissions.data || []).reduce((s, r) => s + Number(r.amount || 0), 0).toLocaleString()}원`;
+  renderHomeCustomization();
+  const postingCount = acts.reduce(
+    (s, r) =>
+      s +
+      Object.values(r.content?.postings || {}).reduce(
+        (a, b) => a + Number(b || 0),
+        0,
+      ),
+    0,
+  );
+  $("monthlyBasic").innerHTML =
+    `<div><span>개통</span><b>${monthActivation}건</b></div><div><span>포스팅</span><b>${postingCount}건</b></div>`;
+  const roundsByNumber = new Map(
+      (closing.data || []).map((row) => [row.round, row]),
+    ),
+    roundRows = [1, 2, 3, 4].map((round) => {
+      const row = roundsByNumber.get(round) || {};
+      return {
+        round,
+        auto: Number(row.auto_sales_a || 0) + Number(row.auto_sales_b || 0),
+        done:
+          Number(row.closing_sales_a || 0) + Number(row.closing_sales_b || 0),
+      };
+    }),
+    doneTotal = roundRows.reduce((s, r) => s + r.done, 0);
+  $("roundBody").innerHTML = roundRows
+    .map(
+      (r) =>
+        `<tr><th>${r.round}차</th><td>${r.auto.toLocaleString()}원</td><td>${r.done.toLocaleString()}원</td></tr>`,
+    )
+    .join("");
+  $("roundFoot").innerHTML =
+    `<tr><th>합계</th><td></td><td>${doneTotal.toLocaleString()}원</td></tr>`;
   const tasks = (todayAct?.tasks || []).filter(Boolean);
   $("todayTasks").innerHTML = tasks.length
     ? tasks.map((t) => `<li>${safe(t)}</li>`).join("")
@@ -227,6 +345,8 @@ async function show(page, options) {
   document
     .querySelectorAll("[data-page]")
     .forEach((b) => b.classList.toggle("active", b.dataset.page === page));
+  $("content").classList.toggle("home-view", page === "home");
+  $("editHomeBtn").hidden = page !== "home";
   if (page === "home") return home();
   if (page === "customers") return customersPage($("content"), me, options);
   if (page === "activity") return activityPage($("content"), me);
@@ -1233,6 +1353,12 @@ async function loadSharedDevices() {
     return loadSyncDevices();
   }
 }
+function setHeroPcBadge(online) {
+  const badge = $("heroPcBadge");
+  if (!badge) return;
+  badge.classList.toggle("offline", !online);
+  badge.innerHTML = `<span class="dot"></span>${online ? "수집 PC 온라인" : "수집 PC 오프라인"}`;
+}
 async function loadHomePcStatus() {
   const box = $("homePcStatus");
   if (!box) return;
@@ -1240,6 +1366,7 @@ async function loadHomePcStatus() {
     const devices = await loadSharedDevices();
     if (lastSharedDevicesSummary) {
       const { total, online } = lastSharedDevicesSummary;
+      setHeroPcBadge(Boolean(online));
       box.innerHTML = online
         ? `<span class="device-dot online"></span><span>공유 수집 PC 온라인 ${online}대 · 지금 수집 가능</span>`
         : total
@@ -1248,12 +1375,14 @@ async function loadHomePcStatus() {
       return;
     }
     const online = devices.filter(isDeviceOnline);
+    setHeroPcBadge(online.length > 0);
     box.innerHTML = online.length
       ? `<span class="device-dot online"></span><span>공유 수집 PC 온라인 ${online.length}대 · 지금 수집 가능</span>`
       : devices.length
         ? `<span class="device-dot offline"></span><span>공유 수집 PC가 모두 오프라인입니다 · 요청은 대기 후 처리됩니다</span>`
         : `<span class="device-dot offline"></span><span>등록된 수집 PC가 없습니다</span>`;
   } catch {
+    setHeroPcBadge(false);
     box.innerHTML = `<span class="device-dot offline"></span><span>수집 PC 상태를 확인하지 못했습니다</span>`;
   }
 }
