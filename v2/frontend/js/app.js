@@ -5,7 +5,7 @@ import {
   currentProfile,
   setRememberLogin,
 } from "./supabase.js?v=20260829-34";
-import { customersPage } from "./customers.js?v=20260916-7";
+import { customersPage } from "./customers.js?v=20260916-8";
 import { activityPage } from "./activity.js?v=20260915-2";
 import {
   checklistItemCount,
