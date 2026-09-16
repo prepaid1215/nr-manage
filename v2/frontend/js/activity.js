@@ -52,11 +52,19 @@ export async function activityPage(root, me) {
       "bSales",
     ];
   let questTargets = [];
+  const MANDATORY_POSTING_KEYS = ["blog_sloom", "blog_main"];
   function rollQuestTargets() {
-    const pool = [...postingFields],
-      count = Math.min(pool.length, 2 + Math.floor(Math.random() * 2)),
-      picked = [];
-    while (picked.length < count && pool.length) {
+    const picked = postingFields.filter(([key]) =>
+        MANDATORY_POSTING_KEYS.includes(key),
+      ),
+      pool = postingFields.filter(
+        ([key]) => !MANDATORY_POSTING_KEYS.includes(key),
+      ),
+      extraCount = Math.floor(Math.random() * 2);
+    while (
+      picked.length < MANDATORY_POSTING_KEYS.length + extraCount &&
+      pool.length
+    ) {
       const idx = Math.floor(Math.random() * pool.length);
       picked.push(pool.splice(idx, 1)[0]);
     }
