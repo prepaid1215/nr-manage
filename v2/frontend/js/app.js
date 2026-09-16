@@ -48,7 +48,7 @@ const menus = [
   ["admin", "오류확인"],
 ];
 const visibleMenus = () => menus.filter(([id]) => id !== "admin" || appAdmin);
-const bottomNavIds = ["home", "customers", "closing"];
+const bottomNavIds = ["home", "customers", "activity", "closing"];
 function nav() {
   const html = visibleMenus()
     .map(([id, label]) => `<button data-page="${id}">${label}</button>`)
