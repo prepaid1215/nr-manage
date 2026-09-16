@@ -17,8 +17,22 @@ const postingFields = [
   ["meeting", "미팅"],
 ];
 const today = localDate;
+const esc = (value) =>
+  String(value ?? "").replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        c
+      ],
+  );
+const QUESTS = [
+  ["posting", "포스팅 / SNS 기록"],
+  ["sales", "개통·매출 입력"],
+  ["memo", "제목 메모"],
+  ["todo", "오늘 할 일"],
+];
 export async function activityPage(root, me) {
-  root.innerHTML = `<section class="card"><h2>일일업무일지</h2><label>기록할 날짜<input id="activityDate" type="date" value="${today()}"></label></section><section class="activity-hero"><span>오늘 개통</span><b id="activationTotal">0건</b></section><form id="activityForm"><section class="card"><div class="section-head"><h2>포스팅 / SNS 기록</h2><b id="postingTotal">총 0건</b></div><div class="activity-grid">${postingFields.map(([key, label]) => `<label>${label}<input type="number" min="0" value="0" data-posting="${key}"></label>`).join("")}</div></section><section class="card"><div class="section-head"><h2>제목 메모</h2><button class="secondary compact" id="copyTitles" type="button">복사하기</button></div><p class="help">한 줄에 제목 하나씩 입력하세요. 저장 시 이 날짜 기록에 함께 저장됩니다.</p><textarea id="postTitles" rows="6" placeholder="정지된 휴대폰 본인인증 방법"></textarea><div id="copyTitlesStatus" class="connection-status" hidden></div></section><section class="card"><h2>개통·매출 기록</h2><div class="activity-grid two"><label>신규개통양도금(원)<input id="newTransfer" type="number" min="0" value="0"></label><label>재구매요금양도금(원)<input id="repurchase" type="number" min="0" value="0"></label><label>현재요금잔액(원)<input id="balance" type="number" min="0" value="0"></label><label>앤보임 수강생<input id="attendance" type="number" min="0" value="0"></label><label>A 자동매출(NV)<input id="aSales" type="number" min="0" value="0"></label><label>B 자동매출(NV)<input id="bSales" type="number" min="0" value="0"></label></div></section><section class="card"><div class="section-head"><h2>오늘 할 일</h2><button class="secondary compact" id="downloadActivityIcs" type="button">📅 캘린더 파일 저장</button></div><div class="task-list">${Array.from({ length: 10 }, (_, i) => `<label><span>${i + 1}</span><input data-task="${i}" placeholder="예: 앤텔고객 충전"></label>`).join("")}</div></section><button class="primary activity-save" type="submit">이 날짜 기록 저장</button><div id="activityStatus" class="connection-status" hidden></div><div id="activityError" class="error"></div></form>`;
+  root.innerHTML = `<section class="card"><h2>일일업무일지</h2><label>기록할 날짜<input id="activityDate" type="date" value="${today()}"></label></section><section class="activity-hero"><span>오늘 개통</span><b id="activationTotal">0건</b></section><p class="quest-progress" id="questProgress">오늘 퀘스트 0/${QUESTS.length} 완료</p><form id="activityForm"><details class="card home-nrc quest" data-quest="posting"><summary><h2>포스팅 / SNS 기록</h2><span class="quest-badge" id="questBadge-posting">미완료</span></summary><b id="postingTotal">총 0건</b><div class="activity-grid">${postingFields.map(([key, label]) => `<label>${label}<input type="number" min="0" value="0" data-posting="${key}"></label>`).join("")}</div></details><details class="card home-nrc quest" data-quest="sales"><summary><h2>개통·매출 입력</h2><span class="quest-badge" id="questBadge-sales">미완료</span></summary><div class="activity-grid two"><label>신규개통양도금(원)<input id="newTransfer" type="number" min="0" value="0"></label><label>재구매요금양도금(원)<input id="repurchase" type="number" min="0" value="0"></label><label>현재요금잔액(원)<input id="balance" type="number" min="0" value="0"></label><label>앤보임 수강생<input id="attendance" type="number" min="0" value="0"></label><label>A 자동매출(NV)<input id="aSales" type="number" min="0" value="0"></label><label>B 자동매출(NV)<input id="bSales" type="number" min="0" value="0"></label></div></details><details class="card home-nrc quest" data-quest="memo"><summary><h2>제목 메모</h2><span class="quest-badge" id="questBadge-memo">미완료</span></summary><p class="help">한 줄에 제목 하나씩 입력하세요. 저장 시 이 날짜 기록에 함께 저장됩니다.</p><textarea id="postTitles" rows="6" placeholder="정지된 휴대폰 본인인증 방법"></textarea><button class="secondary compact" id="copyTitles" type="button">복사하기</button><div id="copyTitlesStatus" class="connection-status" hidden></div></details><details class="card home-nrc quest" data-quest="todo" open><summary><h2>오늘 할 일</h2><span class="quest-badge" id="questBadge-todo">미완료</span></summary><div class="task-list" id="taskList"></div><div class="task-add-row"><button class="secondary compact" id="taskAdd" type="button">+ 항목 추가</button><button class="secondary compact" id="downloadActivityIcs" type="button">📅 캘린더 파일 저장</button></div></details><button class="primary activity-save" type="submit">이 날짜 기록 저장</button><div id="activityStatus" class="connection-status" hidden></div><div id="activityError" class="error"></div></form>`;
   root.firstElementChild.insertAdjacentHTML(
     "beforebegin",
     `<div class="view-tabs activity-tabs"><button class="active" data-activity-view="record">기록하기</button><button data-activity-view="stats">활동 통계</button></div>`,
@@ -30,12 +44,71 @@ export async function activityPage(root, me) {
   const $ = (id) => document.getElementById(id),
     number = (id) => Number($(id).value || 0),
     postingInputs = [...root.querySelectorAll("[data-posting]")],
-    taskInputs = [...root.querySelectorAll("[data-task]")];
+    salesIds = [
+      "newTransfer",
+      "repurchase",
+      "balance",
+      "attendance",
+      "aSales",
+      "bSales",
+    ];
+  const getTaskValues = () =>
+    [...$("taskList").querySelectorAll("[data-task]")].map((i) => i.value);
+  function renderTasks(list) {
+    const values = list.length ? list : ["", "", ""];
+    $("taskList").innerHTML = values
+      .map(
+        (value, i) =>
+          `<label class="task-row"><span>${i + 1}</span><input data-task value="${esc(value)}" placeholder="예: 앤텔고객 충전"><button class="task-remove" type="button" aria-label="항목 삭제">×</button></label>`,
+      )
+      .join("");
+    $("taskList")
+      .querySelectorAll("[data-task]")
+      .forEach((input) => (input.oninput = updateQuestStatus));
+    $("taskList")
+      .querySelectorAll(".task-remove")
+      .forEach((button, i) => {
+        button.onclick = () => {
+          const values = getTaskValues();
+          values.splice(i, 1);
+          renderTasks(values);
+          updateQuestStatus();
+        };
+      });
+  }
+  const questChecks = {
+    posting: () =>
+      postingInputs.reduce((sum, input) => sum + Number(input.value || 0), 0) >
+      0,
+    sales: () => salesIds.some((id) => number(id) > 0),
+    memo: () => $("postTitles").value.trim().length > 0,
+    todo: () => getTaskValues().some((v) => v.trim().length > 0),
+  };
+  function updateQuestStatus() {
+    let done = 0;
+    QUESTS.forEach(([key]) => {
+      const complete = questChecks[key]();
+      if (complete) done++;
+      const badge = $(`questBadge-${key}`);
+      badge.textContent = complete ? "✓ 완료" : "미완료";
+      badge.classList.toggle("done", complete);
+    });
+    $("questProgress").textContent =
+      `오늘 퀘스트 ${done}/${QUESTS.length} 완료`;
+  }
   const totals = () => {
     $("postingTotal").textContent =
       `총 ${postingInputs.reduce((sum, input) => sum + Number(input.value || 0), 0)}건`;
+    updateQuestStatus();
   };
   postingInputs.forEach((input) => (input.oninput = totals));
+  salesIds.forEach((id) => ($(id).oninput = updateQuestStatus));
+  $("postTitles").oninput = updateQuestStatus;
+  $("taskAdd").onclick = () => {
+    const values = getTaskValues();
+    values.push("");
+    renderTasks(values);
+  };
   async function load() {
     const date = $("activityDate").value,
       [record, activations] = await Promise.all([
@@ -68,11 +141,10 @@ export async function activityPage(root, me) {
     $("attendance").value = data?.attendance || 0;
     $("aSales").value = data?.a_sales || 0;
     $("bSales").value = data?.b_sales || 0;
-    taskInputs.forEach(
-      (input, i) => (input.value = (data?.tasks || [])[i] || ""),
-    );
+    renderTasks(data?.tasks || []);
     $("postTitles").value = (content.postTitles || []).join("\n");
     totals();
+    updateQuestStatus();
     $("activityStatus").hidden = !data;
     if (data) {
       $("activityStatus").textContent = "저장된 기록을 불러왔습니다.";
@@ -187,6 +259,7 @@ export async function activityPage(root, me) {
         $("activityForm").hidden = stats;
         $("activityStats").hidden = !stats;
         root.querySelector(".activity-hero").hidden = stats;
+        $("questProgress").hidden = stats;
         root.querySelector("#activityDate").closest(".card").hidden = stats;
         if (stats) loadStats();
       }),
@@ -195,7 +268,7 @@ export async function activityPage(root, me) {
   $("activityDate").onchange = load;
   $("downloadActivityIcs").onclick = () => {
     const date = $("activityDate").value.replaceAll("-", ""),
-      tasks = taskInputs.map((input) => input.value.trim()).filter(Boolean);
+      tasks = getTaskValues().map((v) => v.trim()).filter(Boolean);
     if (!date) return;
     const next = new Date(`${$("activityDate").value}T00:00:00`);
     next.setDate(next.getDate() + 1);
@@ -257,7 +330,7 @@ export async function activityPage(root, me) {
         attendance: number("attendance"),
         a_sales: number("aSales"),
         b_sales: number("bSales"),
-        tasks: taskInputs.map((input) => input.value.trim()),
+        tasks: getTaskValues().map((v) => v.trim()),
         content: { postings, postTitles },
         updated_at: new Date().toISOString(),
       },
