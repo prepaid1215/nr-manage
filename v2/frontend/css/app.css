@@ -213,6 +213,7 @@ button:active{transform:translateY(1px)}button:disabled{cursor:not-allowed;opaci
 .error:not(:empty){min-height:0;padding:10px 12px;border:1px solid #f6d3d3;border-radius:10px;background:#fdf2f2}
 .section-head{align-items:center}.help{line-height:1.65}
 .org-summary article,.stats-kpis article,.perf-grid article{border:1px solid var(--line);background:var(--brand-soft)}
+#customerSummary{grid-template-columns:repeat(3,1fr)}
 .customer-item,.org-member,.schedule-item,.finance-rounds article{transition:border-color .16s}
 .customer-item:hover,.org-member:hover,.schedule-item:hover{border-color:#c6c2de}
 .member-dialog,.customer-dialog{border:1px solid var(--line);border-radius:20px;box-shadow:0 24px 60px rgba(32,32,56,.16)}
