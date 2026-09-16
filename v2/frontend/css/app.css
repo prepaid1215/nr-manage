@@ -124,6 +124,13 @@
 /* NRC home dashboard */
 .home-nrc{margin-top:0}
 .home-nrc .section-head .primary{width:auto;margin:0;white-space:nowrap}
+.home-nrc>summary{display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;list-style:none}
+.home-nrc>summary::-webkit-details-marker{display:none}
+.home-nrc>summary::after{content:"▾";color:var(--muted);font-size:14px;transition:transform .15s ease}
+.home-nrc[open]>summary::after{transform:rotate(180deg)}
+.home-nrc>summary h2{margin:0}
+.home-nrc>summary p{margin:2px 0 0}
+.home-nrc>*:not(summary){margin-top:12px}
 .pc-status-badge{display:flex;align-items:center;gap:8px;margin-top:12px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#fafafd;color:var(--muted);font-size:13px;font-weight:600}
 .pc-status-badge .device-dot{box-shadow:0 0 0 4px #ececf6}
 .nrc-overview{display:grid;grid-template-columns:1.2fr 1fr 1.15fr 1fr;gap:10px;margin-top:14px}

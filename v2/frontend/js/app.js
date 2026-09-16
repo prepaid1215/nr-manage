@@ -11,7 +11,7 @@ import {
   checklistItemCount,
   checklistPage,
 } from "./checklist.js?v=20260906-31";
-import { closingPage, commissionPage } from "./finance.js?v=20260916-1";
+import { closingPage, commissionPage } from "./finance.js?v=20260916-2";
 import { performancePage } from "./performance.js?v=20260908-110";
 import { teamPage } from "./team.js?v=20260831-3";
 import { localDate, monthRange } from "./date.js?v=20260829-25";
@@ -48,13 +48,15 @@ const menus = [
   ["admin", "오류확인"],
 ];
 const visibleMenus = () => menus.filter(([id]) => id !== "admin" || appAdmin);
+const bottomNavIds = ["home", "customers", "closing"];
 function nav() {
   const html = visibleMenus()
     .map(([id, label]) => `<button data-page="${id}">${label}</button>`)
     .join("");
   $("topNav").innerHTML = html;
-  $("bottomNav").innerHTML = menus
-    .slice(0, 4)
+  const byId = new Map(menus);
+  $("bottomNav").innerHTML = bottomNavIds
+    .map((id) => [id, byId.get(id)])
     .concat([["more", "더보기"]])
     .map(([id, label]) => `<button data-page="${id}">${label}</button>`)
     .join("");
@@ -95,7 +97,10 @@ async function home() {
   );
   $("content").querySelector(".kpis").insertAdjacentHTML(
     "afterend",
-    `<section class="card home-nrc"><div class="section-head"><div><h2>NRC 매출 대시보드</h2><p class="help" id="homeNrcUpdated">최근 수집 데이터를 불러오는 중...</p></div></div><div id="homePcStatus" class="pc-status-badge"><span class="device-dot"></span><span>수집 PC 상태 확인 중...</span></div><div id="homeCollectStatus" class="connection-status" hidden></div><div id="homeCollectError" class="error"></div><button class="secondary home-collect-btn" id="homeCollect" type="button">매출받기 (마감할 때만 눌러도 됩니다)</button><div id="homeNrcDashboard"><p class="help">수집된 매출 데이터가 없습니다.</p></div></section>`,
+    `<details class="card home-nrc" id="homeNrcSection"${localStorage.getItem("homeNrcOpen") === "1" ? " open" : ""}><summary><h2>NRC 매출 대시보드</h2><p class="help" id="homeNrcUpdated">최근 수집 데이터를 불러오는 중...</p></summary><div id="homePcStatus" class="pc-status-badge"><span class="device-dot"></span><span>수집 PC 상태 확인 중...</span></div><div id="homeCollectStatus" class="connection-status" hidden></div><div id="homeCollectError" class="error"></div><button class="secondary home-collect-btn" id="homeCollect" type="button">매출받기 (마감할 때만 눌러도 됩니다)</button><div id="homeNrcDashboard"><p class="help">수집된 매출 데이터가 없습니다.</p></div></details>`,
+  );
+  $("homeNrcSection").addEventListener("toggle", (e) =>
+    localStorage.setItem("homeNrcOpen", e.target.open ? "1" : "0"),
   );
   loadHomePcStatus();
   $("content").insertAdjacentHTML(
@@ -235,7 +240,7 @@ async function show(page, options) {
   if (page === "admin") return adminPage($("content"));
   $("content").innerHTML =
     `<section class="card"><h2>더보기</h2><p class="help">전체 메뉴가 아래에 있습니다. PC와 모바일 어디서나 똑같이 사용할 수 있습니다.</p><div class="more-menu">${visibleMenus()
-      .slice(4)
+      .filter(([id]) => !bottomNavIds.includes(id))
       .map(([id, label]) => `<button data-page="${id}" type="button">${label}</button>`)
       .join("")}</div></section>`;
   $("content")
