@@ -217,7 +217,7 @@ button:active{transform:translateY(1px)}button:disabled{cursor:not-allowed;opaci
 .customer-item:hover,.org-member:hover,.schedule-item:hover{border-color:#c6c2de}
 .member-dialog,.customer-dialog{border:1px solid var(--line);border-radius:20px;box-shadow:0 24px 60px rgba(32,32,56,.16)}
 .dialog-head{background:var(--brand)}
-#bottomNav{padding:7px 8px max(7px,env(safe-area-inset-bottom));background:rgba(255,255,255,.94);backdrop-filter:blur(16px);box-shadow:0 -4px 16px rgba(32,32,56,.05)}
+#bottomNav{grid-template-columns:repeat(4,1fr);padding:7px 8px max(7px,env(safe-area-inset-bottom));background:rgba(255,255,255,.94);backdrop-filter:blur(16px);box-shadow:0 -4px 16px rgba(32,32,56,.05)}
 #bottomNav button{border-radius:12px;font-size:12px}#bottomNav button.active{background:var(--brand-soft);color:var(--brand)}
 @media(max-width:720px){
   .app{padding:0 0 88px}
