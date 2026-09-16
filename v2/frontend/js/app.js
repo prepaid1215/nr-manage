@@ -139,7 +139,7 @@ function computeBankBalance(currentBalance) {
     (Number(me.bank_balance_anchor || 0) - currentBalance)
   );
 }
-async function editBankBalance() {
+async function openBalanceDialog() {
   const { data: existing } = await supabase
     .from("daily_activities")
     .select("balance")
@@ -147,23 +147,44 @@ async function editBankBalance() {
     .eq("activity_date", localDate())
     .maybeSingle();
   const currentBalance = Number(existing?.balance || 0);
-  const raw = prompt(
-    "현재 은행잔액(카카오뱅크 충전계좌)을 입력하세요.\n다음부터는 요금 충전/차감에 따라 자동으로 반영됩니다.",
-    String(Math.round(computeBankBalance(currentBalance))),
+  $("balanceFeeInput").value = currentBalance;
+  $("balanceBankInput").value = Math.round(
+    computeBankBalance(currentBalance),
   );
-  if (raw === null) return;
-  const amount = Number(String(raw).replace(/[^0-9]/g, ""));
-  if (!Number.isFinite(amount)) return;
-  const { error } = await supabase
-    .from("profiles")
-    .update({ bank_balance_base: amount, bank_balance_anchor: currentBalance })
-    .eq("id", me.id);
+  $("balanceDialogError").textContent = "";
+  $("balanceDialog").showModal();
+}
+async function submitBalanceDialog(e) {
+  e.preventDefault();
+  const fee = Number($("balanceFeeInput").value || 0),
+    bank = Number($("balanceBankInput").value || 0);
+  if (!Number.isFinite(fee) || !Number.isFinite(bank)) return;
+  const [feeResult, bankResult] = await Promise.all([
+    supabase.from("daily_activities").upsert(
+      {
+        owner_id: me.id,
+        activity_date: localDate(),
+        balance: fee,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "owner_id,activity_date" },
+    ),
+    supabase
+      .from("profiles")
+      .update({ bank_balance_base: bank, bank_balance_anchor: fee })
+      .eq("id", me.id),
+  ]);
+  const error = feeResult.error || bankResult.error;
   if (error) {
-    alert(friendlyError(error, "은행잔액을 저장하지 못했습니다."));
+    $("balanceDialogError").textContent = friendlyError(
+      error,
+      "잔액을 저장하지 못했습니다.",
+    );
     return;
   }
-  me.bank_balance_base = amount;
-  me.bank_balance_anchor = currentBalance;
+  me.bank_balance_base = bank;
+  me.bank_balance_anchor = fee;
+  $("balanceDialog").close();
   await home();
 }
 async function home() {
@@ -192,7 +213,8 @@ async function home() {
   loadHomePcStatus();
   $("content").insertAdjacentHTML(
     "beforeend",
-    `<section class="card"><h2 class="card-title">${icon('<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>')}알림</h2><div id="homeAlerts" class="home-alerts"><p class="help">알림을 불러오는 중...</p></div></section>`,
+    `<section class="card"><h2 class="card-title">${icon('<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>')}알림</h2><div id="homeAlerts" class="home-alerts"><p class="help">알림을 불러오는 중...</p></div></section>
+<dialog id="balanceDialog"><div class="dialog-head"><h2>잔액 입력</h2><button type="button" id="balanceDialogClose">×</button></div><form id="balanceForm"><label>요금잔액(원)<input id="balanceFeeInput" type="number" min="0" inputmode="numeric"></label><label>은행잔액(원) · 카카오뱅크 충전계좌<input id="balanceBankInput" type="number" min="0" inputmode="numeric"></label><p class="help">저장하면 이후부터는 요금 차감/충전에 따라 은행잔액이 자동으로 계산됩니다.</p><div id="balanceDialogError" class="error"></div><div class="customer-actions"><button type="button" class="secondary" id="balanceDialogCancel">취소</button><button class="primary" type="submit">저장</button></div></form></dialog>`,
   );
   $("homeCollect").onclick = runHomeCollection;
   $("homeAddCustomer").onclick = () => show("customers", { openAdd: true });
@@ -200,7 +222,10 @@ async function home() {
     quickAmountEntry("new_transfer", "신규개통양도");
   $("homeQuickRepurchase").onclick = () =>
     quickAmountEntry("repurchase", "재구매양도");
-  $("bankBalance").onclick = editBankBalance;
+  $("balanceEditBtn").onclick = openBalanceDialog;
+  $("balanceForm").onsubmit = submitBalanceDialog;
+  $("balanceDialogClose").onclick = () => $("balanceDialog").close();
+  $("balanceDialogCancel").onclick = () => $("balanceDialog").close();
   const date = new Date(),
     today = localDate(date),
     month = today.slice(0, 7),
