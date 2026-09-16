@@ -32,7 +32,7 @@ const QUESTS = [
   ["todo", "오늘 할 일"],
 ];
 export async function activityPage(root, me) {
-  root.innerHTML = `<section class="card"><h2>일일업무일지</h2><label>기록할 날짜<input id="activityDate" type="date" value="${today()}"></label></section><section class="activity-hero"><span>오늘 개통</span><b id="activationTotal">0건</b></section><p class="quest-progress" id="questProgress">오늘 퀘스트 0/${QUESTS.length} 완료</p><form id="activityForm"><details class="card home-nrc quest" data-quest="posting"><summary><h2>포스팅 / SNS 기록</h2><span class="quest-badge" id="questBadge-posting">미완료</span></summary><b id="postingTotal">총 0건</b><div class="activity-grid">${postingFields.map(([key, label]) => `<label>${label}<input type="number" min="0" value="0" data-posting="${key}"></label>`).join("")}</div></details><details class="card home-nrc quest" data-quest="sales"><summary><h2>개통·매출 입력</h2><span class="quest-badge" id="questBadge-sales">미완료</span></summary><div class="activity-grid two"><label>신규개통양도금(원)<input id="newTransfer" type="number" min="0" value="0"></label><label>재구매요금양도금(원)<input id="repurchase" type="number" min="0" value="0"></label><label>현재요금잔액(원)<input id="balance" type="number" min="0" value="0"></label><label>앤보임 수강생<input id="attendance" type="number" min="0" value="0"></label><label>A 자동매출(NV)<input id="aSales" type="number" min="0" value="0"></label><label>B 자동매출(NV)<input id="bSales" type="number" min="0" value="0"></label></div></details><details class="card home-nrc quest" data-quest="memo"><summary><h2>제목 메모</h2><span class="quest-badge" id="questBadge-memo">미완료</span></summary><p class="help">한 줄에 제목 하나씩 입력하세요. 저장 시 이 날짜 기록에 함께 저장됩니다.</p><textarea id="postTitles" rows="6" placeholder="정지된 휴대폰 본인인증 방법"></textarea><button class="secondary compact" id="copyTitles" type="button">복사하기</button><div id="copyTitlesStatus" class="connection-status" hidden></div></details><details class="card home-nrc quest" data-quest="todo" open><summary><h2>오늘 할 일</h2><span class="quest-badge" id="questBadge-todo">미완료</span></summary><div class="task-list" id="taskList"></div><div class="task-add-row"><button class="secondary compact" id="taskAdd" type="button">+ 항목 추가</button><button class="secondary compact" id="downloadActivityIcs" type="button">📅 캘린더 파일 저장</button></div></details><button class="primary activity-save" type="submit">이 날짜 기록 저장</button><div id="activityStatus" class="connection-status" hidden></div><div id="activityError" class="error"></div></form>`;
+  root.innerHTML = `<section class="card"><h2>일일업무일지</h2><label>기록할 날짜<input id="activityDate" type="date" value="${today()}"></label></section><section class="activity-hero"><span>오늘 개통</span><b id="activationTotal">0건</b></section><p class="quest-progress" id="questProgress">오늘 퀘스트 0/${QUESTS.length} 완료</p><form id="activityForm"><details class="card home-nrc quest" data-quest="posting" open><summary><h2>포스팅 / SNS 기록</h2><span class="quest-badge" id="questBadge-posting">미완료</span></summary><b id="postingTotal">총 0건</b><div class="task-list" id="postingList"></div><div class="task-add-row"><select id="postingPicker"><option value="">채널 선택</option></select><button class="secondary compact" id="postingAdd" type="button">+ 채널 추가</button></div></details><details class="card home-nrc quest" data-quest="sales"><summary><h2>개통·매출 입력</h2><span class="quest-badge" id="questBadge-sales">미완료</span></summary><div class="activity-grid two"><label>신규개통양도금(원)<input id="newTransfer" type="number" min="0" value="0"></label><label>재구매요금양도금(원)<input id="repurchase" type="number" min="0" value="0"></label><label>현재요금잔액(원)<input id="balance" type="number" min="0" value="0"></label><label>앤보임 수강생<input id="attendance" type="number" min="0" value="0"></label><label>A 자동매출(NV)<input id="aSales" type="number" min="0" value="0"></label><label>B 자동매출(NV)<input id="bSales" type="number" min="0" value="0"></label></div></details><details class="card home-nrc quest" data-quest="memo"><summary><h2>제목 메모</h2><span class="quest-badge" id="questBadge-memo">미완료</span></summary><p class="help">한 줄에 제목 하나씩 입력하세요. 저장 시 이 날짜 기록에 함께 저장됩니다.</p><textarea id="postTitles" rows="6" placeholder="정지된 휴대폰 본인인증 방법"></textarea><button class="secondary compact" id="copyTitles" type="button">복사하기</button><div id="copyTitlesStatus" class="connection-status" hidden></div></details><details class="card home-nrc quest" data-quest="todo" open><summary><h2>오늘 할 일</h2><span class="quest-badge" id="questBadge-todo">미완료</span></summary><div class="task-list" id="taskList"></div><div class="task-add-row"><button class="secondary compact" id="taskAdd" type="button">+ 항목 추가</button><button class="secondary compact" id="downloadActivityIcs" type="button">📅 캘린더 파일 저장</button></div></details><button class="primary activity-save" type="submit">이 날짜 기록 저장</button><div id="activityStatus" class="connection-status" hidden></div><div id="activityError" class="error"></div></form>`;
   root.firstElementChild.insertAdjacentHTML(
     "beforebegin",
     `<div class="view-tabs activity-tabs"><button class="active" data-activity-view="record">기록하기</button><button data-activity-view="stats">활동 통계</button></div>`,
@@ -43,7 +43,6 @@ export async function activityPage(root, me) {
   );
   const $ = (id) => document.getElementById(id),
     number = (id) => Number($(id).value || 0),
-    postingInputs = [...root.querySelectorAll("[data-posting]")],
     salesIds = [
       "newTransfer",
       "repurchase",
@@ -76,10 +75,47 @@ export async function activityPage(root, me) {
         };
       });
   }
+  const getPostingEntries = () =>
+    [...$("postingList").querySelectorAll("[data-posting]")].map((input) => [
+      input.dataset.posting,
+      Number(input.value || 0),
+    ]);
+  function refreshPostingPicker() {
+    const active = new Set(getPostingEntries().map(([key]) => key)),
+      remaining = postingFields.filter(([key]) => !active.has(key));
+    $("postingPicker").innerHTML =
+      `<option value="">채널 선택</option>` +
+      remaining
+        .map(([key, label]) => `<option value="${key}">${label}</option>`)
+        .join("");
+    $("postingAdd").disabled = !remaining.length;
+  }
+  function renderPostings(entries) {
+    $("postingList").innerHTML = entries.length
+      ? entries
+          .map(([key, value]) => {
+            const label = postingFields.find(([k]) => k === key)?.[1] || key;
+            return `<label class="task-row posting-row"><span>${esc(label)}</span><input type="number" min="0" value="${value}" data-posting="${key}"><button class="task-remove" type="button" data-remove="${key}" aria-label="채널 삭제">×</button></label>`;
+          })
+          .join("")
+      : '<p class="help">아직 추가한 채널이 없습니다. 아래에서 채널을 선택해 추가하세요.</p>';
+    $("postingList")
+      .querySelectorAll("[data-posting]")
+      .forEach((input) => (input.oninput = totals));
+    $("postingList")
+      .querySelectorAll("[data-remove]")
+      .forEach((button) => {
+        button.onclick = () => {
+          renderPostings(
+            getPostingEntries().filter(([key]) => key !== button.dataset.remove),
+          );
+          totals();
+        };
+      });
+    refreshPostingPicker();
+  }
   const questChecks = {
-    posting: () =>
-      postingInputs.reduce((sum, input) => sum + Number(input.value || 0), 0) >
-      0,
+    posting: () => getPostingEntries().some(([, value]) => value > 0),
     sales: () => salesIds.some((id) => number(id) > 0),
     memo: () => $("postTitles").value.trim().length > 0,
     todo: () => getTaskValues().some((v) => v.trim().length > 0),
@@ -98,16 +134,21 @@ export async function activityPage(root, me) {
   }
   const totals = () => {
     $("postingTotal").textContent =
-      `총 ${postingInputs.reduce((sum, input) => sum + Number(input.value || 0), 0)}건`;
+      `총 ${getPostingEntries().reduce((sum, [, value]) => sum + value, 0)}건`;
     updateQuestStatus();
   };
-  postingInputs.forEach((input) => (input.oninput = totals));
   salesIds.forEach((id) => ($(id).oninput = updateQuestStatus));
   $("postTitles").oninput = updateQuestStatus;
   $("taskAdd").onclick = () => {
     const values = getTaskValues();
     values.push("");
     renderTasks(values);
+  };
+  $("postingAdd").onclick = () => {
+    const key = $("postingPicker").value;
+    if (!key) return;
+    renderPostings([...getPostingEntries(), [key, 0]]);
+    totals();
   };
   async function load() {
     const date = $("activityDate").value,
@@ -132,8 +173,10 @@ export async function activityPage(root, me) {
     $("activationTotal").textContent = `${activations.count || 0}건`;
     const content = data?.content || {},
       posts = content.postings || {};
-    postingInputs.forEach(
-      (input) => (input.value = posts[input.dataset.posting] || 0),
+    renderPostings(
+      postingFields
+        .filter(([key]) => Number(posts[key] || 0) > 0)
+        .map(([key]) => [key, Number(posts[key])]),
     );
     $("newTransfer").value = data?.new_transfer || 0;
     $("repurchase").value = data?.repurchase || 0;
@@ -311,12 +354,7 @@ export async function activityPage(root, me) {
   $("activityForm").onsubmit = async (event) => {
     event.preventDefault();
     $("activityError").textContent = "";
-    const postings = Object.fromEntries(
-        postingInputs.map((input) => [
-          input.dataset.posting,
-          Number(input.value || 0),
-        ]),
-      ),
+    const postings = Object.fromEntries(getPostingEntries()),
       postTitles = $("postTitles")
         .value.split("\n")
         .map((line) => line.trim())
