@@ -180,11 +180,11 @@ async function home() {
   $("content").replaceChildren(frag);
   $("content").querySelector(".hero").insertAdjacentHTML(
     "afterend",
-    `<section class="card home-actions"><button class="primary" id="homeAddCustomer" type="button">+ 고객 등록</button><div class="customer-quick-actions"><button class="secondary compact" id="homeQuickTransfer" type="button">+ 신규개통양도</button><button class="secondary compact" id="homeQuickRepurchase" type="button">+ 재구매양도</button></div></section>`,
+    `<section class="card home-actions"><button class="primary" id="homeAddCustomer" type="button">${icon('<path d="M12 5v14M5 12h14"/>')} 고객 등록</button><div class="customer-quick-actions"><button class="secondary compact" id="homeQuickTransfer" type="button">${icon('<path d="M4 17V7a2 2 0 0 1 2-2h7l7 7-7 7H6a2 2 0 0 1-2-2Z"/>')} 신규개통양도</button><button class="secondary compact" id="homeQuickRepurchase" type="button">${icon('<path d="M17 2.1 21 6l-4 3.9M3 12v-1a4 4 0 0 1 4-4h14M7 21.9 3 18l4-3.9M21 12v1a4 4 0 0 1-4 4H3"/>')} 재구매양도</button></div></section>`,
   );
   $("content").querySelector(".home-summary").insertAdjacentHTML(
     "afterend",
-    `<details class="card home-nrc" id="homeNrcSection"${localStorage.getItem("homeNrcOpen") === "1" ? " open" : ""}><summary><h2>NRC 매출 대시보드</h2><p class="help" id="homeNrcUpdated">최근 수집 데이터를 불러오는 중...</p></summary><div id="homePcStatus" class="pc-status-badge"><span class="device-dot"></span><span>수집 PC 상태 확인 중...</span></div><div id="homeCollectStatus" class="connection-status" hidden></div><div id="homeCollectError" class="error"></div><button class="secondary home-collect-btn" id="homeCollect" type="button">매출받기 (마감할 때만 눌러도 됩니다)</button><div id="homeNrcDashboard"><p class="help">수집된 매출 데이터가 없습니다.</p></div></details>`,
+    `<details class="card home-nrc" id="homeNrcSection"${localStorage.getItem("homeNrcOpen") === "1" ? " open" : ""}><summary><h2 class="card-title">${icon('<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>')}NRC 매출 대시보드</h2><p class="help" id="homeNrcUpdated">최근 수집 데이터를 불러오는 중...</p></summary><div id="homePcStatus" class="pc-status-badge"><span class="device-dot"></span><span>수집 PC 상태 확인 중...</span></div><div id="homeCollectStatus" class="connection-status" hidden></div><div id="homeCollectError" class="error"></div><button class="secondary home-collect-btn" id="homeCollect" type="button">매출받기 (마감할 때만 눌러도 됩니다)</button><div id="homeNrcDashboard"><p class="help">수집된 매출 데이터가 없습니다.</p></div></details>`,
   );
   $("homeNrcSection").addEventListener("toggle", (e) =>
     localStorage.setItem("homeNrcOpen", e.target.open ? "1" : "0"),
@@ -192,7 +192,7 @@ async function home() {
   loadHomePcStatus();
   $("content").insertAdjacentHTML(
     "beforeend",
-    `<section class="card"><h2>알림</h2><div id="homeAlerts" class="home-alerts"><p class="help">알림을 불러오는 중...</p></div></section>`,
+    `<section class="card"><h2 class="card-title">${icon('<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>')}알림</h2><div id="homeAlerts" class="home-alerts"><p class="help">알림을 불러오는 중...</p></div></section>`,
   );
   $("homeCollect").onclick = runHomeCollection;
   $("homeAddCustomer").onclick = () => show("customers", { openAdd: true });
@@ -1488,6 +1488,8 @@ async function loadSavedNrc() {
     $("nrcError").textContent = friendlyError(err);
   }
 }
+const icon = (paths) =>
+  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
 const safe = (value) =>
   String(value ?? "").replace(
     /[&<>"']/g,

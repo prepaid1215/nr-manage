@@ -352,6 +352,12 @@ button:active{transform:translateY(1px)}button:disabled{cursor:not-allowed;opaci
 #content.home-view .hero strong{margin-top:14px}
 #content.home-view .hero-sub{margin:8px 0 0;padding-top:8px;border-top:1px solid rgba(255,255,255,.18);color:rgba(255,255,255,.78);font-size:12.5px}
 #content.home-view .kpis article{position:relative}
+#content.home-view .kpi-head{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12px;font-weight:600}
+#content.home-view .kpi-head svg{width:14px;height:14px;flex:0 0 auto}
+#content.home-view .card-title{display:flex;align-items:center;gap:8px}
+#content.home-view .card-title svg{width:16px;height:16px;color:var(--brand);flex:0 0 auto}
+#content.home-view .home-actions svg{width:15px;height:15px;vertical-align:-3px;margin-right:2px}
+#content.home-view .counter-row .kpi-head{color:var(--text);font-size:13px;font-weight:700}
 #content.home-view .balance-flow{grid-column:1/-1}
 #content.home-view .flow-row{display:flex;align-items:center;gap:10px;margin-top:9px}
 #content.home-view .flow-stat{flex:1;min-width:0}
