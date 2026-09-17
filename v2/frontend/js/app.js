@@ -201,7 +201,7 @@ async function home() {
   $("content").replaceChildren(frag);
   $("content").querySelector(".hero").insertAdjacentHTML(
     "afterend",
-    `<section class="card home-actions"><button class="primary" id="homeAddCustomer" type="button">${icon('<path d="M12 5v14M5 12h14"/>')} 고객 등록</button><div class="customer-quick-actions"><button class="secondary compact" id="homeQuickTransfer" type="button">${icon('<path d="M4 17V7a2 2 0 0 1 2-2h7l7 7-7 7H6a2 2 0 0 1-2-2Z"/>')} 신규개통양도</button><button class="secondary compact" id="homeQuickRepurchase" type="button">${icon('<path d="M17 2.1 21 6l-4 3.9M3 12v-1a4 4 0 0 1 4-4h14M7 21.9 3 18l4-3.9M21 12v1a4 4 0 0 1-4 4H3"/>')} 재구매양도</button><button class="secondary compact" id="homeQuickCharge" type="button">${icon('<path d="M3 10 12 3l9 7"/><path d="M5 10v10M19 10v10M9 10v10M15 10v10"/><path d="M3 21h18"/>')} 충전</button></div></section>`,
+    `<section class="card home-actions"><button class="primary" id="homeAddCustomer" type="button">${icon('<path d="M12 5v14M5 12h14"/>')} 고객 등록</button><div class="customer-quick-actions"><button class="secondary compact" id="homeQuickTransfer" type="button">${icon('<path d="M4 17V7a2 2 0 0 1 2-2h7l7 7-7 7H6a2 2 0 0 1-2-2Z"/>')} 신규개통양도</button><button class="secondary compact" id="homeQuickRepurchase" type="button">${icon('<path d="M17 2.1 21 6l-4 3.9M3 12v-1a4 4 0 0 1 4-4h14M7 21.9 3 18l4-3.9M21 12v1a4 4 0 0 1-4 4H3"/>')} 재구매양도</button></div></section>`,
   );
   $("content").querySelector(".home-summary").insertAdjacentHTML(
     "afterend",
@@ -222,7 +222,7 @@ async function home() {
     quickAmountEntry("new_transfer", "신규개통양도");
   $("homeQuickRepurchase").onclick = () =>
     quickAmountEntry("repurchase", "재구매양도");
-  $("homeQuickCharge").onclick = () => quickAmountEntry("balance", "충전");
+  $("balanceChargeBtn").onclick = () => quickAmountEntry("balance", "요금이동");
   $("balanceEditBtn").onclick = openBalanceDialog;
   $("balanceForm").onsubmit = submitBalanceDialog;
   $("balanceDialogClose").onclick = () => $("balanceDialog").close();

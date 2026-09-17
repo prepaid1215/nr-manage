@@ -383,6 +383,7 @@ button:active{transform:translateY(1px)}button:disabled{cursor:not-allowed;opaci
 #content.home-view .flow-stat span{display:block;color:var(--muted);font-size:11px}
 #content.home-view .flow-stat b{display:block;margin-top:5px;font-size:17px}
 #content.home-view .flow-stat.right{text-align:right}
+#content.home-view .balance-charge-btn{margin-top:12px;width:100%}
 #content.home-view .counter-card .counter-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
 #content.home-view .counter-row span{display:block;color:var(--text);font-weight:700;font-size:13px}
 #content.home-view .counter-row small{display:block;margin-top:2px;color:var(--muted);font-size:11px}
