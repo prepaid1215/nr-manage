@@ -5,7 +5,7 @@ import {
   currentProfile,
   setRememberLogin,
 } from "./supabase.js?v=20260829-34";
-import { customersPage } from "./customers.js?v=20260916-8";
+import { customersPage } from "./customers.js?v=20260917-1";
 import { activityPage } from "./activity.js?v=20260916-4";
 import {
   checklistItemCount,
@@ -151,14 +151,17 @@ async function openBalanceDialog() {
   $("balanceBankInput").value = Math.round(
     computeBankBalance(currentBalance),
   );
+  $("balanceNrcPayInput").value = Number(me.nrc_pay_balance || 0);
   $("balanceDialogError").textContent = "";
   $("balanceDialog").showModal();
 }
 async function submitBalanceDialog(e) {
   e.preventDefault();
   const fee = Number($("balanceFeeInput").value || 0),
-    bank = Number($("balanceBankInput").value || 0);
-  if (!Number.isFinite(fee) || !Number.isFinite(bank)) return;
+    bank = Number($("balanceBankInput").value || 0),
+    nrcPay = Number($("balanceNrcPayInput").value || 0);
+  if (!Number.isFinite(fee) || !Number.isFinite(bank) || !Number.isFinite(nrcPay))
+    return;
   const [feeResult, bankResult] = await Promise.all([
     supabase.from("daily_activities").upsert(
       {
@@ -171,7 +174,11 @@ async function submitBalanceDialog(e) {
     ),
     supabase
       .from("profiles")
-      .update({ bank_balance_base: bank, bank_balance_anchor: fee })
+      .update({
+        bank_balance_base: bank,
+        bank_balance_anchor: fee,
+        nrc_pay_balance: nrcPay,
+      })
       .eq("id", me.id),
   ]);
   const error = feeResult.error || bankResult.error;
@@ -184,6 +191,7 @@ async function submitBalanceDialog(e) {
   }
   me.bank_balance_base = bank;
   me.bank_balance_anchor = fee;
+  me.nrc_pay_balance = nrcPay;
   $("balanceDialog").close();
   await home();
 }
@@ -214,7 +222,7 @@ async function home() {
   $("content").insertAdjacentHTML(
     "beforeend",
     `<section class="card"><h2 class="card-title">${icon('<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>')}알림</h2><div id="homeAlerts" class="home-alerts"><p class="help">알림을 불러오는 중...</p></div></section>
-<dialog id="balanceDialog"><div class="dialog-head"><h2>잔액 입력</h2><button type="button" id="balanceDialogClose">×</button></div><form id="balanceForm"><label>요금잔액(원)<input id="balanceFeeInput" type="number" min="0" inputmode="numeric"></label><label>은행잔액(원) · 카카오뱅크 충전계좌<input id="balanceBankInput" type="number" min="0" inputmode="numeric"></label><p class="help">저장하면 이후부터는 요금 차감/충전에 따라 은행잔액이 자동으로 계산됩니다.</p><div id="balanceDialogError" class="error"></div><div class="customer-actions"><button type="button" class="secondary" id="balanceDialogCancel">취소</button><button class="primary" type="submit">저장</button></div></form></dialog>`,
+<dialog id="balanceDialog"><div class="dialog-head"><h2>잔액 입력</h2><button type="button" id="balanceDialogClose">×</button></div><form id="balanceForm"><label>요금잔액(원)<input id="balanceFeeInput" type="number" min="0" inputmode="numeric"></label><label>은행잔액(원) · 카카오뱅크 충전계좌<input id="balanceBankInput" type="number" min="0" inputmode="numeric"></label><label>NRC Pay 잔액(원) · 링크페이 카드결제<input id="balanceNrcPayInput" type="number" min="0" inputmode="numeric"></label><p class="help">저장하면 이후부터는 요금 차감/충전에 따라 은행잔액이 자동으로 계산됩니다. NRC Pay는 직접 입력한 값 그대로 유지됩니다.</p><div id="balanceDialogError" class="error"></div><div class="customer-actions"><button type="button" class="secondary" id="balanceDialogCancel">취소</button><button class="primary" type="submit">저장</button></div></form></dialog>`,
   );
   $("homeCollect").onclick = runHomeCollection;
   $("homeAddCustomer").onclick = () => show("customers", { openAdd: true });
@@ -310,6 +318,8 @@ async function home() {
   $("balance").textContent = `${currentBalance.toLocaleString()}원`;
   $("bankBalance").textContent =
     `${Math.round(computeBankBalance(currentBalance)).toLocaleString()}원`;
+  $("nrcPayBalance").textContent =
+    `${Number(me.nrc_pay_balance || 0).toLocaleString()}원`;
   $("attendance").textContent = `${Number(todayAct?.attendance || 0)}명`;
   renderHomeCustomization();
   const postingCount = acts.reduce(
