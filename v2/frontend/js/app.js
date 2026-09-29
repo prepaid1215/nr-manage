@@ -139,14 +139,41 @@ function computeBankBalance(currentBalance) {
     (Number(me.bank_balance_anchor || 0) - currentBalance)
   );
 }
-async function openBalanceDialog() {
-  const { data: existing } = await supabase
+async function moveBalance() {
+  const raw = prompt("요금이동 금액(원)을 입력하세요.", "");
+  if (raw === null) return;
+  const amount = Number(String(raw).replace(/[^0-9]/g, ""));
+  if (!amount) return;
+  const current = await fetchCurrentBalance();
+  const next = current + amount;
+  const { error } = await supabase.from("daily_activities").upsert(
+    {
+      owner_id: me.id,
+      activity_date: localDate(),
+      balance: next,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "owner_id,activity_date" },
+  );
+  if (error) {
+    alert(friendlyError(error, "요금이동을 저장하지 못했습니다."));
+    return;
+  }
+  await home();
+}
+async function fetchCurrentBalance() {
+  const { data } = await supabase
     .from("daily_activities")
     .select("balance")
     .eq("owner_id", me.id)
-    .eq("activity_date", localDate())
+    .lte("activity_date", localDate())
+    .order("activity_date", { ascending: false })
+    .limit(1)
     .maybeSingle();
-  const currentBalance = Number(existing?.balance || 0);
+  return Number(data?.balance || 0);
+}
+async function openBalanceDialog() {
+  const currentBalance = await fetchCurrentBalance();
   $("balanceFeeInput").value = currentBalance;
   $("balanceBankInput").value = Math.round(
     computeBankBalance(currentBalance),
@@ -230,7 +257,7 @@ async function home() {
     quickAmountEntry("new_transfer", "신규개통양도");
   $("homeQuickRepurchase").onclick = () =>
     quickAmountEntry("repurchase", "재구매양도");
-  $("balanceChargeBtn").onclick = () => quickAmountEntry("balance", "요금이동");
+  $("balanceChargeBtn").onclick = moveBalance;
   $("balanceEditBtn").onclick = openBalanceDialog;
   $("balanceForm").onsubmit = submitBalanceDialog;
   $("balanceDialogClose").onclick = () => $("balanceDialog").close();
@@ -314,7 +341,7 @@ async function home() {
     `${Number(todayAct?.new_transfer || 0).toLocaleString()}원`;
   $("repurchase").textContent =
     `${Number(todayAct?.repurchase || 0).toLocaleString()}원`;
-  const currentBalance = Number(todayAct?.balance || 0);
+  const currentBalance = await fetchCurrentBalance();
   $("balance").textContent = `${currentBalance.toLocaleString()}원`;
   $("bankBalance").textContent =
     `${Math.round(computeBankBalance(currentBalance)).toLocaleString()}원`;
