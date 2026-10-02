@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>수익계좌 체크 (소실적 기준)</title>
+<style>
+  body { font-family: "Malgun Gothic", sans-serif; max-width: 900px; margin: 24px auto; padding: 0 16px; color: #222; }
+  h1 { font-size: 20px; }
+  h2 { font-size: 15px; margin-top: 24px; border-bottom: 2px solid #333; padding-bottom: 4px; }
+  table { border-collapse: collapse; margin-top: 8px; width: 100%; }
+  td, th { border: 1px solid #ccc; padding: 6px 10px; text-align: right; font-size: 13px; }
+  th { background: #f0f0f0; }
+  td:first-child, th:first-child, td:nth-child(2), th:nth-child(2) { text-align: left; }
+  .ok { background: #eef7ee; }
+  .miss { background: #fdf6ee; }
+  .hint { color: #666; font-size: 12px; }
+  select, input { padding: 4px; margin-right: 10px; }
+</style>
+</head>
+<body>
+<h1>수익계좌 체크 — 매출장려금 구간 (직급 반영)</h1>
+<p class="hint">공식 매출장려금표 기준입니다. 직급이 최소 DT 이상이어야 대상이고, 구간도 직급별로 다릅니다("회원" 직급은 매출장려금 대상 아님). 소실적이 높아도 직급이 안 되면 지급 안 됩니다. 목표를 억지로 채우라는 게 아니라 "지금 상태로 지급 대상인지"만 확인하는 용도입니다.</p>
+<p class="hint">※ 본인 매출 중 DT·GD 승급에 쓰인 매출은 소실적에서 제외(승급매출 초과분만 포함)해야 하는데, 이 계산기는 그 구분을 못 해서 본인 매출 전체를 소실적에 포함합니다 — 승급을 갓 한 사람은 실제보다 소실적이 높게 나올 수 있습니다.</p>
+
+<div>
+  <label>기준 회원 <select id="rootSelect"></select></label>
+  <button onclick="run()">확인하기</button>
+</div>
+
+<div id="output"></div>
+
+<script src="calculator-inline.js"></script>
+<script src="real-org-data.js"></script>
+<script>
+// 공식 매출장려금표 (직급별 차등). RANK_ORDER는 performance-calculator.js의 승급 순서와 동일.
+const RANK_ORDER = ["회원", "DT", "GD", "RD", "ED", "DD", "SDD", "CDD", "PM", "IM"];
+const rankIndex = (name) => Math.max(0, RANK_ORDER.indexOf(String(name || "회원").toUpperCase()));
+
+// min은 "이상", maxExclusive가 true면 "미만" 아니면 "이하".
+const TIERS = [
+  { minRank: "DT", min: 30000, max: 400000, maxExclusive: true, rate: 0.05, label: "DT이상 5%" },
+  { minRank: "GD", min: 400000, max: 800000, maxExclusive: true, rate: 0.08, label: "GD이상 8%" },
+  { minRank: "GD", min: 800000, max: 1500000, maxExclusive: false, rate: 0.10, label: "GD이상 10%" },
+  { minRank: "RD", min: 1500000, max: 4000000, maxExclusive: false, rate: 0.10, label: "RD이상 10%" },
+  { minRank: "ED", min: 5000000, max: 12000000, maxExclusive: false, rate: 0.09, label: "ED이상 9%" },
+  { minRank: "DD", min: 20000000, max: 30000000, maxExclusive: false, rate: 0.07, label: "DD이상 7%" },
+  { minRank: "DD", min: 40000000, max: 50000000, maxExclusive: false, rate: 0.06, label: "DD이상 6%" },
+  { minRank: "DD", min: 75000000, max: 150000000, maxExclusive: true, fixed: 3500000, label: "DD이상 350만원" },
+  { minRank: "DD", min: 150000000, max: 200000000, maxExclusive: true, fixed: 5000000, label: "DD이상 500만원" },
+  { minRank: "DD", min: 200000000, max: 400000000, maxExclusive: true, fixed: 7000000, label: "DD이상 700만원" },
+  { minRank: "CDD", min: 400000000, max: Infinity, maxExclusive: false, fixed: 10000000, label: "CDD이상 1000만원" },
+];
+
+function tierOf(row, nv) {
+  const curRankIdx = rankIndex(row.rankName);
+  const certRankIdx = rankIndex(row.rankMaxName || row.rankName);
+  if (curRankIdx < rankIndex("DT")) {
+    return { tier: null, reason: "직급 미달 (DT 이상부터 매출장려금 대상)" };
+  }
+  // 5%(DT이상) 구간은 인증직급이 GD 이상이면 3만이 아니라 6만부터 인정.
+  const tier1Floor = certRankIdx >= rankIndex("GD") ? 60000 : 30000;
+  for (const t of TIERS) {
+    if (curRankIdx < rankIndex(t.minRank)) continue;
+    const floor = t.label.startsWith("DT이상 5%") ? tier1Floor : t.min;
+    const inRange = nv >= floor && (t.maxExclusive ? nv < t.max : nv <= t.max);
+    if (inRange) return { tier: t, reason: null };
+  }
+  if (nv < tier1Floor) {
+    return { tier: null, reason: `직급은 충족하지만 소실적이 ${tier1Floor.toLocaleString()} NV 미만` };
+  }
+  return { tier: null, reason: "구간표 범위 밖 (구간 사이 공백 또는 직급 상한)" };
+}
+
+function estimatedCommission(nv, tier) {
+  if (!tier) return 0;
+  return tier.fixed ?? Math.round(nv * tier.rate);
+}
+
+let MODEL;
+function init() {
+  MODEL = buildPerformanceModel(REAL_ORG_DATA);
+  const select = document.getElementById("rootSelect");
+  select.innerHTML = MODEL.rows
+    .map((row) => `<option value="${row.userId}" ${row === MODEL.rows[0] ? "selected" : ""}>${row.userName} (${row.userId})</option>`)
+    .join("");
+  run();
+}
+
+function run() {
+  const rootId = document.getElementById("rootSelect").value;
+  const ids = [rootId, ...collectDescendants(rootId)];
+  const rows = ids.map((id) => MODEL.byId.get(id)).filter(Boolean);
+
+  const results = rows.map((row) => {
+    const children = MODEL.children.get(String(row.userId)) || [];
+    let minorNv;
+    let hasSplit = children.length > 0;
+    if (hasSplit) {
+      // 목표값은 minorIndex 판정에 영향 없으므로 더미(1/1)로 넣어서 대/소 구분만 뽑아낸다.
+      const result = calculatePerformance(MODEL, row.userId, { majorTarget: 1, minorTarget: 1 });
+      minorNv = result.effectiveTotals[result.minorIndex];
+    } else {
+      minorNv = Number(row.ordPv || 0);
+    }
+    const { tier, reason } = tierOf(row, minorNv);
+    return { row, minorNv, hasSplit, tier, reason };
+  });
+
+  let html = `<h2>${MODEL.byId.get(rootId)?.userName} 기준 하위 전원 소실적/직급 체크</h2>`;
+  html += "<table><tr><th>이름</th><th>코드</th><th>현재직급</th><th>인증직급</th><th>소실적(또는 본인매출) NV</th><th>수당 구간</th><th>예상 수당(참고용)</th></tr>";
+  results.forEach(({ row, minorNv, hasSplit, tier, reason }) => {
+    const rowClass = tier ? "ok" : "miss";
+    html += `<tr class="${rowClass}"><td>${row.userName}${hasSplit ? "" : " (하위 없음, 본인매출 기준)"}</td><td>${row.userId}</td><td>${row.rankName || "회원"}</td><td>${row.rankMaxName || "-"}</td><td>${minorNv.toLocaleString()}</td><td>${tier ? tier.label : reason}</td><td>${tier ? estimatedCommission(minorNv, tier).toLocaleString() + "원" : "-"}</td></tr>`;
+  });
+  html += "</table>";
+  document.getElementById("output").innerHTML = html;
+}
+
+function collectDescendants(id) {
+  const out = [];
+  const stack = [...(MODEL.children.get(String(id)) || [])];
+  while (stack.length) {
+    const row = stack.pop();
+    out.push(String(row.userId));
+    (MODEL.children.get(String(row.userId)) || []).forEach((c) => stack.push(c));
+  }
+  return out;
+}
+
+init();
+</script>
+</body>
+</html>

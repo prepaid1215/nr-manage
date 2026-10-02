@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>실제 조직 데이터로 마감 캐스케이드 검증</title>
+<style>
+  body { font-family: "Malgun Gothic", sans-serif; max-width: 1000px; margin: 24px auto; padding: 0 16px; color: #222; }
+  h1 { font-size: 20px; }
+  h2 { font-size: 15px; margin-top: 24px; border-bottom: 2px solid #333; padding-bottom: 4px; }
+  fieldset { border: 1px solid #ccc; border-radius: 8px; margin-bottom: 12px; padding: 10px 16px; }
+  legend { font-weight: bold; padding: 0 6px; }
+  label { display: inline-block; min-width: 110px; margin: 4px 0; font-size: 13px; }
+  input[type=number], input[type=text] { padding: 4px; margin-right: 14px; }
+  input[type=text].wide { width: 500px; }
+  button { padding: 10px 20px; font-size: 15px; cursor: pointer; margin: 6px 6px 6px 0; }
+  table { border-collapse: collapse; margin-top: 8px; width: 100%; }
+  td, th { border: 1px solid #ccc; padding: 4px 8px; text-align: right; font-size: 12px; }
+  th { background: #f0f0f0; }
+  td:first-child, th:first-child, td:nth-child(2), th:nth-child(2) { text-align: left; }
+  .result-box { background: #eef7ee; border: 1px solid #8bc98b; border-radius: 8px; padding: 12px 16px; margin-top: 12px; }
+  .error-box { background: #fdeeee; border: 1px solid #d98; border-radius: 8px; padding: 12px 16px; margin-top: 12px; color: #a33; }
+  .hint { color: #666; font-size: 12px; }
+  .tree { font-family: monospace; background: #f5f5f5; padding: 10px; border-radius: 8px; font-size: 12px; max-height: 400px; overflow-y: auto; white-space: pre; }
+</style>
+</head>
+<body>
+<h1 id="pageTitle">real-org.json — 마감 캐스케이드 검증</h1>
+<p class="hint" id="pageDesc">실제 조직 데이터를 그대로 불러와서, 목표를 지정한 마감대상 목록에 대해 자동배분(resolveClosingTargets)이 어떻게 계산되는지 보여줍니다. 기존 calculator.html / cascade-test.html과는 별도의 독립 페이지입니다.</p>
+
+<div id="loadStatus" class="hint">불러오는 중...</div>
+
+<h2>1. 조직 구조 미리보기 (상위 3단계)</h2>
+<div class="tree" id="treePreview"></div>
+
+<h2>2. 마감 계획 입력</h2>
+<fieldset>
+  <div class="row">
+    <label>최상위(top)</label><input type="text" id="topId" value="2893496">
+    <label>대 목표</label><input type="number" id="topMajor" value="400000">
+    <label>소 목표</label><input type="number" id="topMinor" value="400000">
+  </div>
+  <div class="row">
+    <label>마감대상 userId</label><input type="text" id="closingIds" class="wide" placeholder="쉼표로 구분, 예: 2460227,2460369">
+    <p class="hint">비워두면 top만 마감대상입니다. 위 트리 미리보기에서 userId를 골라 넣어보세요 — 목표를 안 주고(override 없이) 넣어도 자동배분되는지가 핵심 확인 포인트입니다.</p>
+  </div>
+</fieldset>
+
+<button onclick="runReal()">계산하기</button>
+<div id="output"></div>
+
+<script src="calculator-inline.js"></script>
+<script src="real-org-data.js"></script>
+<script>
+let MODEL = null;
+let RAW = null;
+
+function load() {
+  RAW = REAL_ORG_DATA;
+  MODEL = buildPerformanceModel(RAW);
+  document.getElementById("loadStatus").textContent =
+    `불러옴: ${RAW.sourceAccountId}, ${RAW.rstLst.length}명, 수집일시 ${RAW.mainStats?.["수집일시"] || "?"}, 최상위 ${MODEL.rows[0]?.userName}(${MODEL.rows[0]?.userId})`;
+  document.getElementById("pageTitle").textContent = `real-org.json (${RAW.sourceAccountId}, ${RAW.rstLst.length}명) — 마감 캐스케이드 검증`;
+  document.getElementById("topId").value = MODEL.rows[0]?.userId || "";
+  renderTreePreview();
+}
+
+function renderTreePreview() {
+  const top = MODEL.rows[0];
+  const lines = [];
+  const walk = (row, depth, path) => {
+    if (depth > 3 || !row) return;
+    const id = String(row.userId);
+    if (path.has(id)) return;
+    const branch = branchBreakdown(row);
+    lines.push(`${"  ".repeat(depth)}${row.userName}(${id}) · 본인${row.ordPv||0} 대${row.maxPv||0} 소${row.minPv||0} · 라인합계${branch.total.toLocaleString()}`);
+    const nextPath = new Set(path);
+    nextPath.add(id);
+    (MODEL.children.get(id) || []).forEach((child) => walk(child, depth + 1, nextPath));
+  };
+  walk(top, 0, new Set());
+  document.getElementById("treePreview").textContent = lines.join("\n");
+}
+
+function runReal() {
+  const output = document.getElementById("output");
+  try {
+    const topId = document.getElementById("topId").value.trim();
+    if (!MODEL.byId.has(topId)) throw new Error(`userId ${topId}를 조직에서 찾을 수 없습니다.`);
+    const topMajor = Number(document.getElementById("topMajor").value || 0);
+    const topMinor = Number(document.getElementById("topMinor").value || 0);
+    const closingIdsRaw = document.getElementById("closingIds").value
+      .split(",").map((s) => s.trim()).filter(Boolean);
+    const unknownIds = closingIdsRaw.filter((id) => !MODEL.byId.has(id));
+    const closingMemberIds = [topId, ...closingIdsRaw.filter((id) => MODEL.byId.has(id))];
+
+    const { resolved, unreachable } = resolveClosingTargets(
+      MODEL,
+      topId,
+      { majorTarget: topMajor, minorTarget: topMinor },
+      closingMemberIds,
+      {},
+    );
+
+    let html = "<h2>1) 목표 자동배분 결과</h2>";
+    if (unknownIds.length) {
+      html += `<div class="error-box">조직에 없는 userId: ${unknownIds.join(", ")}</div>`;
+    }
+    html += "<table><tr><th>이름</th><th>userId</th><th>대 목표(자동배분)</th><th>소 목표(자동배분)</th></tr>";
+    for (const [id, target] of resolved.entries()) {
+      const row = MODEL.byId.get(id);
+      html += `<tr><td>${row?.userName || "?"}</td><td>${id}</td><td>${target.majorTarget.toLocaleString()}</td><td>${target.minorTarget.toLocaleString()}</td></tr>`;
+    }
+    html += "</table>";
+
+    // 목표만 배분하는 걸로는 "실제 마감이 어떻게 되는지"가 안 보이므로,
+    // 깨끗한 모델을 다시 만들어 실제 실적(maxPv/minPv)으로 캐스케이드 마감을 끝까지 적용해서 보여준다.
+    if (!unreachable.length) {
+      const freshModel = buildPerformanceModel(RAW);
+      const plan = planClosing(
+        freshModel,
+        topId,
+        { majorTarget: topMajor, minorTarget: topMinor },
+        closingMemberIds,
+        {},
+      );
+      html += "<h2>2) 아래 단계부터 실제로 마감되는 과정 (하위 → 상위 순)</h2>";
+      html += "<table><tr><th>이름</th><th>userId</th><th>목표(대/소)</th><th>현재 실적(대/소)</th><th>부족(대/소)</th><th>달성 여부</th><th>부족분 채우려면</th></tr>";
+      plan.steps.forEach((step) => {
+        if (step.skipped) {
+          html += `<tr><td colspan="7">${step.memberId} — 목표 0이라 계산 생략</td></tr>`;
+          return;
+        }
+        const row = MODEL.byId.get(step.memberId);
+        const r = step.result;
+        const p = step.projection;
+        const majorNow = r.effectiveTotals[r.majorIndex];
+        const minorNow = r.effectiveTotals[r.minorIndex];
+        const majorDef = r.deficits[r.majorIndex];
+        const minorDef = r.deficits[r.minorIndex];
+        const achieved = r.achieved ? "✅ 달성" : (p.feasible === false ? "⚠️ 배치 불가" : "❌ 미달성");
+        const topUpText = r.achieved
+          ? "-"
+          : p.topUps.map((t, idx) => {
+              if (t.salesWon <= 0) return "";
+              const place = r.placements[idx];
+              const side = idx === r.majorIndex ? "대" : "소";
+              return `${side}: ${place.target?.userName || "-"}(${place.target?.userId || "-"})에 ${t.salesWon.toLocaleString()}원`;
+            }).filter(Boolean).join(" / ") || "-";
+        html += `<tr><td>${row?.userName || step.memberId}</td><td>${step.memberId}</td>
+          <td>${step.allocation.majorTarget.toLocaleString()} / ${step.allocation.minorTarget.toLocaleString()}</td>
+          <td>${majorNow.toLocaleString()} / ${minorNow.toLocaleString()}</td>
+          <td>${majorDef.toLocaleString()} / ${minorDef.toLocaleString()}</td>
+          <td>${achieved}</td>
+          <td>${topUpText}</td></tr>`;
+      });
+      html += "</table>";
+      html += `<div class="${plan.verified ? "result-box" : "error-box"}">
+        최상위(${MODEL.byId.get(topId)?.userName}) 최종: 대 ${plan.topMajorNv.toLocaleString()} / 소 ${plan.topMinorNv.toLocaleString()}
+        · 목표(대${topMajor.toLocaleString()}/소${topMinor.toLocaleString()}) ${plan.verified ? "달성" : "미달성"}
+        ${plan.totalSalesWon > 0 ? ` · 전체 추가로 필요한 매출 합계 ${plan.totalSalesWon.toLocaleString()}원` : ""}
+      </div>`;
+    }
+
+    if (unreachable.length) {
+      html += "<div class='error-box'><b>도달 불가능(구조상 목표 배분 불가 — 이게 바로 신고하신 '붕괴' 케이스가 재현되는지 보는 지점입니다):</b><ul>";
+      unreachable.forEach((id) => {
+        const row = MODEL.byId.get(id);
+        html += `<li>${row?.userName || "?"} (${id})</li>`;
+      });
+      html += "</ul></div>";
+    } else {
+      html += "<div class='result-box'>선택한 마감대상 전원이 목표를 받았습니다 (예외 없음 · 붕괴 없음).</div>";
+    }
+
+    output.innerHTML = html;
+  } catch (error) {
+    output.innerHTML = `<div class="error-box"><b>예외 발생:</b> ${error.message}</div>`;
+  }
+}
+
+load();
+</script>
+</body>
+</html>

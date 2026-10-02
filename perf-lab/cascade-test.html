@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>마감테스트 계보 캐스케이드 검증 (독립 테스트)</title>
+<style>
+  body { font-family: "Malgun Gothic", sans-serif; max-width: 960px; margin: 24px auto; padding: 0 16px; color: #222; }
+  h1 { font-size: 20px; }
+  h2 { font-size: 15px; margin-top: 28px; border-bottom: 2px solid #333; padding-bottom: 4px; }
+  .tree { font-family: monospace; background: #f5f5f5; padding: 12px 16px; border-radius: 8px; white-space: pre; font-size: 13px; }
+  fieldset { border: 1px solid #ccc; border-radius: 8px; margin-bottom: 12px; padding: 10px 16px; }
+  legend { font-weight: bold; padding: 0 6px; }
+  label { display: inline-block; min-width: 90px; margin: 3px 0; font-size: 13px; }
+  input[type=number] { width: 110px; padding: 3px; margin-right: 14px; }
+  .row { margin: 4px 0; }
+  button { padding: 10px 20px; font-size: 15px; cursor: pointer; margin: 8px 8px 8px 0; }
+  table { border-collapse: collapse; margin-top: 8px; width: 100%; }
+  td, th { border: 1px solid #ccc; padding: 5px 10px; text-align: right; font-size: 13px; }
+  th { background: #f0f0f0; }
+  td:first-child, th:first-child { text-align: left; }
+  .result-box { background: #eef7ee; border: 1px solid #8bc98b; border-radius: 8px; padding: 12px 16px; margin-top: 12px; }
+  .error-box { background: #fdeeee; border: 1px solid #d98; border-radius: 8px; padding: 12px 16px; margin-top: 12px; color: #a33; }
+  .hint { color: #666; font-size: 12px; }
+  .assumption { background: #fff8e1; border: 1px solid #e0c060; border-radius: 8px; padding: 10px 16px; font-size: 13px; }
+</style>
+</head>
+<body>
+<h1>마감테스트(2).xlsx 계보 캐스케이드 검증 — 독립 테스트 (기존 calculator.html과 무관)</h1>
+
+<div class="assumption">
+  <b>가정한 계보 구조</b> (엑셀에서 확인된 체인 + 사용자 확인 사항 기준):
+  <div class="tree">노상수본
+└─ 노상수B
+    ├─ 남욱호 (비사업자, 실적 0, 통과 노드)
+    │   └─ 김진숙 ── 김진숙A / 김진숙B
+    │                     └─ 나세빈 ── 나세빈A / 나세빈B
+    │                                     └─ 노철현 ── 노철현A ── 김건
+    │                                                    └─ 노철현B ── 진은태
+    └─ 안영숙(철현) (비사업자, 실적 0, 하위 없음 — 가정)</div>
+  <p class="hint">이 구조가 실제와 다르면 아래 표의 ppId(상위 회원) 값을 직접 고쳐서 다시 계산하면 됩니다.</p>
+</div>
+
+<h2>각 회원 실적 입력 (본인매출 · 대실적 · 소실적)</h2>
+<table id="memberTable">
+  <tr><th>마감대상</th><th>이름</th><th>userId</th><th>상위(ppId)</th><th>본인(ordPv)</th><th>대(maxPv)</th><th>소(minPv)</th></tr>
+</table>
+<p class="hint">"마감대상" 체크된 회원만 캐스케이드 목표를 받습니다. 엑셀의 "b작을때"/"A떨어짐"/"B떨어짐"처럼 특정 시나리오만 보고 싶으면 그 지점까지만 체크하세요.</p>
+
+<h2>마감 목표</h2>
+<div class="row">
+  <label>최상위(top)</label><input type="text" id="topId" value="top" style="width:100px" disabled>
+  <label>대 목표</label><input type="number" id="topMajor" value="1500000">
+  <label>소 목표</label><input type="number" id="topMinor" value="1500000">
+</div>
+<p class="hint">엑셀 1차 기준 "3,000,000 NV" = 대 1,500,000 + 소 1,500,000으로 가정했습니다. 다른 차수 값으로 바꿔서 비교해보세요.</p>
+
+<button onclick="runCascade()">계산하기</button>
+<div id="output"></div>
+
+<script src="calculator-inline.js"></script>
+<script>
+// 엑셀에서 확인된 회원 목록. name은 표시용, id는 코드 대신 알기 쉬운 영문 슬러그 사용.
+const MEMBERS = [
+  { id: "top",      name: "노상수본", ppId: "" },
+  { id: "b",        name: "노상수B",  ppId: "top" },
+  { id: "namwookho",name: "남욱호(비사업자)", ppId: "b" },
+  { id: "anyoungsook", name: "안영숙(철현)(비사업자)", ppId: "b" },
+  { id: "kimjinsook", name: "김진숙", ppId: "namwookho" },
+  { id: "kimjinsookA", name: "김진숙A", ppId: "kimjinsook" },
+  { id: "kimjinsookB", name: "김진숙B", ppId: "kimjinsook" },
+  { id: "nasebin",  name: "나세빈",   ppId: "kimjinsookB" },
+  { id: "nasebinA", name: "나세빈A",  ppId: "nasebin" },
+  { id: "nasebinB", name: "나세빈B",  ppId: "nasebin" },
+  { id: "nochulhyun", name: "노철현", ppId: "nasebinB" },
+  { id: "nochulhyunA", name: "노철현A", ppId: "nochulhyun" },
+  { id: "nochulhyunB", name: "노철현B", ppId: "nochulhyun" },
+  { id: "kimgun",   name: "김건",     ppId: "nochulhyunA" },
+  { id: "jineuntae", name: "진은태",  ppId: "nochulhyunB" },
+];
+
+function buildTable() {
+  const table = document.getElementById("memberTable");
+  MEMBERS.forEach((member) => {
+    const tr = document.createElement("tr");
+    const checked = member.id === "top" ? "checked disabled" : "";
+    tr.innerHTML = `<td><input type="checkbox" id="closing_${member.id}" ${checked}></td>
+      <td>${member.name}</td><td>${member.id}</td>
+      <td><input type="text" id="pp_${member.id}" value="${member.ppId}" style="width:110px"></td>
+      <td><input type="number" id="own_${member.id}" value="0"></td>
+      <td><input type="number" id="maj_${member.id}" value="0"></td>
+      <td><input type="number" id="min_${member.id}" value="0"></td>`;
+    table.appendChild(tr);
+  });
+}
+buildTable();
+
+function runCascade() {
+  const output = document.getElementById("output");
+  try {
+    const rstLst = MEMBERS.map((member, index) => ({
+      userId: member.id,
+      userName: member.name,
+      ppId: document.getElementById(`pp_${member.id}`).value,
+      abPos: index,
+    }));
+    const members = MEMBERS.map((member) => ({
+      userId: member.id,
+      ordPv: Number(document.getElementById(`own_${member.id}`).value || 0),
+      maxPv: Number(document.getElementById(`maj_${member.id}`).value || 0),
+      minPv: Number(document.getElementById(`min_${member.id}`).value || 0),
+    }));
+
+    const model = buildPerformanceModel({ rstLst, members });
+    const topMajor = Number(document.getElementById("topMajor").value || 0);
+    const topMinor = Number(document.getElementById("topMinor").value || 0);
+
+    const closingMemberIds = ["top", ...MEMBERS.map((m) => m.id).filter(
+      (id) => id !== "top" && document.getElementById(`closing_${id}`).checked,
+    )];
+
+    const { resolved, unreachable, allocation } = resolveClosingTargets(
+      model,
+      "top",
+      { majorTarget: topMajor, minorTarget: topMinor },
+      closingMemberIds,
+      {},
+    );
+
+    let html = "<h2>결과: 자동배분 캐스케이드</h2>";
+    html += "<table><tr><th>이름</th><th>대 목표</th><th>소 목표</th><th>직접입력?</th></tr>";
+    MEMBERS.forEach((member) => {
+      const target = resolved.get(member.id);
+      if (!target) return;
+      html += `<tr><td>${member.name}</td><td>${target.majorTarget.toLocaleString()}</td><td>${target.minorTarget.toLocaleString()}</td><td>${target.overridden ? "예" : "아니오(자동)"}</td></tr>`;
+    });
+    html += "</table>";
+
+    if (unreachable.length) {
+      const names = unreachable.map((id) => MEMBERS.find((m) => m.id === id)?.name || id);
+      html += `<div class="error-box">캐스케이드 구조상 목표를 못 받은 회원: ${names.join(", ")}<br><small>직속 하위 2명까지만 계산하는 구조라, 3번째 이상 하위이거나 연결이 끊긴 경우 여기 표시됩니다.</small></div>`;
+    }
+
+    html += "<h2>엑셀 값과 비교하려면</h2><p class='hint'>위 표의 '대 목표'/'소 목표'를 엑셀의 A열(라인별 기준 NV) 값과 줄 맞춰 비교하세요. 다르게 나오는 지점이 있으면 그 회원의 본인매출(ordPv)·대(maxPv)·소(minPv) 값을 엑셀 D열 기준으로 채워서 다시 계산해보세요.</p>";
+
+    output.innerHTML = html;
+  } catch (error) {
+    output.innerHTML = `<div class="error-box"><b>예외 발생:</b> ${error.message}</div>`;
+  }
+}
+runCascade();
+</script>
+</body>
+</html>

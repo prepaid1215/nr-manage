@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>실제 마감 화면 그대로 (perf-lab 목업)</title>
+<link rel="stylesheet" href="./css/app.css">
+<style>
+  body { max-width: 900px; margin: 0 auto; padding: 16px; }
+  #labNotice { background: #fff8e1; border: 1px solid #e0c060; border-radius: 8px; padding: 10px 16px; margin-bottom: 16px; font-size: 13px; }
+</style>
+</head>
+<body>
+<div id="labNotice">
+  이 페이지는 <b>nr-manage의 실제 performance.js를 그대로</b> 가져와서 돌리는 목업입니다.
+  로그인/Supabase 없이, real-org-data.js(주영돈 님 실제 조직 23명)를 수집 데이터인 것처럼 넣었습니다.
+  아래부터는 실제 서비스 화면과 100% 동일하게 동작합니다.
+</div>
+<div id="root"></div>
+<script src="js/real-org-data.js"></script>
+<script type="module">
+import { performancePage } from "./js/performance.js";
+performancePage(document.getElementById("root"));
+</script>
+</body>
+</html>

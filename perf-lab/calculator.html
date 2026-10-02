@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>실적 자동배분 계산기 (검증용)</title>
+<style>
+  body { font-family: "Malgun Gothic", sans-serif; max-width: 900px; margin: 24px auto; padding: 0 16px; color: #222; }
+  h1 { font-size: 20px; }
+  h2 { font-size: 15px; margin-top: 28px; border-bottom: 2px solid #333; padding-bottom: 4px; }
+  fieldset { border: 1px solid #ccc; border-radius: 8px; margin-bottom: 16px; padding: 12px 16px; }
+  legend { font-weight: bold; padding: 0 6px; }
+  label { display: inline-block; min-width: 150px; margin: 4px 0; }
+  input[type=number], input[type=text] { width: 120px; padding: 4px; margin-right: 16px; }
+  .row { margin: 6px 0; }
+  button { padding: 10px 20px; font-size: 15px; cursor: pointer; margin-top: 8px; }
+  pre { background: #f5f5f5; padding: 12px; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; }
+  .result-box { background: #eef7ee; border: 1px solid #8bc98b; border-radius: 8px; padding: 12px 16px; margin-top: 12px; }
+  .error-box { background: #fdeeee; border: 1px solid #d98; border-radius: 8px; padding: 12px 16px; margin-top: 12px; color: #a33; }
+  .hint { color: #666; font-size: 12px; }
+  table { border-collapse: collapse; margin-top: 8px; }
+  td, th { border: 1px solid #ccc; padding: 4px 10px; text-align: right; font-size: 13px; }
+  th { background: #f0f0f0; }
+</style>
+</head>
+<body>
+<h1>실적 자동배분 계산기 (nr-manage performance-calculator.js 그대로 사용)</h1>
+<p class="hint">이 페이지는 실제 코드(performance-calculator.js)를 복사해 그대로 돌립니다. 숫자를 바꿔가며 자동배분 결과가 예상과 맞는지 확인하세요.</p>
+
+<fieldset>
+  <legend>최상위 (top)</legend>
+  <div class="row"><label>이름</label><input type="text" id="topName" value="gd-a"></div>
+  <div class="row"><label>본인매출(ordPv)</label><input type="number" id="topOrdPv" value="50000"></div>
+  <div class="row"><label>마감 목표 · 대실적</label><input type="number" id="topMajor" value="400000">
+  <label>소실적</label><input type="number" id="topMinor" value="400000"></div>
+</fieldset>
+
+<fieldset>
+  <legend>직속 하위 ① (b-closer 역할)</legend>
+  <div class="row"><label>이름</label><input type="text" id="aName" value="b-closer">
+  <label><input type="checkbox" id="aIsClosing" checked> 마감대상으로 선택</label></div>
+  <div class="row"><label>본인매출(ordPv)</label><input type="number" id="aOrdPv" value="20000">
+  <label>대실적(maxPv)</label><input type="number" id="aMax" value="100000">
+  <label>소실적(minPv)</label><input type="number" id="aMin" value="80000"></div>
+  <div class="row"><label>직접입력 목표 · 대</label><input type="number" id="aMajorOverride" placeholder="비우면 자동">
+  <label>소</label><input type="number" id="aMinorOverride" placeholder="비우면 자동"></div>
+</fieldset>
+
+<fieldset>
+  <legend>직속 하위 ② (c-regular 역할)</legend>
+  <div class="row"><label>이름</label><input type="text" id="bName" value="c-regular">
+  <label><input type="checkbox" id="bIsClosing"> 마감대상으로 선택</label></div>
+  <div class="row"><label>본인매출(ordPv)</label><input type="number" id="bOrdPv" value="60000">
+  <label>대실적(maxPv)</label><input type="number" id="bMax" value="20000">
+  <label>소실적(minPv)</label><input type="number" id="bMin" value="0"></div>
+  <div class="row"><label>직접입력 목표 · 대</label><input type="number" id="bMajorOverride" placeholder="비우면 자동">
+  <label>소</label><input type="number" id="bMinorOverride" placeholder="비우면 자동"></div>
+</fieldset>
+
+<button onclick="runCalculation()">계산하기</button>
+
+<div id="output"></div>
+
+<script src="calculator-inline.js"></script>
+<script>
+function runCalculation() {
+  const val = (id) => Number(document.getElementById(id).value || 0);
+  const rawOverride = (id) => {
+    const v = document.getElementById(id).value;
+    return v === "" ? undefined : Number(v);
+  };
+
+  const topName = document.getElementById("topName").value || "top";
+  const aName = document.getElementById("aName").value || "childA";
+  const bName = document.getElementById("bName").value || "childB";
+
+  const payload = {
+    rstLst: [
+      { userId: "top", userName: topName, ppId: "" },
+      { userId: "childA", userName: aName, ppId: "top", abPos: 1 },
+      { userId: "childB", userName: bName, ppId: "top", abPos: 2 },
+    ],
+    members: [
+      { userId: "top", ordPv: val("topOrdPv") },
+      { userId: "childA", ordPv: val("aOrdPv"), maxPv: val("aMax"), minPv: val("aMin") },
+      { userId: "childB", ordPv: val("bOrdPv"), maxPv: val("bMax"), minPv: val("bMin") },
+    ],
+  };
+
+  const closingMemberIds = ["top"];
+  if (document.getElementById("aIsClosing").checked) closingMemberIds.push("childA");
+  if (document.getElementById("bIsClosing").checked) closingMemberIds.push("childB");
+
+  const targetOverrides = {};
+  const aMajor = rawOverride("aMajorOverride");
+  const aMinor = rawOverride("aMinorOverride");
+  if (aMajor !== undefined || aMinor !== undefined) {
+    targetOverrides.childA = { majorTarget: aMajor ?? 0, minorTarget: aMinor ?? 0 };
+  }
+  const bMajor = rawOverride("bMajorOverride");
+  const bMinor = rawOverride("bMinorOverride");
+  if (bMajor !== undefined || bMinor !== undefined) {
+    targetOverrides.childB = { majorTarget: bMajor ?? 0, minorTarget: bMinor ?? 0 };
+  }
+
+  const output = document.getElementById("output");
+  try {
+    const model = buildPerformanceModel(payload);
+
+    const branchA = branchBreakdown(model.byId.get("childA"));
+    const branchB = branchBreakdown(model.byId.get("childB"));
+
+    const { resolved, unreachable, allocation } = resolveClosingTargets(
+      model,
+      "top",
+      { majorTarget: val("topMajor"), minorTarget: val("topMinor") },
+      closingMemberIds,
+      targetOverrides,
+    );
+
+    let html = "<h2>결과</h2>";
+
+    html += `<table><tr><th>라인</th><th>ordPv+maxPv+minPv 합계</th></tr>
+      <tr><td>${aName} (childA)</td><td>${branchA.total.toLocaleString()}</td></tr>
+      <tr><td>${bName} (childB)</td><td>${branchB.total.toLocaleString()}</td></tr></table>`;
+
+    const majorLine = branchA.total >= branchB.total ? aName : bName;
+    html += `<p>→ 총합이 더 큰 <b>${majorLine}</b> 라인이 대실적(major) 라인이 됩니다. top의 본인매출(${val("topOrdPv").toLocaleString()})은 더 작은(minor) 라인에 더해집니다.</p>`;
+
+    html += "<div class='result-box'><b>회원별 확정 목표 (resolveClosingTargets)</b><table><tr><th>회원</th><th>대실적 목표</th><th>소실적 목표</th><th>자동값(대)</th><th>자동값(소)</th><th>직접입력?</th></tr>";
+    for (const [id, target] of resolved.entries()) {
+      const label = id === "top" ? topName : id === "childA" ? aName : bName;
+      html += `<tr><td>${label} (${id})</td><td>${target.majorTarget.toLocaleString()}</td><td>${target.minorTarget.toLocaleString()}</td><td>${target.autoMajorTarget.toLocaleString()}</td><td>${target.autoMinorTarget.toLocaleString()}</td><td>${target.overridden ? "예 (직접입력)" : "아니오 (자동)"}</td></tr>`;
+    }
+    html += "</table></div>";
+
+    if (unreachable.length) {
+      html += `<div class="error-box">도달 불가능(구조상 목표 배분 불가): ${unreachable.join(", ")}</div>`;
+    }
+
+    html += "<h2>원본 allocation 트리 (참고용 원시 데이터)</h2><pre>" + JSON.stringify(allocation, null, 2) + "</pre>";
+
+    output.innerHTML = html;
+  } catch (error) {
+    output.innerHTML = `<div class="error-box"><b>예외 발생:</b> ${error.message}</div>`;
+  }
+}
+runCalculation();
+</script>
+</body>
+</html>
