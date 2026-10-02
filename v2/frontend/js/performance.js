@@ -6,18 +6,21 @@ import {
   branchBreakdown,
   buildPerformanceModel,
   calculatePerformance,
+  cancelClosingCompletion,
   cancelCompletionCascade,
   closingPeriodForDate,
   completionWhenAchieved,
   evaluatePromotion,
   evaluatePromotionPath,
+  planClosing,
   planSignature,
   planBalancedClosingTopUp,
   projectClosingCompletion,
   pruneInvalidCompletions,
+  salesTopUpForDeficit,
   sortMembersDeepestFirst,
 } from "./performance-calculator.js?v=20260908-57";
-import { boxTreeHtml } from "./box-tree.js?v=20260831-60";
+import { boxTreeHtml } from "./box-tree.js?v=20261002-1";
 import {
   addManualLink,
   loadManualLinks,
@@ -69,12 +72,13 @@ export async function performancePage(root) {
   }
 
   let model;
+  let rawPayload;
   try {
-    const payload =
+    rawPayload =
       typeof data.payload === "string"
         ? JSON.parse(data.payload)
         : data.payload;
-    model = buildPerformanceModel(payload);
+    model = buildPerformanceModel(rawPayload);
   } catch (parseError) {
     $("perfError").textContent = parseError.message;
     return;
@@ -415,6 +419,386 @@ export async function performancePage(root) {
     );
   };
 
+  // "밸런스로 나누기" 미리보기 전용 상태. rootMemberId(어느 라인을 열었는지)별로
+  // "적용함"으로 토글해둔 리프 회원 id 집합을 기억해서, 다시 그릴 때 그 사람들의
+  // 실적에 실제로 추가 NV를 더한 뒤 전체를 재계산한다 — 배지 문구만 바꾸는 게
+  // 아니라 위쪽 상위 라인까지 진짜로 다시 계산되게 하기 위함.
+  const balanceOverrides = new Map();
+  // 박스마다 켜고 끄는 "수익계좌" 표시. 켜면(ON) 그 사람은 대·소를 각각 독립
+  // 채워야 마감(수당 발생)으로 보고, 꺼져 있으면(기본값) 대+소 합계가 목표
+  // 합계만 넘으면 통과로 본다 — rootMemberId별로 별도로 기억한다.
+  const incomeAccounts = new Map();
+
+  const renderBalancePreview = (rootMemberId) => {
+    const topDescendantIds = descendantsOf(plan.topMemberId).map((row) => String(row.userId));
+    const subtreeIds = new Set([
+      rootMemberId,
+      ...descendantsOf(rootMemberId).map((row) => String(row.userId)),
+    ]);
+    const applied = balanceOverrides.get(rootMemberId) || new Set();
+    const incomeMarked = incomeAccounts.get(rootMemberId) || new Set();
+
+    // 화면에서 체크박스를 이것저것 눌러보거나 목표를 여러 번 바꿔 계산하면
+    // 실제 model에는 그동안의 마감 완료/예상치(completedClosingNv 등)가 그대로 남아있다.
+    // 밸런스 미리보기는 그런 잔여 상태와 무관하게 항상 "수집된 원본 실적"에서
+    // 지금까지 적용(토글)한 매출만 반영해서 매번 깨끗하게 다시 계산한다.
+    const clonedModel = buildPerformanceModel(rawPayload);
+    const addedNvByLeaf = new Map();
+    // planClosing이 내부적으로 계산해둔 r.effectiveTotals는 "대·소 각각 독립"
+    // 가정(수익계좌 방식)이 이미 섞여 있어서 합계 통과 판정에 쓰면 부풀려진다.
+    // 합계 통과 쪽은 항상 이 rawTotalOf(원본 + 지금까지 적용한 delta)로만 판정한다.
+    const rawTotalOf = (id, deltaMap) => {
+      const row = clonedModel.byId.get(id);
+      return (
+        Number(row?.ordPv || 0) +
+        Number(row?.maxPv || 0) +
+        Number(row?.minPv || 0) +
+        (deltaMap.get(String(id)) || 0)
+      );
+    };
+
+    const computeOnce = () => {
+      let balancePlan;
+      try {
+        // 부분 라인만 떼어서 다시 목표를 주면(예: 2893498한테 대·소 각각 40만) 중복으로
+        // 80만을 요구하는 셈이 되어버리므로, 반드시 실제 최상위·실제 목표로 전체를 한 번에
+        // 계산하고 그 결과에서 이 라인(rootMemberId) 아래 부분만 뽑아서 보여준다.
+        balancePlan = planClosing(
+          clonedModel,
+          plan.topMemberId,
+          { majorTarget: plan.topMajorTarget, minorTarget: plan.topMinorTarget },
+          [plan.topMemberId, ...topDescendantIds],
+          {},
+        );
+      } catch (balanceError) {
+        return { error: balanceError };
+      }
+      return { balancePlan };
+    };
+
+    // "합계 통과"(수익계좌 아님) 구간에서는 부모 하나가 부족분을 전부 떠안는 게
+    // 아니라, 본인 계좌 + 직속 하위(들) 사이에 균형 있게 나눠 추천해야 한다
+    // (신주영 본인 vs 진순정처럼, 둘이 따로따로 계산되면 서로 안 맞는 추천이
+    // 두 개 나온다). manualDelta(적용한 하위의 증가분)까지 반영한 "현재 실제
+    // 합계"를 기준으로, 부족한 만큼을 본인/각 하위에 재귀적으로 절반씩 나눈다.
+    // 수익계좌로 표시된 사람을 만나면 그 밑은 독립(대·소) 로직이 따로 처리하므로
+    // 이 재귀는 더 내려가지 않는다.
+    const planCombinedDeficit = (memberId, requiredTotal, deltaMap, out, targetLookup) => {
+      const currentTotal = rawTotalOf(memberId, deltaMap);
+      const deficit = Math.max(0, requiredTotal - currentTotal);
+      if (deficit <= 0) return;
+      const allChildren = (clonedModel.children.get(memberId) || []).filter(
+        (child) => !incomeMarked.has(String(child.userId)),
+      );
+      // 이미 자기 목표(라인전체 기준 목표)를 채운 하위는 더 요구하지 않는다 —
+      // 그 초과분은 이미 currentTotal에 반영돼 있으니 그대로 두고, 아직
+      // 부족한 하위와 본인 사이에서만 나눈다. (신주영2918877/이충언처럼 이미
+      // 채운 라인에 또 배지가 뜨는 걸 막기 위함.)
+      const neediness = allChildren.filter((child) => {
+        const childId = String(child.userId);
+        const childTarget = targetLookup.get(childId);
+        return childTarget == null || rawTotalOf(childId, deltaMap) < childTarget;
+      });
+      if (!neediness.length) {
+        out.set(memberId, (out.get(memberId) || 0) + deficit);
+        return;
+      }
+      const shareCount = 1 + neediness.length;
+      let remaining = deficit;
+      const shares = Array.from({ length: shareCount }, (_, i) => {
+        const share = i === shareCount - 1 ? remaining : Math.ceil(deficit / shareCount);
+        remaining -= share;
+        return share;
+      });
+      if (shares[0] > 0) out.set(memberId, (out.get(memberId) || 0) + shares[0]);
+      neediness.forEach((child, idx) => {
+        const childId = String(child.userId);
+        const childShare = shares[idx + 1];
+        if (childShare <= 0) return;
+        const childCurrent = rawTotalOf(childId, deltaMap);
+        planCombinedDeficit(childId, childCurrent + childShare, deltaMap, out, targetLookup);
+      });
+    };
+
+    // "합계 통과" 구간의 시작점(= 이 라인 자체이거나, 바로 위가 수익계좌인 지점)에서만
+    // 재귀를 걸어서 이중 계산을 막는다 — 부모가 이미 합계 통과 중이면 그 재귀 안에서
+    // 자식까지 같이 처리되므로 자식에서 또 걸 필요가 없다.
+    const isCombinedSegmentRoot = (memberId) => {
+      if (incomeMarked.has(memberId)) return false;
+      if (memberId === rootMemberId) return true;
+      const row = clonedModel.byId.get(memberId);
+      const parentId = String(row?.ppId ?? "");
+      return incomeMarked.has(parentId) || !subtreeIds.has(parentId);
+    };
+
+    // 1차 계산: 토글 대상마다 필요한 추가 NV(추천 매출량)를 먼저 알아낸다(적용 전 상태 기준).
+    const first = computeOnce();
+    if (first.error) return { error: first.error };
+    const emptyDelta = new Map();
+    const firstTargetLookup = new Map();
+    first.balancePlan.steps.forEach((step) => {
+      if (!step.skipped) {
+        firstTargetLookup.set(
+          step.memberId,
+          step.allocation.majorTarget + step.allocation.minorTarget,
+        );
+      }
+    });
+    first.balancePlan.steps
+      .filter((step) => !step.skipped && subtreeIds.has(step.memberId))
+      .forEach((step) => {
+        const isLeaf = !(clonedModel.children.get(step.memberId) || []).length;
+        if (isLeaf || incomeMarked.has(step.memberId) || !isCombinedSegmentRoot(step.memberId)) {
+          if (!isLeaf) return; // 수익계좌·비-세그먼트루트는 아래에서 따로 처리
+          if (incomeMarked.has(String(clonedModel.byId.get(step.memberId)?.ppId ?? ""))) {
+            // 부모가 수익계좌면 이 리프는 예전처럼 독립(대·소 합산) 기준.
+            const row = clonedModel.byId.get(step.memberId);
+            const combinedTarget = step.allocation.majorTarget + step.allocation.minorTarget;
+            const ownNv = Number(row?.ordPv || 0);
+            if (ownNv < combinedTarget) {
+              addedNvByLeaf.set(step.memberId, salesTopUpForDeficit(combinedTarget - ownNv).addedNv);
+            }
+            return;
+          }
+          return; // 합계 통과 세그먼트에 속한 리프는 세그먼트 루트의 재귀에서 계산됨
+        }
+        // 이 노드가 합계 통과 세그먼트의 시작점이다 — 여기서부터 재귀로 본인/하위에 나눈다.
+        const combinedTarget = step.allocation.majorTarget + step.allocation.minorTarget;
+        planCombinedDeficit(step.memberId, combinedTarget, emptyDelta, addedNvByLeaf, firstTargetLookup);
+      });
+    // 수익계좌로 표시된 사람 본인의 부족분(기존 독립 로직)도 1차에 포함한다.
+    first.balancePlan.steps
+      .filter((step) => !step.skipped && subtreeIds.has(step.memberId) && incomeMarked.has(step.memberId))
+      .forEach((step) => {
+        const r = step.result;
+        if (r.achieved) return;
+        const ownIndex = r.ownContributionIndex;
+        const place = r.placements[ownIndex];
+        if (place?.kind !== "self") return;
+        const deficit = r.deficits[ownIndex];
+        if (deficit > 0) addedNvByLeaf.set(step.memberId, salesTopUpForDeficit(deficit).addedNv);
+      });
+
+    // 토글로 "적용"한 사람들의 실적에 실제로 추가 NV를 더한 뒤, 그 상태로 다시 계산한다.
+    // 동시에 ppId를 타고 올라가며 상위 라인전체/총에도 같은 만큼 반영되도록
+    // manualDelta에 누적한다. (planClosing이 내부적으로 쓰는 completedClosingNv는
+    // "본인이 직접 매출을 더 넣었다"는 별개의 가상 계산이 섞여 있어서 쓰지 않고,
+    // 여기서는 실제로 적용한 값만 순수하게 위로 더한다.)
+    const manualDelta = new Map();
+    applied.forEach((memberId) => {
+      const extra = addedNvByLeaf.get(memberId);
+      const row = clonedModel.byId.get(memberId);
+      if (!row || !extra) return;
+      row.ordPv = Number(row.ordPv || 0) + extra;
+      let current = row;
+      const visited = new Set([String(row.userId)]);
+      while (current?.ppId && !visited.has(String(current.ppId))) {
+        const parentId = String(current.ppId);
+        visited.add(parentId);
+        manualDelta.set(parentId, (manualDelta.get(parentId) || 0) + extra);
+        current = clonedModel.byId.get(parentId);
+      }
+    });
+    const second = applied.size ? computeOnce() : first;
+    if (second.error) return { error: second.error };
+    const balancePlan = second.balancePlan;
+
+    // 적용 후 남은 부족분을 같은 방식(본인/하위 균형 분배)으로 다시 계산해서
+    // 배지에 쓴다 — 1차 때와 똑같은 세그먼트 루트에서 다시 재귀를 돌리되,
+    // 이번엔 manualDelta(적용된 값)를 반영한 "현재 실제" 기준으로 본다.
+    const secondTargetLookup = new Map();
+    balancePlan.steps.forEach((step) => {
+      if (!step.skipped) {
+        secondTargetLookup.set(
+          step.memberId,
+          step.allocation.majorTarget + step.allocation.minorTarget,
+        );
+      }
+    });
+    const remainingDeficit = new Map();
+    balancePlan.steps
+      .filter((step) => !step.skipped && subtreeIds.has(step.memberId))
+      .forEach((step) => {
+        const isLeaf = !(clonedModel.children.get(step.memberId) || []).length;
+        if (isLeaf) return;
+        if (!isCombinedSegmentRoot(step.memberId)) return;
+        const combinedTarget = step.allocation.majorTarget + step.allocation.minorTarget;
+        planCombinedDeficit(step.memberId, combinedTarget, manualDelta, remainingDeficit, secondTargetLookup);
+      });
+
+    const badges = {};
+    const notes = {};
+    const incomeToggleIds = new Set();
+    balancePlan.steps
+      .filter((step) => !step.skipped && subtreeIds.has(step.memberId))
+      .forEach((step) => {
+        const isLeaf = !(clonedModel.children.get(step.memberId) || []).length;
+        if (!isLeaf) incomeToggleIds.add(step.memberId);
+        const parentId = String(clonedModel.byId.get(step.memberId)?.ppId ?? "");
+        const parentIsIncome = incomeMarked.has(parentId);
+        if (isLeaf) {
+          const row = clonedModel.byId.get(step.memberId);
+          const ownNv = Number(row?.ordPv || 0);
+          const isApplied = applied.has(step.memberId);
+          if (parentIsIncome) {
+            // 부모가 수익계좌로 표시됨 — 이 리프는 기존처럼 대·소 합친 독립 목표로 본다.
+            const combinedTarget = step.allocation.majorTarget + step.allocation.minorTarget;
+            const achieved = ownNv >= combinedTarget;
+            notes[step.memberId] =
+              `밸런스 배분 · 목표 ${fmt(combinedTarget)} (대·소 구분 없음) · ${achieved ? "채움" : "부족"}`;
+            if (!achieved) {
+              const topUpEntry = salesTopUpForDeficit(combinedTarget - ownNv);
+              badges[step.memberId] = {
+                applied: false,
+                text: `매출 ${fmt(topUpEntry.salesWon)}원 넣으면 → ${fmt(ownNv + topUpEntry.addedNv)} NV (누르면 적용)`,
+              };
+            } else if (isApplied) {
+              badges[step.memberId] = {
+                applied: true,
+                text: `✅ 적용함 · ${fmt(ownNv)} NV (누르면 되돌리기)`,
+              };
+            }
+            return;
+          }
+          // "합계 통과" 세그먼트에 속한 리프 — 세그먼트 루트에서 재귀로 나눠준
+          // remainingDeficit 몫만큼만 이 사람 배지로 보여준다(상위와 중복 계산 없음).
+          const myDeficit = remainingDeficit.get(step.memberId) || 0;
+          notes[step.memberId] = `밸런스 배분(합계 통과 분담) · 본인 ${fmt(ownNv)} NV`;
+          if (myDeficit > 0 && !isApplied) {
+            const topUpEntry = salesTopUpForDeficit(myDeficit);
+            badges[step.memberId] = {
+              applied: false,
+              text: `매출 ${fmt(topUpEntry.salesWon)}원 넣으면 → ${fmt(ownNv + topUpEntry.addedNv)} NV (누르면 적용)`,
+            };
+          } else if (isApplied) {
+            badges[step.memberId] = {
+              applied: true,
+              text: `✅ 적용함 · ${fmt(ownNv)} NV (누르면 되돌리기)`,
+            };
+          }
+          return;
+        }
+        const r = step.result;
+        const p = step.projection;
+        const actualMajor = r.effectiveTotals[r.majorIndex];
+        const actualMinor = r.effectiveTotals[r.minorIndex];
+        const isIncomeAccount = incomeMarked.has(step.memberId);
+
+        if (!isIncomeAccount) {
+          // 수익계좌로 표시 안 한 사람(기본값)은 그냥 통과 라인으로 본다 —
+          // 대·소를 각각 채울 필요 없이 합계가 목표 합계만 넘으면 된다.
+          // (이충언+신주영 본인처럼, 대실적 쪽이 남아돌면 그걸로 소실적
+          // 부족분까지 대신 채워지는 걸로 취급.)
+          const combinedTarget = step.allocation.majorTarget + step.allocation.minorTarget;
+          const combinedActual = rawTotalOf(step.memberId, manualDelta);
+          const combinedAchieved = combinedActual >= combinedTarget;
+          notes[step.memberId] =
+            `밸런스 배분(합계 통과) · 목표 ${fmt(combinedTarget)} · ${combinedAchieved ? "채움" : "부족"}`;
+          // planClosing이 내부적으로 "대·소 각각" 기준으로 완료값을 적용해뒀을 수
+          // 있으니, 합계 기준 판정과 어긋나면 실제 값(actualMajor/actualMinor)으로
+          // 다시 맞춰서 상위 라인전체·총에도 올바르게 반영되게 한다.
+          const row = clonedModel.byId.get(step.memberId);
+          if (Number(row?.completedClosingNv) > 0) {
+            cancelClosingCompletion(clonedModel, step.memberId);
+          }
+          if (combinedAchieved) {
+            // 대·소 어느 쪽에 얼마씩인지는 합계 통과 모드에서 의미가 없으므로
+            // (raw 합계만 상위로 정확히 올라가면 되므로) 전부 majorNv 한쪽에 담는다.
+            applyClosingCompletion(clonedModel, step.memberId, {
+              majorNv: combinedActual,
+              minorNv: 0,
+              completedNv: combinedActual,
+            });
+          }
+          const currentSplitText = `현재 합계 ${fmt(combinedActual)}`;
+          const isApplied = applied.has(step.memberId);
+          // 이 사람 본인 몫만(하위와 균형 분배된 뒤 남은 몫) 배지로 보여준다 —
+          // remainingDeficit이 없으면(=재귀에서 하위가 이미 다 커버) 배지 없음.
+          const myShare = remainingDeficit.get(step.memberId) || 0;
+          if (myShare > 0 && !isApplied) {
+            const topUpEntry = salesTopUpForDeficit(myShare);
+            const ownNv = Number(row?.ordPv || 0);
+            badges[step.memberId] = {
+              applied: false,
+              text: `${currentSplitText} · 본인 매출 ${fmt(topUpEntry.salesWon)}원 넣으면 → 합계 ${fmt(combinedActual + topUpEntry.addedNv)} NV (누르면 적용)`,
+            };
+          } else {
+            badges[step.memberId] = {
+              applied: combinedAchieved || isApplied,
+              text: isApplied
+                ? `✅ ${currentSplitText} · 적용함 (누르면 되돌리기)`
+                : `${currentSplitText} · 채움(합계 통과)`,
+            };
+          }
+          return;
+        }
+
+        // 수익계좌로 표시한 사람은 대·소를 각각 독립적으로 채워야 한다(기존 방식).
+        const achieved = r.achieved
+          ? "채움"
+          : p.feasible === false
+            ? "배치 불가"
+            : "부족";
+        notes[step.memberId] =
+          `밸런스 배분(수익계좌) · 대${fmt(step.allocation.majorTarget)}/소${fmt(step.allocation.minorTarget)} · ${achieved}`;
+        const currentSplitText = `현재 대${fmt(actualMajor)}/소${fmt(actualMinor)}`;
+        // 본인 쪽 라인이 부족하면(하위를 아무리 올려도 안 채워지는 라인) "본인이
+        // 직접 넣으면" 문구를 덧붙인다 — 김정경처럼 하위(김문겸)는 이미 채웠는데
+        // 본인 소실적만 부족한 경우가 여기 해당한다.
+        const ownIndex = r.ownContributionIndex;
+        const place = r.placements[ownIndex];
+        const isApplied = applied.has(step.memberId);
+        if (place?.kind === "self" && r.deficits[ownIndex] > 0 && !isApplied) {
+          const ownNv = Number(clonedModel.byId.get(step.memberId)?.ordPv || 0);
+          const topUpEntry = salesTopUpForDeficit(r.deficits[ownIndex]);
+          badges[step.memberId] = {
+            applied: false,
+            text: `${currentSplitText} · 본인 매출 ${fmt(topUpEntry.salesWon)}원 넣으면 → ${fmt(ownNv + topUpEntry.addedNv)} NV (누르면 적용)`,
+          };
+        } else {
+          badges[step.memberId] = {
+            applied: r.achieved || isApplied,
+            text: isApplied
+              ? `✅ ${currentSplitText} · 적용함 (누르면 되돌리기)`
+              : `${currentSplitText} · ${achieved}`,
+          };
+        }
+      });
+
+    return { clonedModel, badges, notes, manualDelta, incomeToggleIds, incomeMarked };
+  };
+
+  const renderBalancePreviewInto = (rootMemberId) => {
+    const output = document.querySelector(
+      `[data-balance-output="${CSS.escape(rootMemberId)}"]`,
+    );
+    if (!output) return;
+    const result = renderBalancePreview(rootMemberId);
+    if (result.error) {
+      output.innerHTML = `<div class="error">${safe(result.error.message)}</div>`;
+      return;
+    }
+    output.innerHTML = `<div class="box-tree compact">${boxTreeHtml(result.clonedModel, rootMemberId, {
+      depth: 10,
+      badges: result.badges,
+      notes: result.notes,
+      hideDate: true,
+      clickable: false,
+      incomeToggleIds: result.incomeToggleIds,
+      incomeMarked: result.incomeMarked,
+      // 여기(미리보기)는 planClosing이 "본인이 직접 매출을 더 넣었다고 가정"하며
+      // 내부적으로 채워둔 completedClosingNv를 보여주면 안 된다 — 실제로 일어나지
+      // 않은 가상의 값이라 헷갈린다. 원본(본인+대실적+소실적)에 "적용"으로 토글한
+      // 하위의 추가분(manualDelta)만 더해서, 실제로 그 매출을 넣었다면 상위
+      // 라인전체/총이 얼마가 될지 보여준다.
+      totalOf: (row) =>
+        Number(row?.ordPv || 0) +
+        Number(row?.maxPv || 0) +
+        Number(row?.minPv || 0) +
+        (result.manualDelta.get(String(row?.userId)) || 0),
+    })}</div><small class="help">실제로 저장/마감되는 게 아니라 미리보기입니다. 초록 배지를 눌러 "적용"하면 그 사람 실적뿐 아니라 위쪽 라인전체·총에도 같은 만큼 반영됩니다 (진짜 매출 입력이나 저장은 아닙니다).</small>`;
+  };
+
   const renderControls = () => {
     $("topMemberSelect").innerHTML = model.rows
       .map(
@@ -424,7 +808,7 @@ export async function performancePage(root) {
       .join("");
     $("topMajor").value = plan.topMajorTarget;
     $("topMinor").value = plan.topMinorTarget;
-    $("firstRoundTop").hidden = period.round !== 1;
+    $("firstRoundTop").hidden = true;
     const topCollected = collectedPerformance.get(plan.topMemberId) || {};
     const topManual = plan.manualPerformance[plan.topMemberId] || {};
     $("topCurrentMajor").value = topManual.majorNv ?? topCollected.majorNv ?? 0;
@@ -433,11 +817,9 @@ export async function performancePage(root) {
     availableAt.setDate(availableAt.getDate() + 1);
     const collectedAt = new Date(data.collected_at);
     const sourceState =
-      period.round === 1
-        ? "1차는 현재 실적을 직접 입력합니다."
-        : collectedAt >= availableAt
-          ? "마감일 다음 날 이후 수집 자료를 자동으로 불러왔습니다."
-          : `${period.endDate} 마감 다음 날 수집 자료가 아직 없어 최신 자료를 미리보기로 표시합니다.`;
+      collectedAt >= availableAt
+        ? "마감일 다음 날 이후 수집 자료를 자동으로 불러왔습니다."
+        : `${period.endDate} 마감 다음 날 수집 자료가 아직 없어 최신 자료를 미리보기로 표시합니다.`;
     $("perfPeriod").textContent = `${period.year}년 ${period.month}월 ${period.round}차 · ${period.startDate} ~ ${period.endDate} · ${sourceState}`;
     renderClosers();
   };
@@ -469,7 +851,7 @@ export async function performancePage(root) {
       const collected = collectedPerformance.get(id) || {};
       const manual = plan.manualPerformance[id] || {};
       const actualInputs =
-        !isTop && period.round === 1
+        false
           ? `<label>1차 현재 대실적<input data-member-current-major="${safe(id)}" type="number" min="0" step="1" value="${manual.majorNv ?? collected.majorNv ?? 0}"></label><label>1차 현재 소실적<input data-member-current-minor="${safe(id)}" type="number" min="0" step="1" value="${manual.minorNv ?? collected.minorNv ?? 0}"></label>`
           : "";
       const targetInputs = isTop
@@ -565,7 +947,11 @@ export async function performancePage(root) {
         : deficit > 0
           ? `<span class="sale-hint">${isMajor ? "대실적" : "소실적"} 라인 ${fmt(deficit)} NV 부족 · 매출을 넣을 수 있는 하위 코드를 확인하세요.</span>`
           : `<span>추가 매출이 필요 없습니다.</span>`);
-    return `<article class="closing-line"><b>서브${index + 1} · ${isMajor ? "대실적" : "소실적"}</b><small>${role}</small>${ownNote}<small>지금 ${fmt(result.effectiveTotals[index])} NV · 라인 목표 ${fmt(line.lineTarget)} · ${deficit > 0 ? `${fmt(deficit)} NV 부족` : "목표를 채웠습니다"}</small>${saleLine}</article>`;
+    const balanceButton =
+      deficit > 0 && subMember && !balanced
+        ? `<button type="button" class="compact" data-balance-preview="${safe(subMember.userId)}" data-balance-target="${line.lineTarget}">밸런스로 나누기</button><div class="balance-output" data-balance-output="${safe(subMember.userId)}"></div>`
+        : "";
+    return `<article class="closing-line"><b>서브${index + 1} · ${isMajor ? "대실적" : "소실적"}</b><small>${role}</small>${ownNote}<small>지금 ${fmt(result.effectiveTotals[index])} NV · 라인 목표 ${fmt(line.lineTarget)} · ${deficit > 0 ? `${fmt(deficit)} NV 부족` : "목표를 채웠습니다"}</small>${saleLine}${balanceButton}</article>`;
   };
 
   const treeHtml = (item) => {
@@ -679,38 +1065,7 @@ export async function performancePage(root) {
           return [id, { majorTarget: major, minorTarget: minor }];
         }),
     );
-    if (period.round === 1) {
-      plan.manualPerformance = Object.fromEntries(
-        plan.closingMemberIds.map((id) => {
-          if (id === plan.topMemberId) {
-            return [
-              id,
-              {
-                majorNv: Number($("topCurrentMajor").value || 0),
-                minorNv: Number($("topCurrentMinor").value || 0),
-              },
-            ];
-          }
-          return [
-            id,
-            {
-              majorNv: Number(
-                $("closingOptions").querySelector(
-                  `[data-member-current-major="${CSS.escape(id)}"]`,
-                )?.value || 0,
-              ),
-              minorNv: Number(
-                $("closingOptions").querySelector(
-                  `[data-member-current-minor="${CSS.escape(id)}"]`,
-                )?.value || 0,
-              ),
-            },
-          ];
-        }),
-      );
-    } else {
-      plan.manualPerformance = {};
-    }
+    plan.manualPerformance = {};
     model.rows.forEach((row) => {
       const id = String(row.userId);
       const collected = collectedPerformance.get(id) || {};
@@ -838,9 +1193,7 @@ export async function performancePage(root) {
           majorTarget: node.majorTarget,
           minorTarget: node.minorTarget,
         });
-        const manual = period.round === 1
-          ? plan.manualPerformance[node.memberId]
-          : null;
+        const manual = null;
         if (manual) {
           const ownNv = Math.max(
             0,
@@ -1263,8 +1616,37 @@ export async function performancePage(root) {
   $("perfResult").addEventListener("toggle", fitTrees, true);
   window.addEventListener("resize", fitTrees);
   $("perfResult").onclick = async (event) => {
+    const incomeToggle = event.target.closest("[data-toggle-income]");
+    if (incomeToggle) {
+      const memberId = incomeToggle.dataset.toggleIncome;
+      const rootMemberId = incomeToggle.closest("[data-balance-output]")?.dataset.balanceOutput;
+      if (!rootMemberId) return;
+      if (!incomeAccounts.has(rootMemberId)) incomeAccounts.set(rootMemberId, new Set());
+      const marked = incomeAccounts.get(rootMemberId);
+      if (marked.has(memberId)) marked.delete(memberId);
+      else marked.add(memberId);
+      renderBalancePreviewInto(rootMemberId);
+      return;
+    }
+    const badgeToggle = event.target.closest("[data-badge-toggle]");
+    if (badgeToggle) {
+      const leafId = badgeToggle.dataset.badgeToggle;
+      const rootMemberId = badgeToggle.closest("[data-balance-output]")?.dataset.balanceOutput;
+      if (!rootMemberId) return;
+      if (!balanceOverrides.has(rootMemberId)) balanceOverrides.set(rootMemberId, new Set());
+      const applied = balanceOverrides.get(rootMemberId);
+      if (applied.has(leafId)) applied.delete(leafId);
+      else applied.add(leafId);
+      renderBalancePreviewInto(rootMemberId);
+      return;
+    }
     const completeButton = event.target.closest("[data-complete-closing]");
     const cancelButton = event.target.closest("[data-cancel-closing]");
+    const balanceButton = event.target.closest("[data-balance-preview]");
+    if (balanceButton) {
+      renderBalancePreviewInto(balanceButton.dataset.balancePreview);
+      return;
+    }
     if (completeButton) {
       const id = completeButton.dataset.completeClosing;
       const item = items.find((entry) => entry.node.memberId === id);

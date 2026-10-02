@@ -20,9 +20,16 @@ const defaultTotal = (row) =>
 
 export function boxCardHtml(row, options = {}) {
   const id = String(row?.userId ?? "");
-  const badge = options.badge
-    ? `<span class="box-badge">${safe(options.badge)}</span>`
-    : "";
+  // options.badge가 문자열이면 그냥 표시만 한다. {text, applied} 객체면
+  // 누를 때 실제로 그 사람 실적에 반영해서(위쪽까지 다시 계산해서) 다시 그려주는
+  // 토글 배지로 만든다 (호출부의 data-balance-preview 재계산 로직이 실제 상태를 갖고 있고,
+  // 여기서는 그 결과를 보여주기만 한다).
+  const badge =
+    options.badge && typeof options.badge === "object"
+      ? `<span class="box-badge box-badge-toggle${options.badge.applied ? " showing-after" : ""}" data-badge-toggle="${safe(id)}" role="button" tabindex="0" title="눌러서 적용/취소 (위쪽까지 다시 계산됨)">${safe(options.badge.text)}</span>`
+      : options.badge
+        ? `<span class="box-badge">${safe(options.badge)}</span>`
+        : "";
   const note = options.note
     ? `<span class="box-note">${safe(options.note)}</span>`
     : "";
@@ -56,7 +63,17 @@ export function boxCardHtml(row, options = {}) {
       ? `<span class="box-priority on" data-toggle-priority="${safe(id)}" role="button" tabindex="0" title="상위부터 아래로 채우는 중 (누르면 끄기)">▼</span>`
       : `<span class="box-priority" data-toggle-priority="${safe(id)}" role="button" tabindex="0" title="아래에서 위로 채우는 중 (누르면 상위부터 채우기로 전환)">▲</span>`
     : "";
-  return `<${tag} class="box-node ${boxRankTone(row)}${options.selected ? " selected" : ""}${options.marked ? " marked" : ""}${options.sale ? " sale" : ""}${options.hidden ? " box-hidden-card" : ""}${options.priority ? " box-priority-card" : ""}"${attrs}><b>${safe(row?.userName || "이름 없음")}</b><small>*${safe(id)}</small><small>${safe(row?.rankName || "회원")}/${safe(row?.rankMaxName || "회원")}</small>${options.hideDate ? "" : `<small>${safe(row?.regDate || "-")}</small>`}<em>본인 ${number(row?.ordPv)} NV</em><span class="box-line-total">라인 전체 ${number(lineOnly)}</span><span class="box-line-total box-grand-total">총(본인+전체) ${number(grandTotal)}</span>${note}${badge}${sale}${hideBtn}${priorityBtn}</${tag}>`;
+  // "수익계좌" 토글 — 켜면 이 사람은 대·소를 각각 독립적으로 목표까지 채워야
+  // 마감되는 것으로 본다(그래야 본인 계좌로 수당이 생김). 꺼져 있으면(기본값)
+  // 대+소 합계가 목표 합계만 넘으면 되는 것으로 본다(그냥 통과 라인).
+  const incomeToggleable = options.incomeToggleIds?.has(id);
+  const incomeOn = options.incomeMarked?.has(id);
+  const incomeBtn = incomeToggleable
+    ? incomeOn
+      ? `<span class="box-income on" data-toggle-income="${safe(id)}" role="button" tabindex="0" title="수익계좌로 보는 중 · 대·소 각각 채워야 함 (누르면 끄기)">💰수익계좌</span>`
+      : `<span class="box-income" data-toggle-income="${safe(id)}" role="button" tabindex="0" title="지금은 합계만 넘으면 통과 · 누르면 수익계좌(대·소 각각)로 전환">☆수익계좌로</span>`
+    : "";
+  return `<${tag} class="box-node ${boxRankTone(row)}${options.selected ? " selected" : ""}${options.marked ? " marked" : ""}${options.sale ? " sale" : ""}${options.hidden ? " box-hidden-card" : ""}${options.priority ? " box-priority-card" : ""}"${attrs}><b>${safe(row?.userName || "이름 없음")}</b><small>*${safe(id)}</small><small>${safe(row?.rankName || "회원")}/${safe(row?.rankMaxName || "회원")}</small>${options.hideDate ? "" : `<small>${safe(row?.regDate || "-")}</small>`}<em>본인 ${number(row?.ordPv)} NV</em><span class="box-line-total">라인 전체 ${number(lineOnly)}</span><span class="box-line-total box-grand-total">총(본인+전체) ${number(grandTotal)}</span>${note}${badge}${sale}${hideBtn}${priorityBtn}${incomeBtn}</${tag}>`;
 }
 
 // ctx: { byId: Map, children: Map } — buildPerformanceModel 결과나 동일 구조
@@ -121,6 +138,8 @@ export function boxTreeHtml(ctx, rootId, options = {}) {
       hideable,
       hidden: hiddenIds.has(id),
       priority: priorityIds.has(id),
+      incomeToggleIds: options.incomeToggleIds,
+      incomeMarked: options.incomeMarked,
     })}${hiddenCount ? `<div class="box-more">아래 ${hiddenCount}명 더 있음</div>` : ""}${childrenHtml}</li>`;
   };
 
