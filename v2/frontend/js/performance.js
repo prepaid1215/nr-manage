@@ -57,7 +57,7 @@ export async function performancePage(root) {
   const now = new Date();
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   const initialPeriod = closingPeriodForDate(today);
-  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>마감 실적 계산기</h2><p class="help">이번 차수에 실제로 마감할 사업자만 선택하고, 각 사업자의 대·소목표를 직접 입력하세요.</p></div><label>기준일<input id="perfDate" type="date" value="${initialPeriod.endDate}"></label></div><p id="perfPeriod" class="connection-status"></p><p id="perfSource" class="help"></p><p id="perfStorage" class="help"></p><div class="closing-target-row"><label>최상위 마감 사업자<select id="topMemberSelect"></select></label><label>대실적 목표 (NV)<input id="topMajor" type="number" min="1" step="1000"></label><label>소실적 목표 (NV)<input id="topMinor" type="number" min="1" step="1000"></label></div><div id="firstRoundTop" class="closing-target-row" hidden><label>1차 현재 대실적 직접 입력<input id="topCurrentMajor" type="number" min="0" step="1"></label><label>1차 현재 소실적 직접 입력<input id="topCurrentMinor" type="number" min="0" step="1"></label></div><details class="closing-member-picker" open><summary>이번 차수 마감 사업자 <b id="closingCount">0명</b></summary><p class="help">체크한 사업자만 별도로 마감합니다. 체크하지 않은 회원은 목표를 만들지 않고 현재 조직실적과 하위 증가분만 상위로 전달합니다.</p><div id="closingOptions" class="closing-member-options"></div><details class="performance-link-manager"><summary>끊긴 계보 수동으로 잇기</summary><p class="help">중간 회원이 수집자료에 보이지 않을 때 상위와 하위 사업자 회원번호를 직접 연결합니다. 같은 회원번호는 한 번만 계산됩니다.</p><form id="perfManualLinkForm" class="inline-form"><input id="perfLinkParent" placeholder="상위 회원번호" required><input id="perfLinkChild" placeholder="하위 사업자 회원번호" required><input id="perfLinkName" placeholder="하위 사업자 이름"><button class="primary compact" type="submit">계보 연결</button></form><div id="perfLinkError" class="error"></div><div id="perfLinkList" class="fav-list"></div></details></details><button id="perfRun" class="primary">현재 실적과 추천 매출 계산</button> <button id="perfExportCsv" class="secondary compact" type="button">📊 실적 CSV 내보내기</button> <button id="perfExportJson" class="secondary compact" type="button">💾 수집 JSON 내보내기</button><p id="perfNotice" class="help"></p><div id="perfOrder"></div><div id="perfError" class="error"></div></section><section id="perfSummary"></section><section id="perfResult"></section><section id="perfTeamOrders"></section>`;
+  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>마감 실적 계산기</h2><p class="help">이번 차수에 실제로 마감할 사업자만 선택하고, 각 사업자의 대·소목표를 직접 입력하세요.</p></div><label>기준일<input id="perfDate" type="date" value="${initialPeriod.endDate}"></label></div><p id="perfPeriod" class="connection-status"></p><p id="perfSource" class="help"></p><p id="perfStorage" class="help"></p><div class="closing-target-row"><label>최상위 마감 사업자<select id="topMemberSelect"></select></label><label>대실적 목표 (NV)<input id="topMajor" type="number" min="1" step="1000"></label><label>소실적 목표 (NV)<input id="topMinor" type="number" min="1" step="1000"></label></div><div id="firstRoundTop" class="closing-target-row" hidden><label>1차 현재 대실적 직접 입력<input id="topCurrentMajor" type="number" min="0" step="1"></label><label>1차 현재 소실적 직접 입력<input id="topCurrentMinor" type="number" min="0" step="1"></label></div><details class="closing-member-picker" open><summary>이번 차수 마감 사업자 <b id="closingCount">0명</b></summary><p class="help">체크한 사업자만 별도로 마감합니다. 체크하지 않은 회원은 목표를 만들지 않고 현재 조직실적과 하위 증가분만 상위로 전달합니다.</p><div id="closingOptions" class="closing-member-options"></div><details class="performance-link-manager"><summary>끊긴 계보 수동으로 잇기</summary><p class="help">중간 회원이 수집자료에 보이지 않을 때 상위와 하위 사업자 회원번호를 직접 연결합니다. 같은 회원번호는 한 번만 계산됩니다.</p><form id="perfManualLinkForm" class="inline-form"><input id="perfLinkParent" placeholder="상위 회원번호" required><input id="perfLinkChild" placeholder="하위 사업자 회원번호" required><input id="perfLinkName" placeholder="하위 사업자 이름"><button class="primary compact" type="submit">계보 연결</button></form><div id="perfLinkError" class="error"></div><div id="perfLinkList" class="fav-list"></div></details></details><button id="perfRun" class="primary">현재 실적과 추천 매출 계산</button> <button id="perfExportCsv" class="secondary compact" type="button">📊 실적 CSV 내보내기</button> <button id="perfExportJson" class="secondary compact" type="button">💾 수집 JSON 내보내기</button><p id="perfNotice" class="help"></p><div id="perfOrder"></div><div id="perfError" class="error"></div></section><section id="perfSummary"></section><section id="perfResult"></section><section id="perfTeamOrders"></section><section id="perfTeamJoin"></section>`;
   const $ = (id) => document.getElementById(id);
   const { data: auth } = await supabase.auth.getUser().catch(() => ({}));
   const ownerFilter = auth?.user?.id || null;
@@ -485,12 +485,15 @@ export async function performancePage(root) {
       .map((row) => {
         const id = safe(row.member_no);
         const done =
+          row.verified !== false &&
           row.plan_status === "DONE" &&
           row.completion &&
           new Date(row.completed_at || row.completion.completedAt) >= startsAt;
         const state = done
           ? `✅ 완료 · 대 ${fmt(row.completion.majorNv)} / 소 ${fmt(row.completion.minorNv)}`
-          : "⏳ 대기";
+          : row.verified === false
+            ? "⚠ 수집 확인 전 (마감은 인정 안 됨)"
+            : "⏳ 대기";
         const input = (kind, value) =>
           `<input type="number" min="1" step="1" style="width:64px" data-order-${kind}="${id}" value="${value}">`;
         return `<tr>${td(`${safe(row.member_name || "")} (${id})`)}${td(
@@ -504,6 +507,51 @@ export async function performancePage(root) {
       .join("");
     box.innerHTML = `<div style="margin:8px 0;padding:8px;border:1px solid #e5e7eb;border-radius:8px"><b>팀 마감 오더·현황 · ${period.year}년 ${period.month}월 ${period.round}차</b><div class="help">목표는 만 단위로 입력합니다 (40 = 40만 NV). 아래 사람 계산기에서 "오더 목표 적용"으로 불러옵니다.</div><table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr>${th("사업자")}${th("오더 대/소")}${th("상태")}${th("")}</tr></thead><tbody>${body}</tbody></table><div id="perfTeamOrderMsg" class="help"></div></div>`;
   };
+  // 팀 가입 현황: 내 계보 아래 사람이 앱에 가입했는지, 소유 확인(수집)까지 됐는지 보여준다.
+  // DB 함수가 없거나 아래에 사람이 없으면 아무것도 표시하지 않는다.
+  const renderTeamJoin = async () => {
+    const box = $("perfTeamJoin");
+    if (!box) return;
+    const { data: rows, error: joinError } = await supabase.rpc("get_downline_signup_status");
+    if (joinError || !Array.isArray(rows) || !rows.length) {
+      box.innerHTML = "";
+      return;
+    }
+    const joined = rows.filter((row) => row.has_account).length;
+    const verified = rows.filter((row) => row.verified).length;
+    const mark = (row) =>
+      row.verified
+        ? "✅ 가입 · 수집 확인"
+        : row.has_account
+          ? "🟡 가입 · 수집 확인 전"
+          : "❌ 미가입";
+    const td = (html) => `<td style="padding:4px 6px;border-top:1px solid #e5e7eb">${html}</td>`;
+    const body = rows
+      .map(
+        (row) =>
+          `<tr>${td(`${safe(row.member_name || "")} (${safe(row.member_no)})`)}${td(
+            safe(row.rank_name || ""),
+          )}${td(mark(row))}</tr>`,
+      )
+      .join("");
+    box.innerHTML = `<details style="margin:8px 0;padding:8px;border:1px solid #e5e7eb;border-radius:8px"><summary><b>팀 가입 현황 · 가입 ${joined} / 전체 ${rows.length}명 (수집 확인 ${verified}명)</b></summary><div class="help">내 계보 아래 사람입니다. 앱에 가입하고 NRC 수집까지 마치면 마감 값과 현황이 위로 전달됩니다. 같은 사람의 여러 박스는 한 명으로 묶어 보여줍니다.</div><button type="button" class="compact" id="perfCopyJoin">가입 안내 문구 복사</button> <span id="perfCopyJoinMsg" class="help"></span><table style="width:100%;font-size:12px;border-collapse:collapse;margin-top:6px"><thead><tr><th style="text-align:left;padding:4px 6px">사람</th><th style="text-align:left;padding:4px 6px">직급</th><th style="text-align:left;padding:4px 6px">상태</th></tr></thead><tbody>${body}</tbody></table></details>`;
+  };
+  $("perfTeamJoin").onclick = async (event) => {
+    if (!event.target.closest("#perfCopyJoin")) return;
+    const text =
+      "NRC 사업관리 앱 가입 안내\n" +
+      "주소: https://prepaid1215.github.io/nr-manage/v2/frontend/index.html\n" +
+      '로그인 화면의 "처음이신가요? 회원가입"에서 본인 회원번호로 가입한 뒤, NRC 데이터 수집까지 한 번 진행해 주세요.\n' +
+      "(본인 회원번호로 수집된 자료로 계정 소유를 확인합니다)";
+    const message = $("perfCopyJoinMsg");
+    try {
+      await navigator.clipboard.writeText(text);
+      message.textContent = "복사했습니다. 카톡 등에 붙여넣으세요.";
+    } catch {
+      message.textContent = text;
+    }
+  };
+
   $("perfTeamOrders").onclick = async (event) => {
     const save = event.target.closest("[data-order-save]");
     const remove = event.target.closest("[data-order-delete]");
@@ -542,6 +590,7 @@ export async function performancePage(root) {
   await loadIncomingClosings();
   await loadMyOrder();
   await renderTeamOrders();
+  await renderTeamJoin();
 
   const descendantsOf = (topId) => {
     const out = [];
@@ -1917,6 +1966,7 @@ export async function performancePage(root) {
     await loadIncomingClosings();
     await loadMyOrder();
     renderTeamOrders();
+    renderTeamJoin();
     renderControls();
     runPlan();
   };
