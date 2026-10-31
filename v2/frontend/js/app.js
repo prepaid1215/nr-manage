@@ -814,7 +814,7 @@ async function organizationDashboard(targetOwner) {
           ),
         sub1 = branchTotal(descendants[0]),
         sub2 = branchTotal(descendants[1]),
-        content = `<b>${safe(item.userName || "이름 없음")}${item.manualLink ? ' <i class="manual-link-badge">수동</i>' : ""}</b><small>*${safe(String(item.userId || "").slice(-6))} · ${safe(item.rankName || "회원")} / ${safe(item.rankMaxName || "회원")}</small><span class="family-own">본인 NV <strong>${number(item.ordPv)}</strong></span><span class="family-sales"><em>서브1 실적<strong>${number(sub1)}</strong></em><em>서브2 실적<strong>${number(sub2)}</strong></em><em>대실적<strong>${number(item.maxPv)}</strong></em><em>소실적<strong>${number(item.minPv)}</strong></em></span>`;
+        content = `<b>${safe(item.userName || "이름 없음")}${item.manualLink ? ' <i class="manual-link-badge">수동</i>' : ""}</b><small>*${safe(String(item.userId || "").slice(-6))} · ${safe(item.rankName || "회원")} / ${safe(item.rankMaxName || "회원")}</small><span class="family-own">본인 NV <strong>${number(item.ordPv)}</strong></span><span class="family-sales"><em>서브1 실적<strong>${number(sub1)}</strong></em><em>서브2 실적<strong>${number(sub2)}</strong></em>${sub1 >= sub2 ? `<em>대실적<strong>${number(item.maxPv)}</strong></em><em>소실적<strong>${number(item.minPv)}</strong></em>` : `<em>소실적<strong>${number(item.minPv)}</strong></em><em>대실적<strong>${number(item.maxPv)}</strong></em>`}</span>`;
       return `<li><button class="family-node" data-member="${safe(item.userId)}" data-tree-focus type="button">${content}</button>${descendants.length ? `<ul>${descendants.map((child) => horizontalTreeNode(child, next)).join("")}</ul>` : ""}</li>`;
     };
     const render = () => {
