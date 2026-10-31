@@ -995,9 +995,12 @@ export function planSixtyKSplit(model, lineRootId, deficitNv, defaultPlacements 
       salesNv.set(id, numeric(salesNv.get(id)) + nvOf(salesWon));
     });
     const after = minorNvByMember(model, lineRootId, salesNv);
-    return eligible.filter(
+    const crossed = eligible.filter(
       (id) => numeric(base.get(id)) < SIXTY_K_NV && numeric(after.get(id)) >= SIXTY_K_NV,
     );
+    // 같은 수라면 하위 박스들의 소실적 합이 더 큰 안(아래 칸에 넣어 위로 올리는 안)을 고른다.
+    crossed.minorSum = [...after.values()].reduce((sum, value) => sum + value, 0);
+    return crossed;
   };
   const baselineQualified = qualifiedFor(
     defaultPlacements.map((p) => ({ memberId: String(p.memberId), salesWon: p.salesWon })),
@@ -1011,7 +1014,10 @@ export function planSixtyKSplit(model, lineRootId, deficitNv, defaultPlacements 
     if (
       !best ||
       qualified.length > best.qualified.length ||
-      (qualified.length === best.qualified.length && placements.length < best.placements.length)
+      (qualified.length === best.qualified.length && placements.length < best.placements.length) ||
+      (qualified.length === best.qualified.length &&
+        placements.length === best.placements.length &&
+        qualified.minorSum > best.qualified.minorSum)
     ) {
       best = { placements, qualified };
     }
@@ -1033,8 +1039,8 @@ export function planSixtyKSplit(model, lineRootId, deficitNv, defaultPlacements 
   return {
     totalWon: total,
     placements: best.placements.map((p) => ({ ...p, addedNv: nvOf(p.salesWon) })),
-    qualified: best.qualified,
-    baselineQualified,
+    qualified: [...best.qualified],
+    baselineQualified: [...baselineQualified],
     improves: best.qualified.length > baselineQualified.length,
   };
 }
