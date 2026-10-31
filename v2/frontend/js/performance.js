@@ -417,6 +417,40 @@ export async function performancePage(root) {
   await loadPreviousPerformance();
   renderStorageNote();
 
+  // 하위 계정이 이번 차수에 "마감 완료"로 확정한 본인 마감 값을 상위(이 계정)가 자동으로
+  // 받아온다. 해당 하위를 마감 사업자로 자동 포함하고, 목표는 하위가 확정한 값으로 맞춘다.
+  // (DB 함수 get_downline_period_closings가 없으면 조용히 건너뛴다)
+  let incomingClosings = {};
+  const loadIncomingClosings = async () => {
+    incomingClosings = {};
+    if (storage !== "supabase") return;
+    const { data: rows, error: incomingError } = await supabase.rpc(
+      "get_downline_period_closings",
+      { p_period_id: period.periodId },
+    );
+    if (incomingError || !Array.isArray(rows)) return;
+    rows.forEach((row) => {
+      const id = String(row.member_no);
+      const completion = row.completion;
+      if (
+        !model.byId.has(id) ||
+        id === String(plan.topMemberId) ||
+        !completion ||
+        Number(completion.completedNv) <= 0
+      ) {
+        return;
+      }
+      const target = {
+        majorTarget: Number(row.major_target),
+        minorTarget: Number(row.minor_target),
+      };
+      incomingClosings[id] = { ...target, completion };
+      if (!plan.closingMemberIds.includes(id)) plan.closingMemberIds.push(id);
+      plan.targetOverrides[id] = target;
+    });
+  };
+  await loadIncomingClosings();
+
   const descendantsOf = (topId) => {
     const out = [];
     const stack = [...(model.children.get(String(topId)) || [])];
@@ -1122,6 +1156,24 @@ export async function performancePage(root) {
       plan.targetOverrides,
       plan.manualPerformance,
     );
+    const receivedNames = [];
+    Object.entries(incomingClosings).forEach(([id, info]) => {
+      const target = plan.targetOverrides[id];
+      if (
+        !plan.closingMemberIds.includes(id) ||
+        !target ||
+        target.majorTarget !== info.majorTarget ||
+        target.minorTarget !== info.minorTarget
+      ) {
+        return;
+      }
+      plan.completions[id] = {
+        ...info.completion,
+        signature: lastSignature,
+        fromDownline: true,
+      };
+      receivedNames.push(model.byId.get(id)?.userName || id);
+    });
     const validCompletions = pruneInvalidCompletions(
       plan.completions,
       lastSignature,
@@ -1130,9 +1182,16 @@ export async function performancePage(root) {
       Object.keys(plan.completions).length -
       Object.keys(validCompletions).length;
     plan.completions = validCompletions;
-    $("perfNotice").textContent = invalidatedCount
-      ? `최상위 사업자·목표·마감 사업자 조건이 바뀌어 이전 완료 상태 ${invalidatedCount}건을 초기화하고 다시 계산했습니다.`
-      : "";
+    $("perfNotice").textContent = [
+      invalidatedCount
+        ? `최상위 사업자·목표·마감 사업자 조건이 바뀌어 이전 완료 상태 ${invalidatedCount}건을 초기화하고 다시 계산했습니다.`
+        : "",
+      receivedNames.length
+        ? `${receivedNames.join(", ")} 계정에서 마감 완료로 보낸 값을 반영했습니다.`
+        : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
     try {
       model.rows.forEach((row) => {
         delete row.completedClosingMajorNv;
@@ -1684,6 +1743,7 @@ export async function performancePage(root) {
     plan.completions ||= {};
     if (!model.byId.has(String(plan.topMemberId))) plan = defaultPlan();
     await loadPreviousPerformance();
+    await loadIncomingClosings();
     renderControls();
     runPlan();
   };
@@ -1740,6 +1800,7 @@ export async function performancePage(root) {
       await persistPlan();
     }
     if (cancelButton) {
+      delete incomingClosings[cancelButton.dataset.cancelClosing];
       plan.completions = cancelCompletionCascade(
         model,
         plan.completions,
