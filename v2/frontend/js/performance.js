@@ -113,10 +113,11 @@ export async function performancePage(root) {
   let manualLinks = [];
   const snapshotModels = [];
   if (ownerId) {
+    // 하위 계정이 자기 NRC 계정으로 수집한 최신 자료도 읽어서 계보에 이어붙이므로
+    // (읽기 권한은 DB 정책이 정한다) 여기서는 owner_id로 좁히지 않는다.
     const { data: snapshots } = await supabase
       .from("nrc_sync_snapshots")
       .select("payload,collected_at,source_account_id")
-      .eq("owner_id", ownerId)
       .eq("snapshot_type", "combined")
       .order("collected_at", { ascending: false })
       .limit(100);
