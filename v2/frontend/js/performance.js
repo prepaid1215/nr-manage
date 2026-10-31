@@ -436,7 +436,12 @@ export async function performancePage(root) {
         !model.byId.has(id) ||
         id === String(plan.topMemberId) ||
         !completion ||
-        Number(completion.completedNv) <= 0
+        Number(completion.completedNv) <= 0 ||
+        // 이번 차수 시작 전에 확정된 옛 기록은 이번 마감 값이 아니므로 받지 않는다.
+        !(
+          new Date(completion.completedAt || row.completed_at) >=
+          new Date(`${period.startDate}T00:00:00`)
+        )
       ) {
         return;
       }
