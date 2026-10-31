@@ -976,12 +976,12 @@ export async function performancePage(root) {
           )
         : null;
     const sixtyLine = sixty?.improves
-      ? `<span class="sale-hint sixty-k"><b>6만 NV 기준 추천</b> · ${sixty.placements
+      ? `<span class="sale-hint sixty-k"><b>6만 NV 기준 추천</b></span>${sixty.placements
           .map(
             (p) =>
-              `${safe(model.byId.get(p.memberId)?.userName || "-")} (${safe(p.memberId)}) <b>${fmt(p.salesWon)}원</b> (+${fmt(p.addedNv)} NV)`,
+              `<span class="sale-hint">${safe(model.byId.get(p.memberId)?.userName || "-")} (${safe(p.memberId)}) · ${fmt(p.salesWon)}원 → +${fmt(p.addedNv)} NV</span>`,
           )
-          .join(" + ")} → 소실적 6만 NV 달성: ${sixty.qualified
+          .join("")}<span class="sale-hint">소실적 6만 NV 달성: ${sixty.qualified
           .map((id) => safe(model.byId.get(id)?.userName || id))
           .join(", ")}</span><small>같은 금액(${fmt(sixty.totalWon)}원)을 나눠 넣어서 이 라인 아래에서 6만 NV를 새로 넘기는 사람이 늘어납니다.</small>`
       : "";
