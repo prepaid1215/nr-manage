@@ -1187,6 +1187,7 @@ console.log("balanced completed closer top-up tests passed");
   assert.equal(plan.improves, true);
   assert.deepEqual(plan.baselineQualified, []);
   assert.ok(plan.qualified.includes("P"));
+  assert.deepEqual(plan.placements.map((p) => p.memberId).sort(), ["L", "R"]);
   assert.equal(plan.placements.reduce((sum, p) => sum + p.salesWon, 0), 22000);
   assert.ok(plan.placements.every((p) => p.salesWon >= 10000));
   assert.equal(planSixtyKSplit(model, "P", 0, []), null);

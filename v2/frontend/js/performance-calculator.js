@@ -1011,15 +1011,26 @@ export function planSixtyKSplit(model, lineRootId, deficitNv, defaultPlacements 
   let best = null;
   const consider = (placements) => {
     const qualified = qualifiedFor(placements);
+    // 6만/6만처럼 한 박스의 두 라인을 모두 올려야 넘는 경우에는, 그 박스의 바로 아래
+    // 박스 코드에 나눠 넣는 안을 우선한다. (이미 한쪽이 충분하면 맨 아래 칸이 우선)
+    const qualifiedSet = new Set(qualified);
+    const direct =
+      placements.length >= 2 &&
+      placements.every((p) => qualifiedSet.has(String(model.byId.get(p.memberId)?.ppId ?? "")))
+        ? 1
+        : 0;
+    const same = best && qualified.length === best.qualified.length;
     if (
       !best ||
       qualified.length > best.qualified.length ||
-      (qualified.length === best.qualified.length && placements.length < best.placements.length) ||
-      (qualified.length === best.qualified.length &&
+      (same && placements.length < best.placements.length) ||
+      (same && placements.length === best.placements.length && direct > best.direct) ||
+      (same &&
         placements.length === best.placements.length &&
+        direct === best.direct &&
         qualified.minorSum > best.qualified.minorSum)
     ) {
-      best = { placements, qualified };
+      best = { placements, qualified, direct };
     }
   };
   ids.forEach((id) => consider([{ memberId: id, salesWon: total }]));

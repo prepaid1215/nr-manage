@@ -20,7 +20,7 @@ import {
   pruneInvalidCompletions,
   salesTopUpForDeficit,
   sortMembersDeepestFirst,
-} from "./performance-calculator.js?v=20261031-2";
+} from "./performance-calculator.js?v=20261031-3";
 import { boxTreeHtml } from "./box-tree.js?v=20261002-1";
 import {
   addManualLink,
