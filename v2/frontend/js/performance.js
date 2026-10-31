@@ -20,7 +20,7 @@ import {
   pruneInvalidCompletions,
   salesTopUpForDeficit,
   sortMembersDeepestFirst,
-} from "./performance-calculator.js?v=20261031-3";
+} from "./performance-calculator.js?v=20261031-4";
 import { boxTreeHtml } from "./box-tree.js?v=20261002-1";
 import {
   addManualLink,
@@ -1014,6 +1014,17 @@ export async function performancePage(root) {
               : [],
           )
         : null;
+    const sixtyAlternatives =
+      sixty && !sixty.improves && sixty.alternatives.length >= 2
+        ? `<span class="sale-hint sixty-k"><b>같은 결과로 넣을 수 있는 곳</b> · ${fmt(sixty.totalWon)}원 · 6만 NV 달성: ${sixty.qualified
+            .map((id) => safe(model.byId.get(id)?.userName || id))
+            .join(", ")}</span>${sixty.alternatives
+            .map(
+              (id) =>
+                `<span class="sale-hint">${safe(model.byId.get(id)?.userName || "-")} (${safe(id)})</span>`,
+            )
+            .join("")}`
+        : "";
     const sixtyLine = sixty?.improves
       ? `<span class="sale-hint sixty-k"><b>6만 NV 기준 추천</b></span>${sixty.placements
           .map(
@@ -1028,7 +1039,7 @@ export async function performancePage(root) {
       deficit > 0 && subMember && !balanced
         ? `<button type="button" class="compact" data-balance-preview="${safe(subMember.userId)}" data-balance-target="${line.lineTarget}">밸런스로 나누기</button><div class="balance-output" data-balance-output="${safe(subMember.userId)}"></div>`
         : "";
-    return `<article class="closing-line"><b>서브${index + 1} · ${isMajor ? "대실적" : "소실적"}</b><small>${role}</small>${ownNote}<small>지금 ${fmt(result.effectiveTotals[index])} NV · 라인 목표 ${fmt(line.lineTarget)} · ${deficit > 0 ? `${fmt(deficit)} NV 부족` : "목표를 채웠습니다"}</small>${saleLine}${sixtyLine}${balanceButton}</article>`;
+    return `<article class="closing-line"><b>서브${index + 1} · ${isMajor ? "대실적" : "소실적"}</b><small>${role}</small>${ownNote}<small>지금 ${fmt(result.effectiveTotals[index])} NV · 라인 목표 ${fmt(line.lineTarget)} · ${deficit > 0 ? `${fmt(deficit)} NV 부족` : "목표를 채웠습니다"}</small>${saleLine}${sixtyLine}${sixtyAlternatives}${balanceButton}</article>`;
   };
 
   const treeHtml = (item) => {

@@ -1047,8 +1047,17 @@ export function planSixtyKSplit(model, lineRootId, deficitNv, defaultPlacements 
     }
   }
   if (!best) return null;
+  // 한 곳에 몰아 넣는 안이면, 6만 달성자가 같은 다른 단일 코드도 함께 알려준다(같은 결과).
+  const bestKey = [...best.qualified].sort().join(",");
+  const alternatives =
+    best.placements.length === 1 && best.qualified.length > 0
+      ? ids.filter(
+          (id) => [...qualifiedFor([{ memberId: id, salesWon: total }])].sort().join(",") === bestKey,
+        )
+      : [];
   return {
     totalWon: total,
+    alternatives,
     placements: best.placements.map((p) => ({ ...p, addedNv: nvOf(p.salesWon) })),
     qualified: [...best.qualified],
     baselineQualified: [...baselineQualified],
