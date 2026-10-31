@@ -138,6 +138,11 @@ export async function performancePage(root) {
         });
       } catch {}
     });
+    // 같은 회원이 여러 수집에 겹치면 나중에 이어붙인 값이 이긴다. 최신 자료가
+    // 마지막에 와야 하므로 오래된 것부터 붙인다 (예전 수집 자료가 최신 값을 덮어쓰던 문제).
+    snapshotModels.sort(
+      (a, b) => new Date(a.collectedAt) - new Date(b.collectedAt),
+    );
     let changed = true;
     let passes = 0;
     while (changed && passes <= snapshotModels.length) {
@@ -157,7 +162,7 @@ export async function performancePage(root) {
     manualLinks.forEach((link) => {
       const childId = String(link.member_id);
       const source =
-        snapshotModels.find(({ model: sourceModel }) =>
+        [...snapshotModels].reverse().find(({ model: sourceModel }) =>
           sourceModel.byId.has(childId),
         )?.model || (model.byId.has(childId) ? model : null);
       if (source) {
