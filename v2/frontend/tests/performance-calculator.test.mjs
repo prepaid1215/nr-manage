@@ -16,6 +16,7 @@ import {
   planClosing,
   planExplicitClosings,
   planBalancedClosingTopUp,
+  planSixtyKSplit,
   planSignature,
   projectClosingCompletion,
   pruneInvalidCompletions,
@@ -1168,3 +1169,25 @@ const projectedOnly = planBalancedClosingTopUp(
 assert.equal(projectedOnly.balancedTargetNv, 100000);
 assert.equal(projectedOnly.projection.topUps[projectedOnly.result.minorIndex].salesWon, 50000);
 console.log("balanced completed closer top-up tests passed");
+
+// 6만 NV 기준: 한쪽 라인에 몰면 본인 코드가 작은 쪽을 못 올려서 6만을 못 넘는다.
+// 같은 금액을 두 곳에 나눠 넣으면 넘는다.
+{
+  const rows = [
+    { userId: "P", userName: "P", ppId: "", abPos: 0, rankName: "GD", rankMaxName: "GD", ordPv: 24300, maxPv: 54270, minPv: 32400 },
+    { userId: "L", userName: "L", ppId: "P", abPos: 1, rankName: "GD", rankMaxName: "GD", ordPv: 24300, maxPv: 8100, minPv: 0 },
+    { userId: "R", userName: "R", ppId: "P", abPos: 2, rankName: "GD", rankMaxName: "GD", ordPv: 54270, maxPv: 0, minPv: 0 },
+  ];
+  const model = buildPerformanceModel({
+    rstLst: rows.map(({ ordPv, maxPv, minPv, ...rest }) => rest),
+    members: rows.map(({ userId, ordPv, maxPv, minPv }) => ({ userId, ordPv, maxPv, minPv })),
+  });
+  const plan = planSixtyKSplit(model, "P", 17599, [{ memberId: "R", salesWon: 22000 }]);
+  assert.equal(plan.totalWon, 22000);
+  assert.equal(plan.improves, true);
+  assert.deepEqual(plan.baselineQualified, []);
+  assert.ok(plan.qualified.includes("P"));
+  assert.equal(plan.placements.reduce((sum, p) => sum + p.salesWon, 0), 22000);
+  assert.ok(plan.placements.every((p) => p.salesWon >= 10000));
+  assert.equal(planSixtyKSplit(model, "P", 0, []), null);
+}

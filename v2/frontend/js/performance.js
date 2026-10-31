@@ -15,11 +15,12 @@ import {
   planClosing,
   planSignature,
   planBalancedClosingTopUp,
+  planSixtyKSplit,
   projectClosingCompletion,
   pruneInvalidCompletions,
   salesTopUpForDeficit,
   sortMembersDeepestFirst,
-} from "./performance-calculator.js?v=20260908-57";
+} from "./performance-calculator.js?v=20261031-1";
 import { boxTreeHtml } from "./box-tree.js?v=20261002-1";
 import {
   addManualLink,
@@ -959,11 +960,36 @@ export async function performancePage(root) {
         : deficit > 0
           ? `<span class="sale-hint">${isMajor ? "대실적" : "소실적"} 라인 ${fmt(deficit)} NV 부족 · 매출을 넣을 수 있는 하위 코드를 확인하세요.</span>`
           : `<span>추가 매출이 필요 없습니다.</span>`);
+    // 6만 NV 기준: 인증직급 GD 이상은 소실적 6만 NV 이상일 때 매출장려금이 나온다.
+    // 같은 금액을 이 라인 아래 모든 하위 구조에서 6만을 새로 넘기는 사람이 가장 많아지도록
+    // 나눠 넣는 안을, 기본 추천보다 나을 때만 보여준다. (아래에 하위 마감자가 있으면
+    // 그 마감자의 라인에서 따로 보여준다.)
+    const sixty =
+      deficit > 0 && subMember && !balanced && !line.childAllocation && topUp.salesWon > 0
+        ? planSixtyKSplit(
+            model,
+            String(subMember.userId),
+            deficit,
+            placement.target
+              ? [{ memberId: String(placement.target.userId), salesWon: topUp.salesWon }]
+              : [],
+          )
+        : null;
+    const sixtyLine = sixty?.improves
+      ? `<span class="sale-hint sixty-k"><b>6만 NV 기준 추천</b> · ${sixty.placements
+          .map(
+            (p) =>
+              `${safe(model.byId.get(p.memberId)?.userName || "-")} (${safe(p.memberId)}) <b>${fmt(p.salesWon)}원</b> (+${fmt(p.addedNv)} NV)`,
+          )
+          .join(" + ")} → 소실적 6만 NV 달성: ${sixty.qualified
+          .map((id) => safe(model.byId.get(id)?.userName || id))
+          .join(", ")}</span><small>같은 금액(${fmt(sixty.totalWon)}원)을 나눠 넣어서 이 라인 아래에서 6만 NV를 새로 넘기는 사람이 늘어납니다.</small>`
+      : "";
     const balanceButton =
       deficit > 0 && subMember && !balanced
         ? `<button type="button" class="compact" data-balance-preview="${safe(subMember.userId)}" data-balance-target="${line.lineTarget}">밸런스로 나누기</button><div class="balance-output" data-balance-output="${safe(subMember.userId)}"></div>`
         : "";
-    return `<article class="closing-line"><b>서브${index + 1} · ${isMajor ? "대실적" : "소실적"}</b><small>${role}</small>${ownNote}<small>지금 ${fmt(result.effectiveTotals[index])} NV · 라인 목표 ${fmt(line.lineTarget)} · ${deficit > 0 ? `${fmt(deficit)} NV 부족` : "목표를 채웠습니다"}</small>${saleLine}${balanceButton}</article>`;
+    return `<article class="closing-line"><b>서브${index + 1} · ${isMajor ? "대실적" : "소실적"}</b><small>${role}</small>${ownNote}<small>지금 ${fmt(result.effectiveTotals[index])} NV · 라인 목표 ${fmt(line.lineTarget)} · ${deficit > 0 ? `${fmt(deficit)} NV 부족` : "목표를 채웠습니다"}</small>${saleLine}${sixtyLine}${balanceButton}</article>`;
   };
 
   const treeHtml = (item) => {

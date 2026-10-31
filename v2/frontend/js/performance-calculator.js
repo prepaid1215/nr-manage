@@ -929,3 +929,112 @@ export function planClosing(
     verified,
   };
 }
+
+// ── 6만 NV 기준 ─────────────────────────────────────────────
+// 인증직급 GD 이상은 소실적 6만 NV 이상일 때 매출장려금이 나온다. 한 라인에 넣을 매출을
+// 맨 아래 한 곳에 몰지 않고, 그 아래 모든 하위 구조에서 6만을 새로 넘기는 사람이 가장
+// 많아지도록 같은 금액을 한두 곳에 나눠 넣는 안을 찾는다. (총 지출 = 기본 추천과 같다.)
+export const SIXTY_K_NV = 60000;
+
+export function isSixtyKEligible(row) {
+  const rank = String(row?.rankMaxName || row?.rankName || "회원").toUpperCase();
+  return PROMOTION_ORDER.indexOf(rank) >= PROMOTION_ORDER.indexOf("GD");
+}
+
+function subtreeMemberIds(model, rootId) {
+  const ids = [];
+  const seen = new Set();
+  const stack = [String(rootId)];
+  while (stack.length) {
+    const id = stack.pop();
+    if (!id || seen.has(id) || !model.byId.has(id)) continue;
+    seen.add(id);
+    ids.push(id);
+    (model.children.get(id) || []).forEach((child) => stack.push(memberId(child)));
+  }
+  return ids;
+}
+
+// salesNvById: 회원번호 → 그 회원 본인 코드에 새로 넣는 NV. 소실적 규칙은 calculatePerformance와
+// 같다(본인 매출은 두 라인 중 더 작은 쪽에 합산, 소실적 = 두 값 중 작은 쪽).
+function minorNvByMember(model, rootId, salesNvById = new Map()) {
+  const subSales = new Map();
+  const sales = (id) => {
+    if (subSales.has(id)) return subSales.get(id);
+    let sum = numeric(salesNvById.get(id));
+    (model.children.get(id) || []).forEach((child) => {
+      sum += sales(memberId(child));
+    });
+    subSales.set(id, sum);
+    return sum;
+  };
+  const total = (row) => branchBreakdown(row).total + sales(memberId(row));
+  const result = new Map();
+  subtreeMemberIds(model, rootId).forEach((id) => {
+    const row = model.byId.get(id);
+    const kids = model.children.get(id) || [];
+    const lines = [kids[0] ? total(kids[0]) : 0, kids[1] ? total(kids[1]) : 0];
+    const own = numeric(row.ordPv) + numeric(salesNvById.get(id));
+    const withOwn = lines[0] < lines[1] ? [lines[0] + own, lines[1]] : [lines[0], lines[1] + own];
+    result.set(id, Math.min(...withOwn));
+  });
+  return result;
+}
+
+export function planSixtyKSplit(model, lineRootId, deficitNv, defaultPlacements = []) {
+  const topUp = salesTopUpForDeficit(deficitNv);
+  if (topUp.salesWon <= 0) return null;
+  const ids = subtreeMemberIds(model, lineRootId);
+  if (!ids.length) return null;
+  const eligible = ids.filter((id) => isSixtyKEligible(model.byId.get(id)));
+  const base = minorNvByMember(model, lineRootId);
+  const nvOf = (won) => Math.floor(won / 1000) * 810;
+  const qualifiedFor = (placements) => {
+    const salesNv = new Map();
+    placements.forEach(({ memberId: id, salesWon }) => {
+      salesNv.set(id, numeric(salesNv.get(id)) + nvOf(salesWon));
+    });
+    const after = minorNvByMember(model, lineRootId, salesNv);
+    return eligible.filter(
+      (id) => numeric(base.get(id)) < SIXTY_K_NV && numeric(after.get(id)) >= SIXTY_K_NV,
+    );
+  };
+  const baselineQualified = qualifiedFor(
+    defaultPlacements.map((p) => ({ memberId: String(p.memberId), salesWon: p.salesWon })),
+  );
+  const total = topUp.salesWon;
+  const MIN_PIECE = 10000;
+  const step = total <= 100000 ? 1000 : 2000;
+  let best = null;
+  const consider = (placements) => {
+    const qualified = qualifiedFor(placements);
+    if (
+      !best ||
+      qualified.length > best.qualified.length ||
+      (qualified.length === best.qualified.length && placements.length < best.placements.length)
+    ) {
+      best = { placements, qualified };
+    }
+  };
+  ids.forEach((id) => consider([{ memberId: id, salesWon: total }]));
+  if (total >= MIN_PIECE * 2) {
+    for (let i = 0; i < ids.length; i += 1) {
+      for (let j = i + 1; j < ids.length; j += 1) {
+        for (let first = MIN_PIECE; first <= total - MIN_PIECE; first += step) {
+          consider([
+            { memberId: ids[i], salesWon: first },
+            { memberId: ids[j], salesWon: total - first },
+          ]);
+        }
+      }
+    }
+  }
+  if (!best) return null;
+  return {
+    totalWon: total,
+    placements: best.placements.map((p) => ({ ...p, addedNv: nvOf(p.salesWon) })),
+    qualified: best.qualified,
+    baselineQualified,
+    improves: best.qualified.length > baselineQualified.length,
+  };
+}
