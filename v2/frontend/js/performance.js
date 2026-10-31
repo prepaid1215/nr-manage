@@ -1161,6 +1161,10 @@ export async function performancePage(root) {
       plan.targetOverrides,
       plan.manualPerformance,
     );
+    // 하위에서 받아 저장돼 있던 완료 값은 매번 새로 받은 값으로만 다시 채운다.
+    Object.keys(plan.completions).forEach((id) => {
+      if (plan.completions[id]?.fromDownline) delete plan.completions[id];
+    });
     const receivedNames = [];
     Object.entries(incomingClosings).forEach(([id, info]) => {
       const target = plan.targetOverrides[id];
