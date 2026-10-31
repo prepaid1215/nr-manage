@@ -58,9 +58,15 @@ export async function performancePage(root) {
   const initialPeriod = closingPeriodForDate(today);
   root.innerHTML = `<section class="card"><div class="section-head"><div><h2>마감 실적 계산기</h2><p class="help">이번 차수에 실제로 마감할 사업자만 선택하고, 각 사업자의 대·소목표를 직접 입력하세요.</p></div><label>기준일<input id="perfDate" type="date" value="${initialPeriod.endDate}"></label></div><p id="perfPeriod" class="connection-status"></p><p id="perfSource" class="help"></p><p id="perfStorage" class="help"></p><div class="closing-target-row"><label>최상위 마감 사업자<select id="topMemberSelect"></select></label><label>대실적 목표 (NV)<input id="topMajor" type="number" min="1" step="1000"></label><label>소실적 목표 (NV)<input id="topMinor" type="number" min="1" step="1000"></label></div><div id="firstRoundTop" class="closing-target-row" hidden><label>1차 현재 대실적 직접 입력<input id="topCurrentMajor" type="number" min="0" step="1"></label><label>1차 현재 소실적 직접 입력<input id="topCurrentMinor" type="number" min="0" step="1"></label></div><details class="closing-member-picker" open><summary>이번 차수 마감 사업자 <b id="closingCount">0명</b></summary><p class="help">체크한 사업자만 별도로 마감합니다. 체크하지 않은 회원은 목표를 만들지 않고 현재 조직실적과 하위 증가분만 상위로 전달합니다.</p><div id="closingOptions" class="closing-member-options"></div><details class="performance-link-manager"><summary>끊긴 계보 수동으로 잇기</summary><p class="help">중간 회원이 수집자료에 보이지 않을 때 상위와 하위 사업자 회원번호를 직접 연결합니다. 같은 회원번호는 한 번만 계산됩니다.</p><form id="perfManualLinkForm" class="inline-form"><input id="perfLinkParent" placeholder="상위 회원번호" required><input id="perfLinkChild" placeholder="하위 사업자 회원번호" required><input id="perfLinkName" placeholder="하위 사업자 이름"><button class="primary compact" type="submit">계보 연결</button></form><div id="perfLinkError" class="error"></div><div id="perfLinkList" class="fav-list"></div></details></details><button id="perfRun" class="primary">현재 실적과 추천 매출 계산</button> <button id="perfExportCsv" class="secondary compact" type="button">📊 실적 CSV 내보내기</button> <button id="perfExportJson" class="secondary compact" type="button">💾 수집 JSON 내보내기</button><p id="perfNotice" class="help"></p><div id="perfError" class="error"></div></section><section id="perfSummary"></section><section id="perfResult"></section>`;
   const $ = (id) => document.getElementById(id);
-  let { data, error } = await supabase
-    .from("nrc_sync_snapshots")
-    .select("payload,collected_at,source_account_id")
+  const { data: auth } = await supabase.auth.getUser().catch(() => ({}));
+  const ownerFilter = auth?.user?.id || null;
+  const ownSnapshots = (query) =>
+    ownerFilter ? query.eq("owner_id", ownerFilter) : query;
+  let { data, error } = await ownSnapshots(
+    supabase
+      .from("nrc_sync_snapshots")
+      .select("payload,collected_at,source_account_id"),
+  )
     .eq("snapshot_type", "combined")
     .order("collected_at", { ascending: false })
     .limit(1)
@@ -92,7 +98,6 @@ export async function performancePage(root) {
   $("perfSource").textContent =
     `수집 ${new Date(data.collected_at).toLocaleString("ko-KR")} · 계보도 가장 아래 사업자부터 순서대로 마감합니다.`;
 
-  const { data: auth } = await supabase.auth.getUser().catch(() => ({}));
   const ownerId = auth?.user?.id || null;
   let storage = ownerId ? "supabase" : "local";
   let storageNote = ownerId
@@ -111,6 +116,7 @@ export async function performancePage(root) {
     const { data: snapshots } = await supabase
       .from("nrc_sync_snapshots")
       .select("payload,collected_at,source_account_id")
+      .eq("owner_id", ownerId)
       .eq("snapshot_type", "combined")
       .order("collected_at", { ascending: false })
       .limit(100);
@@ -1596,9 +1602,11 @@ export async function performancePage(root) {
     if (period.round > 1) {
       const availableAt = new Date(`${period.endDate}T00:00:00`);
       availableAt.setDate(availableAt.getDate() + 1);
-      const { data: periodSnapshot } = await supabase
-        .from("nrc_sync_snapshots")
-        .select("payload,collected_at,source_account_id")
+      const { data: periodSnapshot } = await ownSnapshots(
+        supabase
+          .from("nrc_sync_snapshots")
+          .select("payload,collected_at,source_account_id"),
+      )
         .eq("snapshot_type", "combined")
         .gte("collected_at", availableAt.toISOString())
         .order("collected_at", { ascending: true })

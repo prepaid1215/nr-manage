@@ -285,6 +285,7 @@ async function home() {
       supabase
         .from("nrc_sync_snapshots")
         .select("source_account_id,payload,collected_at")
+        .eq("owner_id", me.id)
         .eq("snapshot_type", "combined")
         .order("collected_at", { ascending: false })
         .limit(1)
@@ -438,6 +439,7 @@ async function organization() {
     const { data, error } = await supabase
       .from("nrc_sync_snapshots")
       .select("source_account_id,payload,collected_at")
+      .eq("owner_id", me.id)
       .eq("snapshot_type", "combined")
       .order("collected_at", { ascending: false })
       .limit(1)
@@ -518,6 +520,7 @@ async function organizationTree() {
     const { data, error } = await supabase
       .from("nrc_sync_snapshots")
       .select("source_account_id,payload,collected_at")
+      .eq("owner_id", me.id)
       .eq("snapshot_type", "combined")
       .order("collected_at", { ascending: false })
       .limit(1)

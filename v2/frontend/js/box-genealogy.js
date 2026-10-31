@@ -17,9 +17,12 @@ export async function boxGenealogyPage(root) {
   const $ = (id) => document.getElementById(id);
   $("boxReload").onclick = () => boxGenealogyPage(root);
 
-  const { data, error } = await supabase
+  const { data: auth } = await supabase.auth.getUser().catch(() => ({}));
+  let snapshotQuery = supabase
     .from("nrc_sync_snapshots")
-    .select("source_account_id,payload,collected_at")
+    .select("source_account_id,payload,collected_at");
+  if (auth?.user?.id) snapshotQuery = snapshotQuery.eq("owner_id", auth.user.id);
+  const { data, error } = await snapshotQuery
     .eq("snapshot_type", "combined")
     .order("collected_at", { ascending: false })
     .limit(1)
