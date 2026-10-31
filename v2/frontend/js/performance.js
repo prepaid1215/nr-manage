@@ -57,7 +57,7 @@ export async function performancePage(root) {
   const now = new Date();
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   const initialPeriod = closingPeriodForDate(today);
-  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>마감 실적 계산기</h2><p class="help">이번 차수에 실제로 마감할 사업자만 선택하고, 각 사업자의 대·소목표를 직접 입력하세요.</p></div><label>기준일<input id="perfDate" type="date" value="${initialPeriod.endDate}"></label></div><p id="perfPeriod" class="connection-status"></p><p id="perfSource" class="help"></p><p id="perfStorage" class="help"></p><div class="closing-target-row"><label>최상위 마감 사업자<select id="topMemberSelect"></select></label><label>대실적 목표 (NV)<input id="topMajor" type="number" min="1" step="1000"></label><label>소실적 목표 (NV)<input id="topMinor" type="number" min="1" step="1000"></label></div><div id="firstRoundTop" class="closing-target-row" hidden><label>1차 현재 대실적 직접 입력<input id="topCurrentMajor" type="number" min="0" step="1"></label><label>1차 현재 소실적 직접 입력<input id="topCurrentMinor" type="number" min="0" step="1"></label></div><details class="closing-member-picker" open><summary>이번 차수 마감 사업자 <b id="closingCount">0명</b></summary><p class="help">체크한 사업자만 별도로 마감합니다. 체크하지 않은 회원은 목표를 만들지 않고 현재 조직실적과 하위 증가분만 상위로 전달합니다.</p><div id="closingOptions" class="closing-member-options"></div><details class="performance-link-manager"><summary>끊긴 계보 수동으로 잇기</summary><p class="help">중간 회원이 수집자료에 보이지 않을 때 상위와 하위 사업자 회원번호를 직접 연결합니다. 같은 회원번호는 한 번만 계산됩니다.</p><form id="perfManualLinkForm" class="inline-form"><input id="perfLinkParent" placeholder="상위 회원번호" required><input id="perfLinkChild" placeholder="하위 사업자 회원번호" required><input id="perfLinkName" placeholder="하위 사업자 이름"><button class="primary compact" type="submit">계보 연결</button></form><div id="perfLinkError" class="error"></div><div id="perfLinkList" class="fav-list"></div></details></details><button id="perfRun" class="primary">현재 실적과 추천 매출 계산</button> <button id="perfExportCsv" class="secondary compact" type="button">📊 실적 CSV 내보내기</button> <button id="perfExportJson" class="secondary compact" type="button">💾 수집 JSON 내보내기</button><p id="perfNotice" class="help"></p><div id="perfOrder"></div><div id="perfError" class="error"></div></section><section id="perfSummary"></section><section id="perfResult"></section>`;
+  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>마감 실적 계산기</h2><p class="help">이번 차수에 실제로 마감할 사업자만 선택하고, 각 사업자의 대·소목표를 직접 입력하세요.</p></div><label>기준일<input id="perfDate" type="date" value="${initialPeriod.endDate}"></label></div><p id="perfPeriod" class="connection-status"></p><p id="perfSource" class="help"></p><p id="perfStorage" class="help"></p><div class="closing-target-row"><label>최상위 마감 사업자<select id="topMemberSelect"></select></label><label>대실적 목표 (NV)<input id="topMajor" type="number" min="1" step="1000"></label><label>소실적 목표 (NV)<input id="topMinor" type="number" min="1" step="1000"></label></div><div id="firstRoundTop" class="closing-target-row" hidden><label>1차 현재 대실적 직접 입력<input id="topCurrentMajor" type="number" min="0" step="1"></label><label>1차 현재 소실적 직접 입력<input id="topCurrentMinor" type="number" min="0" step="1"></label></div><details class="closing-member-picker" open><summary>이번 차수 마감 사업자 <b id="closingCount">0명</b></summary><p class="help">체크한 사업자만 별도로 마감합니다. 체크하지 않은 회원은 목표를 만들지 않고 현재 조직실적과 하위 증가분만 상위로 전달합니다.</p><div id="closingOptions" class="closing-member-options"></div><details class="performance-link-manager"><summary>끊긴 계보 수동으로 잇기</summary><p class="help">중간 회원이 수집자료에 보이지 않을 때 상위와 하위 사업자 회원번호를 직접 연결합니다. 같은 회원번호는 한 번만 계산됩니다.</p><form id="perfManualLinkForm" class="inline-form"><input id="perfLinkParent" placeholder="상위 회원번호" required><input id="perfLinkChild" placeholder="하위 사업자 회원번호" required><input id="perfLinkName" placeholder="하위 사업자 이름"><button class="primary compact" type="submit">계보 연결</button></form><div id="perfLinkError" class="error"></div><div id="perfLinkList" class="fav-list"></div></details></details><button id="perfRun" class="primary">현재 실적과 추천 매출 계산</button> <button id="perfExportCsv" class="secondary compact" type="button">📊 실적 CSV 내보내기</button> <button id="perfExportJson" class="secondary compact" type="button">💾 수집 JSON 내보내기</button><p id="perfNotice" class="help"></p><div id="perfOrder"></div><div id="perfError" class="error"></div></section><section id="perfSummary"></section><section id="perfResult"></section><section id="perfTeamOrders"></section>`;
   const $ = (id) => document.getElementById(id);
   const { data: auth } = await supabase.auth.getUser().catch(() => ({}));
   const ownerFilter = auth?.user?.id || null;
@@ -454,7 +454,94 @@ export async function performancePage(root) {
       plan.targetOverrides[id] = target;
     });
   };
+  // 최상위가 정한 이번 차수 오더(내 마감 목표)를 받아온다. DB 함수가 없으면 건너뛴다.
+  let myOrder = null;
+  const loadMyOrder = async () => {
+    myOrder = null;
+    if (storage !== "supabase") return;
+    const { data: rows, error: orderError } = await supabase.rpc("get_my_closing_order", {
+      p_period_id: period.periodId,
+    });
+    if (!orderError && Array.isArray(rows) && rows[0]) myOrder = rows[0];
+  };
+
+  // 팀 마감 오더·현황(위 계정용): 아래 앱 계정들의 이번 차수 목표(오더)와 마감 상태를 한눈에 보고,
+  // 목표를 만 단위로 정해 저장한다. 아래에 앱 계정이 없거나 DB 함수가 없으면 아무것도 표시하지 않는다.
+  const renderTeamOrders = async () => {
+    const box = $("perfTeamOrders");
+    if (!box) return;
+    const { data: rows, error: statusError } = await supabase.rpc("get_downline_closing_status", {
+      p_period_id: period.periodId,
+    });
+    if (statusError || !Array.isArray(rows) || !rows.length) {
+      box.innerHTML = "";
+      return;
+    }
+    const man = (nv) => (nv ? Math.round(Number(nv) / 10000) : "");
+    const startsAt = new Date(`${period.startDate}T00:00:00`);
+    const th = (label) => `<th style="text-align:left;padding:4px 6px">${label}</th>`;
+    const td = (html) => `<td style="padding:4px 6px;border-top:1px solid #e5e7eb">${html}</td>`;
+    const body = rows
+      .map((row) => {
+        const id = safe(row.member_no);
+        const done =
+          row.plan_status === "DONE" &&
+          row.completion &&
+          new Date(row.completed_at || row.completion.completedAt) >= startsAt;
+        const state = done
+          ? `✅ 완료 · 대 ${fmt(row.completion.majorNv)} / 소 ${fmt(row.completion.minorNv)}`
+          : "⏳ 대기";
+        const input = (kind, value) =>
+          `<input type="number" min="1" step="1" style="width:64px" data-order-${kind}="${id}" value="${value}">`;
+        return `<tr>${td(`${safe(row.member_name || "")} (${id})`)}${td(
+          `${input("major", man(row.major_target))} / ${input("minor", man(row.minor_target))} 만`,
+        )}${td(state)}${td(
+          `<button type="button" class="compact" data-order-save="${id}">저장</button> <button type="button" class="compact" data-order-delete="${id}">지우기</button>${
+            row.ordered_by_name ? `<small> · ${safe(row.ordered_by_name)} 설정</small>` : ""
+          }`,
+        )}</tr>`;
+      })
+      .join("");
+    box.innerHTML = `<div style="margin:8px 0;padding:8px;border:1px solid #e5e7eb;border-radius:8px"><b>팀 마감 오더·현황 · ${period.year}년 ${period.month}월 ${period.round}차</b><div class="help">목표는 만 단위로 입력합니다 (40 = 40만 NV). 아래 사람 계산기에서 "오더 목표 적용"으로 불러옵니다.</div><table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr>${th("사업자")}${th("오더 대/소")}${th("상태")}${th("")}</tr></thead><tbody>${body}</tbody></table><div id="perfTeamOrderMsg" class="help"></div></div>`;
+  };
+  $("perfTeamOrders").onclick = async (event) => {
+    const save = event.target.closest("[data-order-save]");
+    const remove = event.target.closest("[data-order-delete]");
+    if (!save && !remove) return;
+    const memberNo = (save || remove).dataset.orderSave || (save || remove).dataset.orderDelete;
+    const message = $("perfTeamOrderMsg");
+    if (remove) {
+      const { error: removeError } = await supabase.rpc("delete_closing_order", {
+        p_period_id: period.periodId,
+        p_member_no: memberNo,
+      });
+      if (removeError) message.textContent = removeError.message;
+      else await renderTeamOrders();
+      return;
+    }
+    const read = (kind) =>
+      Number(
+        $("perfTeamOrders").querySelector(`[data-order-${kind}="${CSS.escape(memberNo)}"]`)?.value,
+      );
+    const major = read("major");
+    const minor = read("minor");
+    if (!(major > 0) || !(minor > 0)) {
+      message.textContent = "대·소 목표를 만 단위 숫자(예: 40)로 모두 입력하세요.";
+      return;
+    }
+    const { error: saveError } = await supabase.rpc("set_closing_order", {
+      p_period_id: period.periodId,
+      p_member_no: memberNo,
+      p_major: Math.round(major * 10000),
+      p_minor: Math.round(minor * 10000),
+    });
+    if (saveError) message.textContent = saveError.message;
+    else await renderTeamOrders();
+  };
+
   await loadIncomingClosings();
+  await loadMyOrder();
+  await renderTeamOrders();
 
   const descendantsOf = (topId) => {
     const out = [];
@@ -1159,11 +1246,37 @@ export async function performancePage(root) {
         )}${cell(status(completion))}${cell(values(completion))}</tr>`;
       })
       .join("");
-    box.innerHTML = `<div style="margin:8px 0;padding:8px;border:1px solid #e5e7eb;border-radius:8px"><b>이번 오더 · ${period.year}년 ${period.month}월 ${period.round}차</b><div class="help">내 마감 ${safe(top?.userName || "")} · 목표 대 ${fmt(plan.topMajorTarget)} / 소 ${fmt(plan.topMinorTarget)} · ${topDone ? "✅ 완료" : "⏳ 진행 중"}</div>${
+    const orderMatches =
+      myOrder &&
+      Number(myOrder.major_target) === plan.topMajorTarget &&
+      Number(myOrder.minor_target) === plan.topMinorTarget;
+    const orderLine = myOrder
+      ? `<div class="help">받은 오더 · 대 ${fmt(myOrder.major_target)} / 소 ${fmt(myOrder.minor_target)} (${safe(myOrder.ordered_by_name || "상위")} 설정)${
+          orderMatches
+            ? " · ✅ 현재 목표와 같음"
+            : ' <button type="button" class="compact" id="perfApplyOrder">오더 목표 적용</button>'
+        }</div>`
+      : "";
+    box.innerHTML = `<div style="margin:8px 0;padding:8px;border:1px solid #e5e7eb;border-radius:8px"><b>이번 오더 · ${period.year}년 ${period.month}월 ${period.round}차</b><div class="help">내 마감 ${safe(top?.userName || "")} · 목표 대 ${fmt(plan.topMajorTarget)} / 소 ${fmt(plan.topMinorTarget)} · ${topDone ? "✅ 완료" : "⏳ 진행 중"}</div>${orderLine}${
       rows
         ? `<table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr><th style="text-align:left;padding:4px 6px">아래 마감</th><th style="text-align:left;padding:4px 6px">목표 대/소</th><th style="text-align:left;padding:4px 6px">상태</th><th style="text-align:left;padding:4px 6px">완료 값</th></tr></thead><tbody>${rows}</tbody></table>`
         : '<div class="help">체크한 아래 마감 사업자가 없습니다.</div>'
     }</div>`;
+  };
+
+  $("perfOrder").onclick = async (event) => {
+    if (!event.target.closest("#perfApplyOrder") || !myOrder) return;
+    if (String(plan.topMemberId) !== String(myOrder.member_no)) {
+      $("perfNotice").textContent =
+        "받은 오더는 최상위 마감 사업자가 내 회원번호일 때만 적용됩니다.";
+      return;
+    }
+    plan.topMajorTarget = Number(myOrder.major_target);
+    plan.topMinorTarget = Number(myOrder.minor_target);
+    $("topMajor").value = plan.topMajorTarget;
+    $("topMinor").value = plan.topMinorTarget;
+    runPlan();
+    await persistPlan();
   };
 
   const runPlan = () => {
@@ -1802,6 +1915,8 @@ export async function performancePage(root) {
     if (!model.byId.has(String(plan.topMemberId))) plan = defaultPlan();
     await loadPreviousPerformance();
     await loadIncomingClosings();
+    await loadMyOrder();
+    renderTeamOrders();
     renderControls();
     runPlan();
   };
