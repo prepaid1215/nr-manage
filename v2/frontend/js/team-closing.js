@@ -107,7 +107,7 @@ export async function mountTeamClosing(root) {
           )}${td(mark(row))}${
             canMark
               ? td(
-                  `<span data-seller-cell style="display:inline-flex;gap:4px;align-items:center;cursor:pointer;user-select:none;touch-action:none"><input type="checkbox" tabindex="-1" style="pointer-events:none" data-seller="${safe(row.member_no)}"${
+                  `<span data-seller-cell style="display:inline-flex;gap:4px;align-items:center;cursor:pointer;user-select:none;touch-action:none;white-space:nowrap"><input type="checkbox" tabindex="-1" style="pointer-events:none" data-seller="${safe(row.member_no)}"${
                     isSeller(row) ? " checked" : ""
                   }> 매출자</span>`,
                 )
