@@ -197,7 +197,7 @@ export async function manualClosePage(root, me) {
       .map((rid) => {
         const top = model.byId.get(rid);
         const t = targetOf(rid);
-        return `<section data-mc-section="${safe(rid)}" style="margin-top:14px;padding-top:10px;border-top:2px solid #c3cede"><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b style="font-size:15px">${safe(top.userName)} *${safe(rid)}</b> <small>${safe(top.rankName || "")}/${safe(top.rankMaxName || "")}</small><span style="margin-left:auto"></span>마감 목표 대 <input type="number" min="0" step="1" style="width:56px" data-mc-tmaj="${safe(rid)}" value="${t.major}"> 만 / 소 <input type="number" min="0" step="1" style="width:56px" data-mc-tmin="${safe(rid)}" value="${t.minor}"> 만 <button type="button" class="secondary compact" data-mc-rec-btn="${safe(rid)}">추천 보기</button> <button type="button" class="compact" data-mc-unroot="${safe(rid)}" aria-label="이 계보도 닫기" style="min-width:0">×</button></div><div data-mc-rec="${safe(rid)}" style="margin-top:6px"></div><div class="box-tree pannable-tree" style="margin-top:8px"><div class="tree-stage" style="zoom:${zoom}">${treeHtml(rid)}</div></div></section>`;
+        return `<section data-mc-section="${safe(rid)}" style="margin-top:14px;padding-top:10px;border-top:2px solid #c3cede"><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b style="font-size:15px">${safe(top.userName)} *${safe(rid)}</b> <small>${safe(top.rankName || "")}/${safe(top.rankMaxName || "")}</small><span style="margin-left:auto"></span>마감 목표 대 <input type="number" min="0" step="1" style="width:72px" data-mc-tmaj="${safe(rid)}" value="${t.major}"> 만 / 소 <input type="number" min="0" step="1" style="width:72px" data-mc-tmin="${safe(rid)}" value="${t.minor}"> 만 <button type="button" class="secondary compact" data-mc-rec-btn="${safe(rid)}">추천 보기</button> <span class="box-zoom"><button type="button" class="secondary compact" data-mc-zoom="out" aria-label="축소">−</button><button type="button" class="secondary compact" data-mc-zoom="reset" data-mc-zoomlabel>${Math.round(zoom * 100)}%</button><button type="button" class="secondary compact" data-mc-zoom="in" aria-label="확대">＋</button></span> <button type="button" class="secondary compact" data-mc-print="${safe(rid)}">🖨 인쇄</button> <button type="button" class="compact" data-mc-unroot="${safe(rid)}" aria-label="이 계보도 닫기" style="min-width:0">×</button></div><div data-mc-rec="${safe(rid)}" style="margin-top:6px"></div><div class="box-tree pannable-tree" style="margin-top:8px"><div class="tree-stage" style="zoom:${zoom}">${treeHtml(rid)}</div></div></section>`;
       })
       .join("");
   const drawTrees = () => {
@@ -300,8 +300,9 @@ export async function manualClosePage(root, me) {
     document.querySelectorAll("#mcTrees .tree-stage").forEach((stage) => {
       stage.style.zoom = zoom;
     });
-    const label = $("mcZoomReset");
-    if (label) label.textContent = `${Math.round(zoom * 100)}%`;
+    document.querySelectorAll("[data-mc-zoomlabel]").forEach((label) => {
+      label.textContent = `${Math.round(zoom * 100)}%`;
+    });
   };
 
   // 인쇄할 때는 계보도 영역만 남긴다 (다른 화면 요소는 숨김)
@@ -309,7 +310,7 @@ export async function manualClosePage(root, me) {
     const style = document.createElement("style");
     style.id = "mcPrintStyle";
     style.textContent =
-      "@media print{body.mc-printing *{visibility:hidden}body.mc-printing #mcTrees,body.mc-printing #mcTrees *{visibility:visible}body.mc-printing #mcTrees{position:absolute;left:0;top:0;width:100%}body.mc-printing #mcTrees .box-tree{overflow:visible!important;max-height:none!important;border:0}body.mc-printing #mcTrees .tree-stage{zoom:.6!important}body.mc-printing #mcTrees button,body.mc-printing #mcTrees [data-mc-rec]{display:none!important}body.mc-printing #mcTrees input{border:0;background:transparent}}";
+      "@media print{body.mc-printing *{visibility:hidden}body.mc-printing #mcTrees,body.mc-printing #mcTrees *{visibility:visible}body.mc-printing #mcTrees{position:absolute;left:0;top:0;width:100%}body.mc-printing #mcTrees section:not(.mc-print-this){display:none!important}body.mc-printing #mcTrees .box-tree{overflow:visible!important;max-height:none!important;border:0}body.mc-printing #mcTrees .tree-stage{zoom:.6!important}body.mc-printing #mcTrees button,body.mc-printing #mcTrees [data-mc-rec]{display:none!important}body.mc-printing #mcTrees input{border:0;background:transparent}}";
     document.head.appendChild(style);
   }
 
@@ -332,7 +333,7 @@ export async function manualClosePage(root, me) {
           `<label data-mc-pickrow="${safe(row.userId)}" style="display:flex;flex-direction:row;flex-wrap:nowrap;gap:8px;align-items:center;justify-content:flex-start;text-align:left;padding:3px 6px;margin:0;width:auto;cursor:pointer"><input type="checkbox" data-mc-root="${safe(row.userId)}"${rootIds.includes(String(row.userId)) ? " checked" : ""} style="flex:none;width:18px;height:18px;min-height:0;margin:0;padding:0"><span style="flex:none;width:68px;font-size:13px">${safe(row.userId)}</span><b style="flex:none;min-width:56px">${safe(row.userName)}</b><small style="flex:none;color:#6b7280">${safe(row.rankName || "")}/${safe(row.rankMaxName || "")}</small></label>`,
       )
       .join("");
-    $("mcBody").innerHTML = `<section class="card"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><label>단계 <select id="mcDepth">${depthOptions}</select></label><span class="box-zoom"><button type="button" class="secondary compact" id="mcZoomOut" aria-label="축소">−</button><button type="button" class="secondary compact" id="mcZoomReset">${Math.round(zoom * 100)}%</button><button type="button" class="secondary compact" id="mcZoomIn" aria-label="확대">＋</button></span><button type="button" class="secondary compact" id="mcPrint">🖨 인쇄</button><button type="button" class="secondary compact" id="mcReset">입력 초기화</button></div><div class="help" style="margin-top:4px">계보도의 빈 곳을 끌면 화면이 움직입니다. 칸·버튼 위에서는 움직이지 않습니다.</div><details open style="margin-top:8px"><summary><b>맨 위 박스 고르기</b> (여러 개 체크하면 아래로 차례로 나옵니다)</summary><input id="mcSearch" type="search" placeholder="이름 또는 회원번호 검색" style="width:100%;margin:6px 0"><div id="mcPickList" style="max-height:220px;overflow:auto;border:1px solid #e5e7eb;border-radius:8px;padding:4px">${pickList}</div></details><div id="mcTotal" class="help" style="margin-top:6px"></div><div id="mcEntered" style="margin-top:4px;font-size:13px;line-height:1.9"></div><details style="margin-top:6px"><summary><b>다른 계정으로 가져가기</b> (주영돈에서 넣은 가상 매출을 한수진 화면에서 이어 쓰기)</summary><div class="help">여기서 "복사"를 누르면 지금 넣은 NV가 글자로 복사됩니다. 다른 계정 화면에서 아래 칸에 붙여넣고 "불러오기"를 누르면 같은 박스에 같은 NV가 들어가서, 위쪽 계산에 그대로 반영됩니다.</div><textarea id="mcShare" rows="2" style="width:100%;font-size:12px" placeholder="여기에 붙여넣기"></textarea><div><button type="button" class="secondary compact" id="mcCopy">복사</button> <button type="button" class="secondary compact" id="mcLoad">불러오기</button> <span id="mcShareMsg" class="help"></span></div></details><div id="mcTrees">${treesHtml()}</div></section>`;
+    $("mcBody").innerHTML = `<section class="card"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><label>단계 <select id="mcDepth">${depthOptions}</select></label><button type="button" class="secondary compact" id="mcReset">입력 초기화</button></div><div class="help" style="margin-top:4px">계보도의 빈 곳을 끌면 화면이 움직입니다. 칸·버튼 위에서는 움직이지 않습니다.</div><details open style="margin-top:8px"><summary><b>맨 위 박스 고르기</b> (여러 개 체크하면 아래로 차례로 나옵니다)</summary><input id="mcSearch" type="search" placeholder="이름 또는 회원번호 검색" style="width:100%;margin:6px 0"><div id="mcPickList" style="max-height:220px;overflow:auto;border:1px solid #e5e7eb;border-radius:8px;padding:4px">${pickList}</div></details><div id="mcTotal" class="help" style="margin-top:6px"></div><div id="mcEntered" style="margin-top:4px;font-size:13px;line-height:1.9"></div><details style="margin-top:6px"><summary><b>다른 계정으로 가져가기</b> (주영돈에서 넣은 가상 매출을 한수진 화면에서 이어 쓰기)</summary><div class="help">여기서 "복사"를 누르면 지금 넣은 NV가 글자로 복사됩니다. 다른 계정 화면에서 아래 칸에 붙여넣고 "불러오기"를 누르면 같은 박스에 같은 NV가 들어가서, 위쪽 계산에 그대로 반영됩니다.</div><textarea id="mcShare" rows="2" style="width:100%;font-size:12px" placeholder="여기에 붙여넣기"></textarea><div><button type="button" class="secondary compact" id="mcCopy">복사</button> <button type="button" class="secondary compact" id="mcLoad">불러오기</button> <span id="mcShareMsg" class="help"></span></div></details><div id="mcTrees">${treesHtml()}</div></section>`;
     refreshNumbers();
   };
 
@@ -453,15 +454,23 @@ export async function manualClosePage(root, me) {
       refreshNumbers();
       return;
     }
-    const zoomBtn = event.target.closest("#mcZoomOut, #mcZoomIn, #mcZoomReset");
+    const zoomBtn = event.target.closest("[data-mc-zoom]");
     if (zoomBtn) {
-      setZoom(zoomBtn.id === "mcZoomOut" ? zoom - 0.1 : zoomBtn.id === "mcZoomIn" ? zoom + 0.1 : 1);
+      const kind = zoomBtn.dataset.mcZoom;
+      setZoom(kind === "out" ? zoom - 0.1 : kind === "in" ? zoom + 0.1 : 1);
       return;
     }
-    if (event.target.closest("#mcPrint")) {
+    const printBtn = event.target.closest("[data-mc-print]");
+    if (printBtn) {
+      // 누른 계보도 하나만 인쇄한다
+      const section = printBtn.closest("[data-mc-section]");
+      section?.classList.add("mc-print-this");
       document.body.classList.add("mc-printing");
       window.print();
-      setTimeout(() => document.body.classList.remove("mc-printing"), 500);
+      setTimeout(() => {
+        document.body.classList.remove("mc-printing");
+        section?.classList.remove("mc-print-this");
+      }, 500);
       return;
     }
     const recBtn = event.target.closest("[data-mc-rec-btn]");
