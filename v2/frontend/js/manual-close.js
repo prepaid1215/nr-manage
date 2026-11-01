@@ -74,7 +74,7 @@ export async function manualClosePage(root, me) {
       localStorage.setItem(storeKey(), JSON.stringify({ sales, rootIds, depth, targetsBy }));
     } catch {}
   };
-  const targetOf = (rid) => ({ major: 40, minor: 40, ...(targetsBy[rid] || {}) });
+  const targetOf = (rid) => ({ major: 40, minor: 40, follow: true, ...(targetsBy[rid] || {}) });
 
   const loadSnapshot = async () => {
     const { data, error } = await supabase
@@ -197,7 +197,7 @@ export async function manualClosePage(root, me) {
       .map((rid) => {
         const top = model.byId.get(rid);
         const t = targetOf(rid);
-        return `<section data-mc-section="${safe(rid)}" style="margin-top:14px;padding-top:10px;border-top:2px solid #c3cede"><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b style="font-size:15px">${safe(top.userName)} *${safe(rid)}</b> <small>${safe(top.rankName || "")}/${safe(top.rankMaxName || "")}</small><span style="margin-left:auto"></span>마감 목표 대 <input type="number" min="0" step="1" style="width:72px" data-mc-tmaj="${safe(rid)}" value="${t.major}"> 만 / 소 <input type="number" min="0" step="1" style="width:72px" data-mc-tmin="${safe(rid)}" value="${t.minor}"> 만 <button type="button" class="secondary compact" data-mc-rec-btn="${safe(rid)}">추천 보기</button> <span class="box-zoom"><button type="button" class="secondary compact" data-mc-zoom="out" aria-label="축소">−</button><button type="button" class="secondary compact" data-mc-zoom="reset" data-mc-zoomlabel>${Math.round(zoom * 100)}%</button><button type="button" class="secondary compact" data-mc-zoom="in" aria-label="확대">＋</button></span> <button type="button" class="secondary compact" data-mc-print="${safe(rid)}">🖨 인쇄</button> <button type="button" class="compact" data-mc-unroot="${safe(rid)}" aria-label="이 계보도 닫기" style="min-width:0">×</button></div><div data-mc-rec="${safe(rid)}" style="margin-top:6px"></div><div class="box-tree pannable-tree" style="margin-top:8px"><div class="tree-stage" style="zoom:${zoom}">${treeHtml(rid)}</div></div></section>`;
+        return `<section data-mc-section="${safe(rid)}" style="margin-top:14px;padding-top:10px;border-top:2px solid #c3cede"><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b style="font-size:15px">${safe(top.userName)} *${safe(rid)}</b> <small>${safe(top.rankName || "")}/${safe(top.rankMaxName || "")}</small><span style="margin-left:auto"></span>${ancestorRoot(rid) ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:13px"><input type="checkbox" data-mc-follow="${safe(rid)}"${followsAbove(rid) ? " checked" : ""} style="width:18px;height:18px;min-height:0;margin:0;padding:0"> 위에서 따라가기</span>` : ""}마감 목표 대 <input type="number" min="0" step="any" style="width:84px" data-mc-tmaj="${safe(rid)}" value="${followsAbove(rid) ? "" : t.major}" placeholder="${followsAbove(rid) ? "자동" : ""}"${followsAbove(rid) ? " readonly" : ""}> 만 / 소 <input type="number" min="0" step="any" style="width:84px" data-mc-tmin="${safe(rid)}" value="${followsAbove(rid) ? "" : t.minor}" placeholder="${followsAbove(rid) ? "자동" : ""}"${followsAbove(rid) ? " readonly" : ""}> 만 <button type="button" class="secondary compact" data-mc-rec-btn="${safe(rid)}">추천 보기</button> <span class="box-zoom"><button type="button" class="secondary compact" data-mc-zoom="out" aria-label="축소">−</button><button type="button" class="secondary compact" data-mc-zoom="reset" data-mc-zoomlabel>${Math.round(zoom * 100)}%</button><button type="button" class="secondary compact" data-mc-zoom="in" aria-label="확대">＋</button></span> <button type="button" class="secondary compact" data-mc-print="${safe(rid)}">🖨 인쇄</button> <button type="button" class="compact" data-mc-unroot="${safe(rid)}" aria-label="이 계보도 닫기" style="min-width:0">×</button></div><div data-mc-rec="${safe(rid)}" style="margin-top:6px"></div><div class="box-tree pannable-tree" style="margin-top:8px"><div class="tree-stage" style="zoom:${zoom}">${treeHtml(rid)}</div></div></section>`;
       })
       .join("");
   const drawTrees = () => {
@@ -247,22 +247,82 @@ export async function manualClosePage(root, me) {
   };
 
   // ── 추천: 목표까지 부족한 만큼을 어디에 넣을지 보여준다 (버튼을 눌렀을 때만 계산) ──
-  const recommend = (rid) => {
+  // 위쪽 박스가 먼저 정해지면, 그 아래 박스의 목표는 위에서 필요한 만큼을 받아 내려온다.
+  const ancestorRoot = (rid) => {
+    let cursor = model.byId.get(rid);
+    let guard = 0;
+    while (cursor && cursor.ppId && model.byId.has(String(cursor.ppId)) && guard++ < 30) {
+      const parent = String(cursor.ppId);
+      if (rootIds.includes(parent)) return parent;
+      cursor = model.byId.get(parent);
+    }
+    return "";
+  };
+  const followsAbove = (rid) => Boolean(ancestorRoot(rid)) && targetOf(rid).follow !== false;
+  const stateOf = (rid) => {
     const top = model.byId.get(rid);
     const topKids = kids(rid);
-    const targets = targetOf(rid);
     subSalesNv = new Map();
     const lines = [topKids[0] ? lineTotal(topKids[0]) : 0, topKids[1] ? lineTotal(topKids[1]) : 0];
     const own = Number(top.ordPv || 0) + Number(sales[rid] || 0);
     const side = lines[0] < lines[1] ? 0 : 1; // 본인 NV는 작은 쪽(같으면 서브2)에 합산
     const sums = [lines[0] + (side === 0 ? own : 0), lines[1] + (side === 1 ? own : 0)];
-    const minorLine = sums[0] < sums[1] ? 0 : 1;
+    return { topKids, sums, minorLine: sums[0] < sums[1] ? 0 : 1 };
+  };
+  // 이 계보도의 목표(NV). 위에서 따라가면: 위 박스가 이 박스 라인에서 더 필요로 하는 만큼을 지금 실적에 더한
+  // 값을 합계 목표로 잡고, 대/소로는 최대한 고르게 나눈다(이미 한쪽이 더 크면 모자란 쪽에 몰아서 채운다).
+  const targetNvOf = (rid) => {
+    const manual = targetOf(rid);
+    if (!followsAbove(rid)) {
+      return { majorNv: Number(manual.major || 0) * 10000, minorNv: Number(manual.minor || 0) * 10000, from: "", need: 0 };
+    }
+    const anc = ancestorRoot(rid);
+    const st = stateOf(anc);
+    const above = targetNvOf(anc);
+    const want = [];
+    want[st.minorLine] = above.minorNv;
+    want[1 - st.minorLine] = above.majorNv;
+    let cursor = rid;
+    while (String(model.byId.get(cursor).ppId) !== anc) cursor = String(model.byId.get(cursor).ppId);
+    const index = st.topKids.findIndex((kid) => String(kid.userId) === cursor);
+    const need = Math.max(0, (want[index] || 0) - (st.sums[index] || 0));
+    const now = calc(rid);
+    const total = now.major + now.minor + need;
+    let minorNv = now.minor;
+    let majorNv = now.major;
+    if (need > 0) {
+      if (now.minor + need <= now.major) {
+        minorNv = now.minor + need;
+      } else {
+        majorNv = Math.ceil(total / 2);
+        minorNv = total - majorNv;
+      }
+    }
+    return { majorNv, minorNv, from: anc, need };
+  };
+  const manText = (nv) => String(Math.round((nv / 10000) * 10000) / 10000);
+
+  const recommend = (rid) => {
+    const pair = targetNvOf(rid);
+    const { topKids, sums, minorLine } = stateOf(rid);
     const wants = [];
-    wants[minorLine] = { label: "소실적", target: Number(targets.minor || 0) * 10000 };
-    wants[1 - minorLine] = { label: "대실적", target: Number(targets.major || 0) * 10000 };
+    wants[minorLine] = { label: "소실적", target: pair.minorNv };
+    wants[1 - minorLine] = { label: "대실적", target: pair.majorNv };
+    if (followsAbove(rid)) {
+      const sec = document.querySelector(`[data-mc-section="${CSS.escape(rid)}"]`);
+      const majInput = sec?.querySelector("[data-mc-tmaj]");
+      const minInput = sec?.querySelector("[data-mc-tmin]");
+      if (majInput) majInput.value = manText(pair.majorNv);
+      if (minInput) minInput.value = manText(pair.minorNv);
+    }
     const name = (id) => `${safe(model.byId.get(id)?.userName || "-")} *${safe(id)}`;
     const blocks = [];
     const list = [];
+    if (pair.from) {
+      blocks.push(
+        `<div style="color:#4338ca">위(${name(pair.from)})에서 내려온 목표 → 이 박스 라인에 <b>${fmt(pair.need)} NV</b> 더 필요 · 목표 대 ${fmt(pair.majorNv)} / 소 ${fmt(pair.minorNv)} NV</div>`,
+      );
+    }
     [0, 1].forEach((index) => {
       const lineRoot = topKids[index];
       if (!lineRoot) return;
@@ -364,6 +424,14 @@ export async function manualClosePage(root, me) {
     refreshNumbers();
   };
   root.onchange = async (event) => {
+    const follow = event.target.closest("[data-mc-follow]");
+    if (follow) {
+      const rid = follow.dataset.mcFollow;
+      targetsBy[rid] = { ...targetOf(rid), follow: follow.checked };
+      saveState();
+      drawTrees();
+      return;
+    }
     const pick = event.target.closest("[data-mc-root]");
     if (pick) {
       const id = pick.dataset.mcRoot;
