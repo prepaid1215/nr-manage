@@ -20,7 +20,7 @@ export async function mountTeamClosing(root) {
   if (!root) return;
   const period = closingPeriodForDate(new Date());
   root.innerHTML =
-    '<div data-tc="mine"></div><div data-tc="join"></div><div data-tc="orders"></div>';
+    '<div data-tc="mine"></div><div data-tc="join"></div><div data-tc="orders"></div><div data-tc="team"></div>';
   const part = (name) => root.querySelector(`[data-tc="${name}"]`);
 
   const renderMine = async () => {
@@ -36,13 +36,13 @@ export async function mountTeamClosing(root) {
     box.innerHTML = `<div class="card" style="margin:8px 0"><b>받은 오더 · ${period.year}년 ${period.month}월 ${period.round}차</b><div class="help">대 ${fmt(order.major_target)} / 소 ${fmt(order.minor_target)} (${safe(order.ordered_by_name || "상위")} 설정) · 실적 탭의 마감 계산기에서 "오더 목표 적용"으로 불러옵니다.</div></div>`;
   };
 
-  const renderOrders = async () => {
-    const box = part("orders");
-    const { data: rows, error } = await supabase.rpc("get_downline_closing_status", {
+  const renderOrderTable = async (partName, rpcName, title, help, emptyHtml = "") => {
+    const box = part(partName);
+    const { data: rows, error } = await supabase.rpc(rpcName, {
       p_period_id: period.periodId,
     });
     if (error || !Array.isArray(rows) || !rows.length) {
-      box.innerHTML = "";
+      box.innerHTML = error ? "" : emptyHtml;
       return;
     }
     const startsAt = new Date(`${period.startDate}T00:00:00`);
@@ -70,8 +70,27 @@ export async function mountTeamClosing(root) {
         )}</tr>`;
       })
       .join("");
-    box.innerHTML = `<div class="card" style="margin:8px 0"><b>팀 마감 오더·현황 · ${period.year}년 ${period.month}월 ${period.round}차</b><div class="help">내 계보 아래 앱 계정입니다. 목표는 만 단위로 입력합니다 (40 = 40만 NV). 아래 사람은 마감 계산기에서 "오더 목표 적용"으로 불러옵니다.</div><table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr>${th("사업자")}${th("오더 대/소")}${th("상태")}${th("")}</tr></thead><tbody>${body}</tbody></table><div data-tc-msg class="help"></div></div>`;
+    box.innerHTML = `<div class="card" style="margin:8px 0"><b>${title} · ${period.year}년 ${period.month}월 ${period.round}차</b><div class="help">${help} 목표는 만 단위로 입력합니다 (40 = 40만 NV). 받는 사람은 마감 계산기에서 "오더 목표 적용"으로 불러옵니다.</div><table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr>${th("사업자")}${th("오더 대/소")}${th("상태")}${th("")}</tr></thead><tbody>${body}</tbody></table><div data-tc-msg class="help"></div></div>`;
   };
+
+  const teamGuide =
+    '<div class="card" style="margin:8px 0"><b>마케팅 팀</b><div class="help">계보와 상관없이 팀원을 모으는 팀입니다. 아래 "팀 관리"에서 팀을 만들고 초대코드를 만들어 팀원(예: 이호정)에게 보내세요. 팀원이 코드로 합류하면 이 칸에 나타나 오더와 마감 현황을 볼 수 있습니다. 고객·활동·포스팅은 "팀 관리"에서 팀원별로 공유를 허용하면 볼 수 있습니다.</div></div>';
+  const renderOrders = () =>
+    Promise.all([
+      renderOrderTable(
+        "orders",
+        "get_downline_closing_status",
+        "팀 마감 오더·현황",
+        "내 계보 아래 앱 계정입니다.",
+      ),
+      renderOrderTable(
+        "team",
+        "get_team_closing_status",
+        "마케팅 팀 마감 오더·현황",
+        "계보와 상관없이 내 팀에 합류한 팀원입니다.",
+        teamGuide,
+      ),
+    ]);
 
   const renderJoin = async () => {
     const box = part("join");
@@ -149,7 +168,9 @@ export async function mountTeamClosing(root) {
     const remove = event.target.closest("[data-order-delete]");
     if (!save && !remove) return;
     const memberNo = (save || remove).dataset.orderSave || (save || remove).dataset.orderDelete;
-    const message = root.querySelector("[data-tc-msg]");
+    const message =
+      (save || remove).closest("[data-tc]")?.querySelector("[data-tc-msg]") ||
+      root.querySelector("[data-tc-msg]");
     if (remove) {
       const { error } = await supabase.rpc("delete_closing_order", {
         p_period_id: period.periodId,

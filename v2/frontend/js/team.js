@@ -1,6 +1,6 @@
 import { supabase } from "./supabase.js?v=20260829-34";
 import { friendlyError } from "./errors.js?v=20260830-1";
-import { mountTeamClosing } from "./team-closing.js?v=20261101-7";
+import { mountTeamClosing } from "./team-closing.js?v=20261101-8";
 import { buildPerformanceModel } from "./performance-calculator.js?v=20260831-61";
 
 const resources = [
