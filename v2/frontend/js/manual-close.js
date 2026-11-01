@@ -52,6 +52,7 @@ export async function manualClosePage(root, me) {
   let rootIds = []; // 계보도로 그릴 맨 위 박스들 (여러 개를 체크하면 아래로 차례로 그린다)
   let applyBy = {}; // 맨 위 박스 회원번호 → 추천으로 계산된 (박스, NV) 목록
   let depth = 5;
+  let unit = "nv"; // 박스 칸에 적는 단위: "nv" | "won"
   let zoom = 1; // 계보도 확대·축소 (저장하지 않는다)
   let collectedAt = "";
 
@@ -60,18 +61,20 @@ export async function manualClosePage(root, me) {
     sales = {};
     rootIds = [];
     depth = 5;
+    unit = "nv";
     targetsBy = {};
     try {
       const saved = JSON.parse(localStorage.getItem(storeKey()) || "null");
       if (saved?.sales) sales = { ...saved.sales };
       rootIds = (saved?.rootIds || (saved?.rootId ? [saved.rootId] : [])).map(String);
       depth = Number(saved?.depth) || 5;
+      unit = saved?.unit === "won" ? "won" : "nv";
       targetsBy = saved?.targetsBy || {};
     } catch {}
   };
   const saveState = () => {
     try {
-      localStorage.setItem(storeKey(), JSON.stringify({ sales, rootIds, depth, targetsBy }));
+      localStorage.setItem(storeKey(), JSON.stringify({ sales, rootIds, depth, targetsBy, unit }));
     } catch {}
   };
   const targetOf = (rid) => ({ major: 40, minor: 40, follow: true, ...(targetsBy[rid] || {}) });
@@ -173,10 +176,12 @@ export async function manualClosePage(root, me) {
   };
 
   // ── 화면 ───────────────────────────────────────────────────────────────
+  // 저장은 항상 NV. 칸에는 고른 단위로 보여준다 (원은 1,000원 단위 올림).
+  const shown = (id) => (sales[id] ? (unit === "won" ? wonOfNv(sales[id]) : sales[id]) : "");
   const val = (id, field) => `<b data-mc-v="${safe(id)}:${field}"></b>`;
   const cardHtml = (row) => {
     const id = String(row.userId);
-    return `<div class="box-node" data-mc-card="${safe(id)}" style="min-width:150px"><b>${safe(row.userName || "이름 없음")}</b><small>*${safe(id)}</small><small>${safe(row.rankName || "회원")}/${safe(row.rankMaxName || "회원")}</small><em>본인 ${fmt(row.ordPv)} NV</em><div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 6px;margin-top:4px;text-align:center"><span>서브1</span><span>서브2</span>${val(id, "l0")}${val(id, "l1")}<span>대실적</span><span>소실적</span>${val(id, "major")}${val(id, "minor")}</div><div style="margin-top:6px"><input type="number" inputmode="numeric" min="0" step="1" placeholder="매출(NV)" data-mc-sale="${safe(id)}" value="${safe(sales[id] || "")}" style="width:96px;height:26px;padding:2px 6px;font-size:12px"><small data-mc-won="${safe(id)}" style="display:block"></small></div></div>`;
+    return `<div class="box-node" data-mc-card="${safe(id)}" style="min-width:150px"><b>${safe(row.userName || "이름 없음")}</b><small>*${safe(id)}</small><small>${safe(row.rankName || "회원")}/${safe(row.rankMaxName || "회원")}</small><em>본인 ${fmt(row.ordPv)} NV</em><div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 6px;margin-top:4px;text-align:center"><span>서브1</span><span>서브2</span>${val(id, "l0")}${val(id, "l1")}<span>대실적</span><span>소실적</span>${val(id, "major")}${val(id, "minor")}</div><div style="margin-top:6px"><input type="number" inputmode="numeric" min="0" step="1" placeholder="${unit === "won" ? "매출(원)" : "매출(NV)"}" data-mc-sale="${safe(id)}" value="${safe(shown(id))}" style="width:96px;height:26px;padding:2px 6px;font-size:12px"><small data-mc-won="${safe(id)}" style="display:block"></small></div></div>`;
   };
   const treeHtml = (rid) => {
     const node = (row, level, path) => {
@@ -226,8 +231,12 @@ export async function manualClosePage(root, me) {
       const changed = b.major !== n.major || b.minor !== n.minor || b.lines[0] !== n.lines[0] || b.lines[1] !== n.lines[1];
       card.style.borderColor = changed || sales[id] ? "#dc2626" : "";
       const saleInput = card.querySelector("[data-mc-sale]");
-      if (document.activeElement !== saleInput) saleInput.value = sales[id] || "";
-      card.querySelector("[data-mc-won]").textContent = sales[id] ? `≈ ${fmt(wonOfNv(sales[id]))}원` : "";
+      if (document.activeElement !== saleInput) saleInput.value = shown(id);
+      card.querySelector("[data-mc-won]").textContent = sales[id]
+        ? unit === "won"
+          ? `≈ ${fmt(sales[id])} NV`
+          : `≈ ${fmt(wonOfNv(sales[id]))}원`
+        : "";
     });
     const totalNv = Object.values(sales).reduce((sum, nv) => sum + Number(nv || 0), 0);
     $("mcTotal").textContent = totalNv
@@ -393,7 +402,7 @@ export async function manualClosePage(root, me) {
           `<label data-mc-pickrow="${safe(row.userId)}" style="display:flex;flex-direction:row;flex-wrap:nowrap;gap:8px;align-items:center;justify-content:flex-start;text-align:left;padding:3px 6px;margin:0;width:auto;cursor:pointer"><input type="checkbox" data-mc-root="${safe(row.userId)}"${rootIds.includes(String(row.userId)) ? " checked" : ""} style="flex:none;width:18px;height:18px;min-height:0;margin:0;padding:0"><span style="flex:none;width:68px;font-size:13px">${safe(row.userId)}</span><b style="flex:none;min-width:56px">${safe(row.userName)}</b><small style="flex:none;color:#6b7280">${safe(row.rankName || "")}/${safe(row.rankMaxName || "")}</small></label>`,
       )
       .join("");
-    $("mcBody").innerHTML = `<section class="card"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><label>단계 <select id="mcDepth">${depthOptions}</select></label><button type="button" class="secondary compact" id="mcReset">입력 초기화</button></div><div class="help" style="margin-top:4px">계보도의 빈 곳을 끌면 화면이 움직입니다. 칸·버튼 위에서는 움직이지 않습니다.</div><details open style="margin-top:8px"><summary><b>맨 위 박스 고르기</b> (여러 개 체크하면 아래로 차례로 나옵니다)</summary><input id="mcSearch" type="search" placeholder="이름 또는 회원번호 검색" style="width:100%;margin:6px 0"><div id="mcPickList" style="max-height:220px;overflow:auto;border:1px solid #e5e7eb;border-radius:8px;padding:4px">${pickList}</div></details><div id="mcTotal" class="help" style="margin-top:6px"></div><div id="mcEntered" style="margin-top:4px;font-size:13px;line-height:1.9"></div><details style="margin-top:6px"><summary><b>다른 계정으로 가져가기</b> (주영돈에서 넣은 가상 매출을 한수진 화면에서 이어 쓰기)</summary><div class="help">여기서 "복사"를 누르면 지금 넣은 NV가 글자로 복사됩니다. 다른 계정 화면에서 아래 칸에 붙여넣고 "불러오기"를 누르면 같은 박스에 같은 NV가 들어가서, 위쪽 계산에 그대로 반영됩니다.</div><textarea id="mcShare" rows="2" style="width:100%;font-size:12px" placeholder="여기에 붙여넣기"></textarea><div><button type="button" class="secondary compact" id="mcCopy">복사</button> <button type="button" class="secondary compact" id="mcLoad">불러오기</button> <span id="mcShareMsg" class="help"></span></div></details><div id="mcTrees">${treesHtml()}</div></section>`;
+    $("mcBody").innerHTML = `<section class="card"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><label>단계 <select id="mcDepth">${depthOptions}</select></label><label>입력 단위 <select id="mcUnit"><option value="nv"${unit === "nv" ? " selected" : ""}>NV</option><option value="won"${unit === "won" ? " selected" : ""}>원</option></select></label><button type="button" class="secondary compact" id="mcReset">입력 초기화</button></div><div class="help" style="margin-top:4px">계보도의 빈 곳을 끌면 화면이 움직입니다. 칸·버튼 위에서는 움직이지 않습니다.</div><details open style="margin-top:8px"><summary><b>맨 위 박스 고르기</b> (여러 개 체크하면 아래로 차례로 나옵니다)</summary><input id="mcSearch" type="search" placeholder="이름 또는 회원번호 검색" style="width:100%;margin:6px 0"><div id="mcPickList" style="max-height:220px;overflow:auto;border:1px solid #e5e7eb;border-radius:8px;padding:4px">${pickList}</div></details><div id="mcTotal" class="help" style="margin-top:6px"></div><div id="mcEntered" style="margin-top:4px;font-size:13px;line-height:1.9"></div><details style="margin-top:6px"><summary><b>다른 계정으로 가져가기</b> (주영돈에서 넣은 가상 매출을 한수진 화면에서 이어 쓰기)</summary><div class="help">여기서 "복사"를 누르면 지금 넣은 NV가 글자로 복사됩니다. 다른 계정 화면에서 아래 칸에 붙여넣고 "불러오기"를 누르면 같은 박스에 같은 NV가 들어가서, 위쪽 계산에 그대로 반영됩니다.</div><textarea id="mcShare" rows="2" style="width:100%;font-size:12px" placeholder="여기에 붙여넣기"></textarea><div><button type="button" class="secondary compact" id="mcCopy">복사</button> <button type="button" class="secondary compact" id="mcLoad">불러오기</button> <span id="mcShareMsg" class="help"></span></div></details><div id="mcTrees">${treesHtml()}</div></section>`;
     refreshNumbers();
   };
 
@@ -417,7 +426,8 @@ export async function manualClosePage(root, me) {
     }
     const input = event.target.closest("[data-mc-sale]");
     if (!input) return;
-    const nv = Math.max(0, Math.floor(Number(input.value || 0)));
+    const typed = Math.max(0, Math.floor(Number(input.value || 0)));
+    const nv = unit === "won" ? Math.floor(typed / 1000) * NV_PER_THOUSAND : typed;
     if (nv > 0) sales[input.dataset.mcSale] = nv;
     else delete sales[input.dataset.mcSale];
     saveState();
@@ -436,6 +446,12 @@ export async function manualClosePage(root, me) {
     if (pick) {
       const id = pick.dataset.mcRoot;
       rootIds = pick.checked ? [...new Set([...rootIds, id])] : rootIds.filter((value) => value !== id);
+      saveState();
+      drawTrees();
+      return;
+    }
+    if (event.target.id === "mcUnit") {
+      unit = event.target.value === "won" ? "won" : "nv";
       saveState();
       drawTrees();
       return;
