@@ -277,7 +277,7 @@ export async function manualClosePage(root, me) {
     const depthOptions = [2, 3, 4, 5, 6, 7, 8, 9, 10]
       .map((n) => `<option value="${n}"${n === depth ? " selected" : ""}>${n}단계</option>`)
       .join("");
-    $("mcBody").innerHTML = `<section class="card"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><label>맨 위 박스 <select id="mcRoot">${rootOptions}</select></label><label>단계 <select id="mcDepth">${depthOptions}</select></label><button type="button" class="secondary compact" id="mcReset">입력 초기화</button></div><div id="mcTotal" class="help" style="margin-top:6px"></div><div style="margin-top:8px;padding-top:8px;border-top:1px solid #e5e7eb"><b>${safe(model.byId.get(rootId)?.userName || "")} 마감 목표</b> 대 <input id="mcTargetMajor" type="number" min="0" step="1" style="width:56px" value="${targets.major}"> 만 / 소 <input id="mcTargetMinor" type="number" min="0" step="1" style="width:56px" value="${targets.minor}"> 만 <button type="button" class="secondary compact" id="mcRecBtn">추천 보기</button><div id="mcRec" style="margin-top:6px"></div></div><div class="box-tree" style="touch-action:pan-x pan-y;margin-top:8px"><div class="tree-stage" id="mcStage">${treeHtml()}</div></div></section>`;
+    $("mcBody").innerHTML = `<section class="card"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><label>맨 위 박스 <select id="mcRoot">${rootOptions}</select></label><label>단계 <select id="mcDepth">${depthOptions}</select></label><button type="button" class="secondary compact" id="mcReset">입력 초기화</button></div><div id="mcTotal" class="help" style="margin-top:6px"></div><details style="margin-top:6px"><summary><b>다른 계정으로 가져가기</b> (주영돈에서 넣은 가상 매출을 한수진 화면에서 이어 쓰기)</summary><div class="help">여기서 "복사"를 누르면 지금 넣은 NV가 글자로 복사됩니다. 다른 계정 화면에서 아래 칸에 붙여넣고 "불러오기"를 누르면 같은 박스에 같은 NV가 들어가서, 위쪽 계산에 그대로 반영됩니다.</div><textarea id="mcShare" rows="2" style="width:100%;font-size:12px" placeholder="여기에 붙여넣기"></textarea><div><button type="button" class="secondary compact" id="mcCopy">복사</button> <button type="button" class="secondary compact" id="mcLoad">불러오기</button> <span id="mcShareMsg" class="help"></span></div></details><div style="margin-top:8px;padding-top:8px;border-top:1px solid #e5e7eb"><b>${safe(model.byId.get(rootId)?.userName || "")} 마감 목표</b> 대 <input id="mcTargetMajor" type="number" min="0" step="1" style="width:56px" value="${targets.major}"> 만 / 소 <input id="mcTargetMinor" type="number" min="0" step="1" style="width:56px" value="${targets.minor}"> 만 <button type="button" class="secondary compact" id="mcRecBtn">추천 보기</button><div id="mcRec" style="margin-top:6px"></div></div><div class="box-tree" style="touch-action:pan-x pan-y;margin-top:8px"><div class="tree-stage" id="mcStage">${treeHtml()}</div></div></section>`;
     refreshNumbers();
   };
 
@@ -320,7 +320,38 @@ export async function manualClosePage(root, me) {
       }
     }
   };
-  root.onclick = (event) => {
+  root.onclick = async (event) => {
+    if (event.target.closest("#mcCopy")) {
+      const text = `NVSALES:${JSON.stringify(sales)}`;
+      $("mcShare").value = text;
+      let copied = false;
+      try {
+        await navigator.clipboard.writeText(text);
+        copied = true;
+      } catch {}
+      $("mcShareMsg").textContent = copied ? "복사했습니다." : "위 칸의 글자를 직접 복사해 주세요.";
+      return;
+    }
+    if (event.target.closest("#mcLoad")) {
+      try {
+        const raw = $("mcShare").value.trim().replace(/^NVSALES:/, "");
+        const loaded = JSON.parse(raw);
+        let count = 0;
+        Object.entries(loaded).forEach(([id, nv]) => {
+          const value = Math.floor(Number(nv || 0));
+          if (value > 0) {
+            sales[id] = value;
+            count += 1;
+          }
+        });
+        saveState();
+        draw();
+        $("mcShareMsg").textContent = `${count}칸을 불러왔습니다.`;
+      } catch {
+        $("mcShareMsg").textContent = "읽을 수 없는 글자입니다. 복사한 글자를 그대로 붙여넣어 주세요.";
+      }
+      return;
+    }
     if (event.target.closest("#mcRecBtn")) {
       recommend();
       return;
