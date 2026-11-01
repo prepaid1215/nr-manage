@@ -13,6 +13,7 @@ import {
 } from "./checklist.js?v=20260906-31";
 import { closingPage, commissionPage } from "./finance.js?v=20260916-2";
 import { performancePage } from "./performance.js?v=20261101-1";
+import { manualClosePage } from "./manual-close.js?v=20261101-1";
 import { teamPage } from "./team.js?v=20261101-10";
 import { localDate, monthRange } from "./date.js?v=20260829-25";
 import { friendlyError } from "./errors.js?v=20260830-1";
@@ -41,6 +42,7 @@ const menus = [
   ["checklist", "체크"],
   ["organization", "조직"],
   ["performance", "실적"],
+  ["manual", "직접계산"],
   ["commission", "수당"],
   ["closing", "마감"],
   ["team", "팀"],
@@ -417,6 +419,7 @@ async function show(page, options) {
   if (page === "checklist") return checklistPage($("content"), me);
   if (page === "organization") return organizationDashboard();
   if (page === "performance") return performancePage($("content"), me);
+  if (page === "manual") return manualClosePage($("content"), me);
   if (page === "commission") return commissionPage($("content"), me);
   if (page === "closing") return closingPage($("content"), me);
   if (page === "team") return teamPage($("content"), me);
