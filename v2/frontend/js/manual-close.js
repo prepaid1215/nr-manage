@@ -23,7 +23,7 @@ const isGdUp = (row) =>
   RANKS.indexOf(String(row?.rankMaxName || row?.rankName || "회원").toUpperCase()) >= 2;
 
 export async function manualClosePage(root, me) {
-  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>직접계산</h2><p class="help">수집 자료로 박스를 미리 채워 두었습니다. 박스마다 넣을 매출(원)을 직접 입력하면 바로 계산됩니다. 추천은 하지 않고, 계산 과정을 그대로 보여줍니다.</p></div></div><div id="mcSource" class="help">불러오는 중...</div><div id="mcError" class="error"></div></section><div id="mcBody"></div>`;
+  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>마감 직접 계산</h2><p class="help">수집 자료로 박스를 미리 채워 두었습니다. 박스마다 넣을 매출(원)을 직접 입력하면 바로 계산됩니다. 추천은 하지 않고, 계산 과정을 그대로 보여줍니다.</p></div></div><div id="mcSource" class="help">불러오는 중...</div><div id="mcError" class="error"></div></section><div id="mcBody"></div>`;
   const $ = (id) => document.getElementById(id);
 
   // ── 수집 자료 고르기 (계정별 가장 최근 것) ─────────────────────────────
