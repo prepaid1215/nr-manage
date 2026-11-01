@@ -20,7 +20,7 @@ export async function mountTeamClosing(root) {
   if (!root) return;
   const period = closingPeriodForDate(new Date());
   root.innerHTML =
-    '<div data-tc="mine"></div><div data-tc="orders"></div><div data-tc="join"></div>';
+    '<div data-tc="mine"></div><div data-tc="join"></div><div data-tc="orders"></div>';
   const part = (name) => root.querySelector(`[data-tc="${name}"]`);
 
   const renderMine = async () => {
