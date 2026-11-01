@@ -1,5 +1,6 @@
 import { supabase } from "./supabase.js?v=20260829-34";
 import { friendlyError } from "./errors.js?v=20260830-1";
+import { mountTeamClosing } from "./team-closing.js?v=20261101-1";
 import { buildPerformanceModel } from "./performance-calculator.js?v=20260831-61";
 
 const resources = [
@@ -21,9 +22,10 @@ const safe = (value) =>
   );
 
 export async function teamPage(root, me) {
-  root.innerHTML = `<section class="card"><h2>팀 관리</h2><p class="help">회원코드를 정확히 검색한 뒤 이름을 확인하고 파트너로 임명할 수 있습니다.</p><form id="teamCreate" class="inline-form"><input id="teamName" placeholder="팀 이름" required><button class="primary">팀 만들기</button></form><div id="teamError" class="error"></div></section><div id="teamList"></div>`;
+  root.innerHTML = `<div id="teamClosing"></div><section class="card"><h2>팀 관리</h2><p class="help">회원코드를 정확히 검색한 뒤 이름을 확인하고 파트너로 임명할 수 있습니다.</p><form id="teamCreate" class="inline-form"><input id="teamName" placeholder="팀 이름" required><button class="primary">팀 만들기</button></form><div id="teamError" class="error"></div></section><div id="teamList"></div>`;
   const $ = (id) => document.getElementById(id),
     errorBox = $("teamError");
+  mountTeamClosing($("teamClosing"));
   const explainError = (error) =>
     /function .* does not exist|schema cache/i.test(error.message)
       ? "Supabase에서 RUN_011_PARTNER_CODE_APPOINTMENT.sql을 먼저 실행하세요."
