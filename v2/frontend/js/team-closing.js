@@ -107,9 +107,9 @@ export async function mountTeamClosing(root) {
           )}${td(mark(row))}${
             canMark
               ? td(
-                  `<label><input type="checkbox" data-seller="${safe(row.member_no)}"${
+                  `<span data-seller-cell style="display:inline-flex;gap:4px;align-items:center;cursor:pointer;user-select:none;touch-action:none"><input type="checkbox" tabindex="-1" style="pointer-events:none" data-seller="${safe(row.member_no)}"${
                     isSeller(row) ? " checked" : ""
-                  }> 매출자</label>`,
+                  }> 매출자</span>`,
                 )
               : ""
           }</tr>`,
@@ -120,7 +120,7 @@ export async function mountTeamClosing(root) {
       : `가입 ${joined} / 전체 ${rows.length}명 (수집 확인 ${verified}명)`;
     box.innerHTML = `<details class="card" style="margin:8px 0" open><summary><b>팀 가입 현황 · ${summary}</b></summary><div class="help">NRC 계보 기준으로 내 아래 전체입니다. 앱에 가입하고 NRC 수집까지 마치면 마감 값과 현황이 위로 전달됩니다. 같은 사람의 여러 박스는 한 명으로 묶어 보여줍니다.${
       canMark
-        ? " 사업을 하지 않고 수당을 사업자에게 넘기는 가족회원은 \"매출자\"로 체크하면 가입 대상에서 빠집니다."
+        ? " 사업을 하지 않고 수당을 사업자에게 넘기는 가족회원은 \"매출자\"로 체크하면 가입 대상에서 빠집니다. 체크칸을 누른 채 위아래로 끌면 여러 명을 한 번에 표시하거나 해제할 수 있습니다."
         : ""
     }</div><button type="button" class="compact" data-tc-copy>가입 안내 문구 복사</button> <span data-tc-copymsg class="help"></span><table style="width:100%;font-size:12px;border-collapse:collapse;margin-top:6px"><thead><tr>${th("사람")}${th("직급")}${th("상태")}${canMark ? th("") : ""}</tr></thead><tbody>${body}</tbody></table></details>`;
   };
@@ -173,6 +173,68 @@ export async function mountTeamClosing(root) {
     else await renderOrders();
   };
 
+  // 드래그로 한 번에 표시: 체크칸을 누른 채 다른 행 위로 끌면 같은 상태(누른 칸의 반대)로 바뀐다.
+  // 손을 떼면 바뀐 사람들을 한 번에 저장한다. (마우스·터치 모두 포인터 이벤트로 처리)
+  root._tcAbort?.abort();
+  const abort = new AbortController();
+  root._tcAbort = abort;
+  let drag = null;
+  const rowBox = (x, y) =>
+    document.elementFromPoint(x, y)?.closest?.("tr")?.querySelector?.("[data-seller]") || null;
+  const touch = (box) => {
+    if (!drag || !box || drag.boxes.has(box.dataset.seller)) return;
+    drag.boxes.set(box.dataset.seller, box);
+    box.checked = drag.state;
+  };
+  root.addEventListener(
+    "pointerdown",
+    (event) => {
+      const cell = event.target.closest("[data-seller-cell]");
+      if (!cell || (event.pointerType === "mouse" && event.button !== 0)) return;
+      const box = cell.querySelector("[data-seller]");
+      event.preventDefault();
+      drag = { state: !box.checked, boxes: new Map() };
+      touch(box);
+    },
+    { signal: abort.signal },
+  );
+  root.addEventListener(
+    "pointermove",
+    (event) => {
+      if (drag) touch(rowBox(event.clientX, event.clientY));
+    },
+    { signal: abort.signal },
+  );
+  window.addEventListener(
+    "pointerup",
+    async () => {
+      if (!drag) return;
+      const { state, boxes } = drag;
+      drag = null;
+      const ids = [...boxes.keys()];
+      const { data: auth } = await supabase.auth.getUser();
+      const ownerId = auth?.user?.id;
+      if (!ownerId || !ids.length) return;
+      const { error } = state
+        ? await supabase
+            .from("nrc_seller_marks")
+            .upsert(
+              ids.map((memberNo) => ({ owner_id: ownerId, member_no: memberNo })),
+              { onConflict: "owner_id,member_no", ignoreDuplicates: true },
+            )
+        : await supabase
+            .from("nrc_seller_marks")
+            .delete()
+            .eq("owner_id", ownerId)
+            .in("member_no", ids);
+      if (error) boxes.forEach((box) => (box.checked = !state));
+      await renderJoin();
+    },
+    { signal: abort.signal },
+  );
+  window.addEventListener("pointercancel", () => (drag = null), { signal: abort.signal });
+
+  // 칸 값이 다른 경로로 바뀐 경우(한 명씩 저장)
   root.onchange = async (event) => {
     const box = event.target.closest("[data-seller]");
     if (!box) return;
