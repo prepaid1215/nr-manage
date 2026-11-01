@@ -120,7 +120,7 @@ export async function mountTeamClosing(root) {
       : `가입 ${joined} / 전체 ${rows.length}명 (수집 확인 ${verified}명)`;
     box.innerHTML = `<details class="card" style="margin:8px 0" open><summary><b>팀 가입 현황 · ${summary}</b></summary><div class="help">NRC 계보 기준으로 내 아래 전체입니다. 앱에 가입하고 NRC 수집까지 마치면 마감 값과 현황이 위로 전달됩니다. 같은 사람의 여러 박스는 한 명으로 묶어 보여줍니다.${
       canMark
-        ? " 사업을 하지 않고 수당을 사업자에게 넘기는 가족회원은 \"매출자\"로 체크하면 가입 대상에서 빠집니다. 체크칸을 누른 채 위아래로 끌면 여러 명을 한 번에 표시하거나 해제할 수 있습니다."
+        ? " 사업을 하지 않고 수당을 사업자에게 넘기는 가족회원은 \"매출자\"로 체크하면 가입 대상에서 빠집니다. 체크칸을 누른 채 위아래로 끌면 여러 명을 한 번에 표시하거나 해제할 수 있습니다. 아래 사업자가 매출자로 표시한 사람은 위 계정 화면에서는 보이지 않습니다."
         : ""
     }</div><button type="button" class="compact" data-tc-copy>가입 안내 문구 복사</button> <span data-tc-copymsg class="help"></span><table style="width:100%;font-size:12px;border-collapse:collapse;margin-top:6px"><thead><tr>${th("사람")}${th("직급")}${th("상태")}${canMark ? th("") : ""}</tr></thead><tbody>${body}</tbody></table></details>`;
   };
