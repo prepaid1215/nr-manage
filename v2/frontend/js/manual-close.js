@@ -55,6 +55,9 @@ export async function manualClosePage(root, me) {
   let selectedId = "";
   let collectedAt = "";
   let sourceId = "";
+  let marks = new Map(); // 박스 회원번호 → 'income'(수당매출자) | 'seller'(매출자)
+  let canKind = false; // 수당매출자/매출자 구분 저장 칸이 DB에 있는지
+  let ownBoxes = new Set(); // 사업자 본인 박스(수당 계산 대상)
 
   const storeKey = () => `manual-close:${me.id}:${snapshotId}`;
   const loadState = () => {
@@ -135,6 +138,37 @@ export async function manualClosePage(root, me) {
     if (!selectedId || !model.byId.has(selectedId)) {
       selectedId = model.byId.has(String(me.member_no)) ? String(me.member_no) : String(model.rows[0].userId);
     }
+    // 사업자 본인 박스: 내 회원번호에서 시작해 같은 이름으로 이어지는 박스들
+    ownBoxes = new Set();
+    const startId = String(me.member_no);
+    if (model.byId.has(startId)) {
+      const queue = [startId];
+      while (queue.length) {
+        const id = queue.shift();
+        if (ownBoxes.has(id)) continue;
+        ownBoxes.add(id);
+        const name = model.byId.get(id).userName;
+        (model.children.get(id) || []).forEach((child) => {
+          if (child.userName === name) queue.push(String(child.userId));
+        });
+      }
+    }
+  };
+
+  // 수당매출자/매출자 표시 불러오기 (kind 칸이 없으면 모두 매출자로 보고 구분 칸은 숨긴다)
+  const loadMarks = async () => {
+    marks = new Map();
+    canKind = false;
+    const withKind = await supabase.from("nrc_seller_marks").select("member_no,kind");
+    if (!withKind.error && Array.isArray(withKind.data)) {
+      canKind = true;
+      withKind.data.forEach((row) => marks.set(String(row.member_no), row.kind === "income" ? "income" : "seller"));
+      return;
+    }
+    const plain = await supabase.from("nrc_seller_marks").select("member_no");
+    if (!plain.error && Array.isArray(plain.data)) {
+      plain.data.forEach((row) => marks.set(String(row.member_no), "seller"));
+    }
   };
 
   // ── 계산 ───────────────────────────────────────────────────────────────
@@ -174,6 +208,40 @@ export async function manualClosePage(root, me) {
     };
   };
 
+  // ── 수당 추정 (소실적 × 지급율, 1NV=1원 가정 / 사업자 본인 박스 + 수당매출자만) ──────
+  const rateOf = (minorNv, row) => {
+    const gd = isGdUp(row);
+    if (minorNv >= 800000) return gd ? 0.1 : 0.06;
+    if (minorNv >= 400000) return gd ? 0.08 : 0.06;
+    if (minorNv >= 60000 && gd) return 0.05;
+    return 0;
+  };
+  const counts = (id) => ownBoxes.has(id) || marks.get(id) === "income";
+  const incomeOf = (id) => {
+    const c = calc(id);
+    return Math.round(c.minor * rateOf(c.minor, model.byId.get(id)));
+  };
+  const badgeHtml = (id, row, c) => {
+    if (marks.get(id) === "seller") return '<span style="color:#6b7280">매출자 · 수당 제외</span>';
+    let text = "";
+    if (isGdUp(row)) {
+      text += c.minor >= 60000
+        ? '<span style="color:#047857">6만 ✓</span>'
+        : `<span style="color:#b45309">6만 -${fmt(60000 - c.minor)}</span>`;
+    }
+    if (counts(id)) text += ` <span style="color:#4338ca">수당 약 ${fmt(incomeOf(id))}원</span>`;
+    return text;
+  };
+  const incomeTotal = () => {
+    subSalesNv = new Map();
+    let sum = 0;
+    model.rows.forEach((row) => {
+      const id = String(row.userId);
+      if (counts(id)) sum += incomeOf(id);
+    });
+    return sum;
+  };
+
   // ── 화면 ───────────────────────────────────────────────────────────────
   const explain = () => {
     const c = calc(selectedId);
@@ -200,14 +268,16 @@ export async function manualClosePage(root, me) {
   const rowHtml = (row, depth) => {
     const id = String(row.userId);
     const c = calc(id);
-    const sixty = isGdUp(row)
-      ? c.minor >= 60000
-        ? '<span style="color:#047857">6만 ✓</span>'
-        : `<span style="color:#b45309">6만 -${fmt(60000 - c.minor)}</span>`
-      : "";
+    const sixty = badgeHtml(id, row, c);
+    const kind = marks.get(id) || "";
+    const kindSelect = ownBoxes.has(id)
+      ? '<span style="font-size:12px;color:#4338ca">내 박스</span>'
+      : canKind
+        ? `<select data-mc-kind="${safe(id)}" style="height:26px;font-size:12px"><option value=""${kind === "" ? " selected" : ""}>표시 없음</option><option value="income"${kind === "income" ? " selected" : ""}>수당매출자</option><option value="seller"${kind === "seller" ? " selected" : ""}>매출자</option></select>`
+        : "";
     const sale = sales[id] ? sales[id] : "";
     const isSel = id === selectedId;
-    return `<div data-mc-row="${safe(id)}" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:2px 6px;margin-left:${depth * 14}px;border-left:3px solid ${isSel ? "#5b4fc9" : "#e5e7eb"};background:${isSel ? "#f5f3ff" : "transparent"}"><button type="button" class="compact" data-mc-pick="${safe(id)}" style="min-width:0;height:24px;padding:0 8px">${isSel ? "●" : "○"}</button><b style="min-width:84px">${safe(row.userName)} <small>*${safe(id.slice(-6))}</small></b><small>${safe(row.rankMaxName || row.rankName || "")}</small><span style="font-size:12px">소 <b data-mc-minor="${safe(id)}">${fmt(c.minor)}</b> / 대 <b data-mc-major="${safe(id)}">${fmt(c.major)}</b></span> <span data-mc-sixty="${safe(id)}" style="font-size:12px">${sixty}</span><label style="margin-left:auto;font-size:12px">매출(원) <input type="number" inputmode="numeric" min="0" step="1000" style="width:96px;height:26px;padding:2px 6px;font-size:13px" data-mc-sale="${safe(id)}" value="${safe(sale)}"></label></div>`;
+    return `<div data-mc-row="${safe(id)}" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:2px 6px;margin-left:${depth * 14}px;border-left:3px solid ${isSel ? "#5b4fc9" : "#e5e7eb"};background:${isSel ? "#f5f3ff" : "transparent"}"><button type="button" class="compact" data-mc-pick="${safe(id)}" style="min-width:0;height:24px;padding:0 8px">${isSel ? "●" : "○"}</button><b style="min-width:84px">${safe(row.userName)} <small>*${safe(id.slice(-6))}</small></b><small>${safe(row.rankMaxName || row.rankName || "")}</small><span style="font-size:12px">소 <b data-mc-minor="${safe(id)}">${fmt(c.minor)}</b> / 대 <b data-mc-major="${safe(id)}">${fmt(c.major)}</b></span> <span data-mc-sixty="${safe(id)}" style="font-size:12px">${sixty}</span><span style="margin-left:auto">${kindSelect}</span><label style="font-size:12px">매출(원) <input type="number" inputmode="numeric" min="0" step="1000" style="width:96px;height:26px;padding:2px 6px;font-size:13px" data-mc-sale="${safe(id)}" value="${safe(sale)}"></label></div>`;
   };
 
   const walk = (id, depth, out, seenIds) => {
@@ -236,14 +306,19 @@ export async function manualClosePage(root, me) {
       rowEl.querySelector("[data-mc-minor]").textContent = fmt(c.minor);
       rowEl.querySelector("[data-mc-major]").textContent = fmt(c.major);
       const row = model.byId.get(id);
-      rowEl.querySelector("[data-mc-sixty]").innerHTML = isGdUp(row)
-        ? c.minor >= 60000
-          ? '<span style="color:#047857">6만 ✓</span>'
-          : `<span style="color:#b45309">6만 -${fmt(60000 - c.minor)}</span>`
-        : "";
+      rowEl.querySelector("[data-mc-sixty]").innerHTML = badgeHtml(id, row, c);
     });
     const total = Object.values(sales).reduce((sum, won) => sum + Math.floor(Number(won || 0) / 1000) * 1000, 0);
     $("mcTotal").textContent = `입력한 매출 합계 ${fmt(total)}원 (${fmt(nvOf(total))} NV)`;
+    // 추정 수당: 입력 전과 입력 후를 나란히 (사업자 본인 박스 + 수당매출자만)
+    const after = incomeTotal();
+    const keep = sales;
+    sales = {};
+    const before = incomeTotal();
+    sales = keep;
+    subSalesNv = new Map();
+    const incomeCount = model.rows.filter((row) => counts(String(row.userId))).length;
+    $("mcIncome").innerHTML = `추정 수당(내 박스 + 수당매출자 ${fmt(incomeCount)}칸): 입력 전 <b>${fmt(before)}원</b> → 입력 후 <b>${fmt(after)}원</b> (<b>${after - before >= 0 ? "+" : ""}${fmt(after - before)}원</b>) <span style="color:#6b7280">· 소실적 × 지급율, 1NV=1원 가정</span>`;
   };
 
   const draw = () => {
@@ -261,7 +336,7 @@ export async function manualClosePage(root, me) {
       )
       .join("");
     $("mcSource").innerHTML = `수집 자료 <select id="mcSnap">${sourceOptions}</select> · 기준일 ${new Date(collectedAt).toLocaleString("ko-KR")}`;
-    $("mcBody").innerHTML = `<section class="card"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><label>계산할 박스 <select id="mcSelect">${options}</select></label><label>목표 대 <input id="mcTargetMajor" type="number" min="0" step="1" style="width:64px" value="${targets.major}"> 만</label><label>소 <input id="mcTargetMinor" type="number" min="0" step="1" style="width:64px" value="${targets.minor}"> 만</label><button type="button" class="secondary compact" id="mcReset">입력 초기화</button><label>박스 찾기 <input id="mcFind" placeholder="이름·회원번호" style="width:120px"></label></div><div id="mcTotal" class="help" style="margin-top:6px"></div></section><div id="mcExplain"></div><section class="card"><h3 style="margin:0 0 6px">박스별 매출 입력</h3><div class="help">○를 누르면 그 박스가 위 계산 과정에 나옵니다. 매출(원)은 1,000원 단위로 반영되고 위쪽 박스까지 바로 올라갑니다.</div><div id="mcTree"></div></section>`;
+    $("mcBody").innerHTML = `<section class="card"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><label>계산할 박스 <select id="mcSelect">${options}</select></label><label>목표 대 <input id="mcTargetMajor" type="number" min="0" step="1" style="width:64px" value="${targets.major}"> 만</label><label>소 <input id="mcTargetMinor" type="number" min="0" step="1" style="width:64px" value="${targets.minor}"> 만</label><button type="button" class="secondary compact" id="mcReset">입력 초기화</button><label>박스 찾기 <input id="mcFind" placeholder="이름·회원번호" style="width:120px"></label></div><div id="mcTotal" class="help" style="margin-top:6px"></div><div id="mcIncome" style="margin-top:4px;font-size:13px"></div></section><div id="mcExplain"></div><section class="card"><h3 style="margin:0 0 6px">박스별 매출 입력</h3><div class="help">○를 누르면 그 박스가 위 계산 과정에 나옵니다. 매출(원)은 1,000원 단위로 반영되고 위쪽 박스까지 바로 올라갑니다.</div><div id="mcTree"></div></section>`;
     renderTree();
     refreshNumbers();
   };
@@ -296,6 +371,26 @@ export async function manualClosePage(root, me) {
     }
   };
   root.onchange = async (event) => {
+    const kindSelect = event.target.closest("[data-mc-kind]");
+    if (kindSelect) {
+      const id = kindSelect.dataset.mcKind;
+      const kind = kindSelect.value;
+      const { error } = kind
+        ? await supabase
+            .from("nrc_seller_marks")
+            .upsert({ owner_id: me.id, member_no: id, kind }, { onConflict: "owner_id,member_no" })
+        : await supabase.from("nrc_seller_marks").delete().eq("owner_id", me.id).eq("member_no", id);
+      if (error) {
+        $("mcError").textContent = error.message;
+        kindSelect.value = marks.get(id) || "";
+        return;
+      }
+      $("mcError").textContent = "";
+      if (kind) marks.set(id, kind);
+      else marks.delete(id);
+      refreshNumbers();
+      return;
+    }
     if (event.target.id === "mcSelect") {
       selectedId = event.target.value;
       saveState();
@@ -306,6 +401,7 @@ export async function manualClosePage(root, me) {
       snapshotId = Number(event.target.value) || event.target.value;
       try {
         await loadSnapshot();
+        await loadMarks();
         draw();
       } catch (error) {
         $("mcError").textContent = error.message;
@@ -331,6 +427,7 @@ export async function manualClosePage(root, me) {
 
   try {
     await loadSnapshot();
+    await loadMarks();
     draw();
   } catch (error) {
     $("mcSource").textContent = "";
