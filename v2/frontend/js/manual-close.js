@@ -55,6 +55,7 @@ export async function manualClosePage(root, me) {
   let selectedId = "";
   let collectedAt = "";
   let sourceId = "";
+  let entered = []; // 매출을 넣으려고 추가한 박스 회원번호 (몇 군데만 추가해서 쓴다)
   let marks = new Map(); // 박스 회원번호 → 'income'(수당매출자) | 'seller'(매출자)
   let canKind = false; // 수당매출자/매출자 구분 저장 칸이 DB에 있는지
   let ownBoxes = new Set(); // 사업자 본인 박스(수당 계산 대상)
@@ -64,17 +65,19 @@ export async function manualClosePage(root, me) {
     try {
       const saved = JSON.parse(localStorage.getItem(storeKey()) || "null");
       sales = saved?.sales || {};
+      entered = [...new Set([...(saved?.entered || []), ...Object.keys(sales)])];
       targets = saved?.targets || { major: 40, minor: 40 };
       selectedId = saved?.selectedId || "";
     } catch {
       sales = {};
+      entered = [];
       targets = { major: 40, minor: 40 };
       selectedId = "";
     }
   };
   const saveState = () => {
     try {
-      localStorage.setItem(storeKey(), JSON.stringify({ sales, targets, selectedId }));
+      localStorage.setItem(storeKey(), JSON.stringify({ sales, entered, targets, selectedId }));
     } catch {}
   };
 
@@ -275,9 +278,38 @@ export async function manualClosePage(root, me) {
       : canKind
         ? `<select data-mc-kind="${safe(id)}" style="height:26px;font-size:12px"><option value=""${kind === "" ? " selected" : ""}>표시 없음</option><option value="income"${kind === "income" ? " selected" : ""}>수당매출자</option><option value="seller"${kind === "seller" ? " selected" : ""}>매출자</option></select>`
         : "";
-    const sale = sales[id] ? sales[id] : "";
     const isSel = id === selectedId;
-    return `<div data-mc-row="${safe(id)}" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:2px 6px;margin-left:${depth * 14}px;border-left:3px solid ${isSel ? "#5b4fc9" : "#e5e7eb"};background:${isSel ? "#f5f3ff" : "transparent"}"><button type="button" class="compact" data-mc-pick="${safe(id)}" style="min-width:0;height:24px;padding:0 8px">${isSel ? "●" : "○"}</button><b style="min-width:84px">${safe(row.userName)} <small>*${safe(id.slice(-6))}</small></b><small>${safe(row.rankMaxName || row.rankName || "")}</small><span style="font-size:12px">소 <b data-mc-minor="${safe(id)}">${fmt(c.minor)}</b> / 대 <b data-mc-major="${safe(id)}">${fmt(c.major)}</b></span> <span data-mc-sixty="${safe(id)}" style="font-size:12px">${sixty}</span><span style="margin-left:auto">${kindSelect}</span><label style="font-size:12px">매출(원) <input type="number" inputmode="numeric" min="0" step="1000" style="width:96px;height:26px;padding:2px 6px;font-size:13px" data-mc-sale="${safe(id)}" value="${safe(sale)}"></label></div>`;
+    return `<div data-mc-row="${safe(id)}" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:2px 6px;margin-left:${depth * 14}px;border-left:3px solid ${isSel ? "#5b4fc9" : "#e5e7eb"};background:${isSel ? "#f5f3ff" : "transparent"}"><button type="button" class="compact" data-mc-pick="${safe(id)}" style="min-width:0;height:24px;padding:0 8px">${isSel ? "●" : "○"}</button><b style="min-width:84px">${safe(row.userName)} <small>*${safe(id.slice(-6))}</small></b><small>${safe(row.rankMaxName || row.rankName || "")}</small><span style="font-size:12px">소 <b data-mc-minor="${safe(id)}">${fmt(c.minor)}</b> / 대 <b data-mc-major="${safe(id)}">${fmt(c.major)}</b></span> <span data-mc-sixty="${safe(id)}" style="font-size:12px">${sixty}</span><span style="margin-left:auto">${kindSelect}</span></div>`;
+  };
+
+  // 매출 넣기: 넣을 박스만 찾아서 추가한다 (전체 박스를 다 채우지 않는다)
+  const renderSales = () => {
+    const rows = entered
+      .filter((id) => model.byId.has(id))
+      .map((id) => {
+        const row = model.byId.get(id);
+        return `<div data-mc-srow="${safe(id)}" style="display:flex;gap:8px;align-items:center;padding:4px 0;border-top:1px solid #e5e7eb"><b>${safe(row.userName)} <small>*${safe(id.slice(-6))}</small></b><small>${safe(row.rankMaxName || row.rankName || "")}</small><span style="margin-left:auto"></span><input type="number" inputmode="numeric" min="0" step="1000" placeholder="금액" style="width:110px;height:28px;padding:2px 6px;font-size:13px" data-mc-sale="${safe(id)}" value="${safe(sales[id] || "")}"><span class="help">원</span><button type="button" class="compact" data-mc-remove="${safe(id)}" aria-label="삭제" style="min-width:0">×</button></div>`;
+      })
+      .join("");
+    $("mcSales").innerHTML = rows || '<div class="help">아직 추가한 박스가 없습니다. 위 칸에 이름을 치고 매출을 넣을 박스를 골라 추가하세요.</div>';
+  };
+  const renderAddList = (query) => {
+    const q = query.trim();
+    if (!q) {
+      $("mcAddList").innerHTML = "";
+      return;
+    }
+    const matches = model.rows
+      .filter((row) => !entered.includes(String(row.userId)) && `${row.userName} ${row.userId}`.includes(q))
+      .slice(0, 10);
+    $("mcAddList").innerHTML = matches.length
+      ? matches
+          .map(
+            (row) =>
+              `<button type="button" class="secondary compact" data-mc-add="${safe(row.userId)}" style="margin:2px 4px 2px 0">${safe(row.userName)} *${safe(String(row.userId).slice(-6))} · ${safe(row.rankMaxName || row.rankName || "")}</button>`,
+          )
+          .join("")
+      : '<span class="help">찾는 박스가 없습니다.</span>';
   };
 
   const walk = (id, depth, out, seenIds) => {
@@ -336,7 +368,8 @@ export async function manualClosePage(root, me) {
       )
       .join("");
     $("mcSource").innerHTML = `수집 자료 <select id="mcSnap">${sourceOptions}</select> · 기준일 ${new Date(collectedAt).toLocaleString("ko-KR")}`;
-    $("mcBody").innerHTML = `<section class="card"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><label>계산할 박스 <select id="mcSelect">${options}</select></label><label>목표 대 <input id="mcTargetMajor" type="number" min="0" step="1" style="width:64px" value="${targets.major}"> 만</label><label>소 <input id="mcTargetMinor" type="number" min="0" step="1" style="width:64px" value="${targets.minor}"> 만</label><button type="button" class="secondary compact" id="mcReset">입력 초기화</button><label>박스 찾기 <input id="mcFind" placeholder="이름·회원번호" style="width:120px"></label></div><div id="mcTotal" class="help" style="margin-top:6px"></div><div id="mcIncome" style="margin-top:4px;font-size:13px"></div></section><div id="mcExplain"></div><section class="card"><h3 style="margin:0 0 6px">박스별 매출 입력</h3><div class="help">○를 누르면 그 박스가 위 계산 과정에 나옵니다. 매출(원)은 1,000원 단위로 반영되고 위쪽 박스까지 바로 올라갑니다.</div><div id="mcTree"></div></section>`;
+    $("mcBody").innerHTML = `<section class="card"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><label>계산할 박스 <select id="mcSelect">${options}</select></label><label>목표 대 <input id="mcTargetMajor" type="number" min="0" step="1" style="width:64px" value="${targets.major}"> 만</label><label>소 <input id="mcTargetMinor" type="number" min="0" step="1" style="width:64px" value="${targets.minor}"> 만</label><button type="button" class="secondary compact" id="mcReset">입력 초기화</button></div><div id="mcTotal" class="help" style="margin-top:6px"></div><div id="mcIncome" style="margin-top:4px;font-size:13px"></div></section><div id="mcExplain"></div><section class="card"><h3 style="margin:0 0 6px">매출 넣기</h3><div class="help">매출을 넣을 박스만 찾아서 추가하세요. 금액(원)은 1,000원 단위로 반영되고 위쪽 박스까지 바로 올라갑니다.</div><label style="display:block;margin-top:6px">박스 추가 <input id="mcAdd" placeholder="이름 또는 회원번호를 치세요" style="width:220px"></label><div id="mcAddList" style="margin:4px 0"></div><div id="mcSales"></div></section><details class="card" style="margin:8px 0"><summary><b>전체 박스 보기 · 수당매출자/매출자 표시</b></summary><div class="help">박스마다 수당매출자·매출자를 표시하는 곳입니다. ○를 누르면 그 박스가 위 계산 과정에 나옵니다. 매출 입력은 위 "매출 넣기"에서 합니다.</div><label style="display:block;margin:6px 0">박스 찾기 <input id="mcFind" placeholder="이름·회원번호" style="width:140px"></label><div id="mcTree"></div></details>`;
+    renderSales();
     renderTree();
     refreshNumbers();
   };
@@ -352,6 +385,10 @@ export async function manualClosePage(root, me) {
       else delete sales[id];
       saveState();
       refreshNumbers();
+      return;
+    }
+    if (event.target.id === "mcAdd") {
+      renderAddList(event.target.value);
       return;
     }
     if (event.target.id === "mcFind") {
@@ -418,8 +455,30 @@ export async function manualClosePage(root, me) {
       refreshNumbers();
       return;
     }
+    const add = event.target.closest("[data-mc-add]");
+    if (add) {
+      const id = add.dataset.mcAdd;
+      if (!entered.includes(id)) entered.push(id);
+      saveState();
+      $("mcAdd").value = "";
+      renderAddList("");
+      renderSales();
+      document.querySelector(`[data-mc-srow="${CSS.escape(id)}"] input`)?.focus();
+      return;
+    }
+    const remove = event.target.closest("[data-mc-remove]");
+    if (remove) {
+      const id = remove.dataset.mcRemove;
+      entered = entered.filter((value) => value !== id);
+      delete sales[id];
+      saveState();
+      renderSales();
+      refreshNumbers();
+      return;
+    }
     if (event.target.closest("#mcReset")) {
       sales = {};
+      entered = [];
       saveState();
       draw();
     }
