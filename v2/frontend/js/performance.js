@@ -227,6 +227,11 @@ export async function performancePage(root) {
       completions: Object.fromEntries(
         Object.entries(completions)
           .filter(([id]) => model.byId.has(String(id)))
+          .filter(
+            ([, value]) =>
+              new Date(value?.completedAt) >=
+              new Date(`${initialPeriod.startDate}T00:00:00`),
+          )
           .map(([id, value]) => [id, { ...value, signature }]),
       ),
     };
@@ -1636,7 +1641,11 @@ export async function performancePage(root) {
       const currentAchieved =
         currentMajorNv >= plan.topMajorTarget &&
         currentMinorNv >= plan.topMinorTarget;
-      if (currentAchieved && !topItem.completion) {
+      // 이전 차수에 수집한 자료로는 자동 마감 완료를 만들지 않는다(새 차수 첫날, 지난 차수 실적이
+      // 새 목표를 채운 것처럼 보여 가짜 완료가 위 계정까지 전달되던 문제).
+      const snapshotInPeriod =
+        new Date(data.collected_at) >= new Date(`${period.startDate}T00:00:00`);
+      if (currentAchieved && !topItem.completion && snapshotInPeriod) {
         const automaticCompletion = completionWhenAchieved(
           actualTop,
           lastSignature,
