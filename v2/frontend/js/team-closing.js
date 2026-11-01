@@ -99,7 +99,11 @@ export async function mountTeamClosing(root) {
           : row.has_account
             ? "🟡 가입 · 수집 확인 전"
             : "❌ 미가입";
-    const body = rows
+    // 가입한 사람(수집 확인 → 가입)을 맨 위로, 그다음 미가입, 매출자는 맨 아래로 보낸다.
+    const rank = (row) =>
+      isSeller(row) ? 3 : row.verified ? 0 : row.has_account ? 1 : 2;
+    const body = [...rows]
+      .sort((a, b) => rank(a) - rank(b) || a.lv - b.lv || String(a.member_no).localeCompare(String(b.member_no)))
       .map(
         (row) =>
           `<tr>${td(`${safe(row.member_name || "")} (${safe(row.member_no)})`)}${td(
