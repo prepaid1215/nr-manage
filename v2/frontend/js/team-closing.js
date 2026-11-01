@@ -73,24 +73,58 @@ export async function mountTeamClosing(root) {
     box.innerHTML = `<div class="card" style="margin:8px 0"><b>${title} · ${period.year}년 ${period.month}월 ${period.round}차</b><div class="help">${help} 목표는 만 단위로 입력합니다 (40 = 40만 NV). 받는 사람은 마감 계산기에서 "오더 목표 적용"으로 불러옵니다.</div><table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr>${th("사업자")}${th("오더 대/소")}${th("상태")}${th("")}</tr></thead><tbody>${body}</tbody></table><div data-tc-msg class="help"></div></div>`;
   };
 
-  const teamGuide =
-    '<div class="card" style="margin:8px 0"><b>마케팅 팀</b><div class="help">계보와 상관없이 팀원을 모으는 팀입니다. 아래 "팀 관리"에서 팀을 만들고 초대코드를 만들어 팀원(예: 이호정)에게 보내세요. 팀원이 코드로 합류하면 이 칸에 나타나 오더와 마감 현황을 볼 수 있습니다. 고객·활동·포스팅은 "팀 관리"에서 팀원별로 공유를 허용하면 볼 수 있습니다.</div></div>';
+  // 관리(오더)는 항상 계보 위 계정이 한다. 팀은 사람을 묶어서 서로 뭘 했는지 보는 용도다.
   const renderOrders = () =>
-    Promise.all([
-      renderOrderTable(
-        "orders",
-        "get_downline_closing_status",
-        "팀 마감 오더·현황",
-        "내 계보 아래 앱 계정입니다.",
-      ),
-      renderOrderTable(
-        "team",
-        "get_team_closing_status",
-        "마케팅 팀 마감 오더·현황",
-        "계보와 상관없이 내 팀에 합류한 팀원입니다.",
-        teamGuide,
-      ),
-    ]);
+    renderOrderTable(
+      "orders",
+      "get_downline_closing_status",
+      "팀 마감 오더·현황",
+      "내 계보 아래 앱 계정입니다. 오더는 계보 위 계정이 정합니다.",
+    );
+
+  const teamGuide =
+    '<div class="card" style="margin:8px 0"><b>마케팅 팀 활동 현황</b><div class="help">팀은 계보와 상관없이 사람을 한 묶음으로 묶어서 서로 뭘 했는지 확인하는 용도입니다(관리·오더는 계보 위 계정이 합니다). 아래 "팀 관리"에서 팀을 만들고 초대코드를 팀원에게 보내세요. 팀원이 합류하면 이 칸에 서로의 활동이 나타납니다.</div></div>';
+
+  const renderTeamActivity = async () => {
+    const box = part("team");
+    const monthStart = `${period.year}-${String(period.month).padStart(2, "0")}-01`;
+    const lastDay = new Date(period.year, period.month, 0).getDate();
+    const monthEnd = `${period.year}-${String(period.month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+    const { data: rows, error } = await supabase.rpc("get_team_activity_summary", {
+      p_from: monthStart,
+      p_to: monthEnd,
+      p_period_id: period.periodId,
+    });
+    if (error || !Array.isArray(rows)) {
+      box.innerHTML = "";
+      return;
+    }
+    if (!rows.length) {
+      box.innerHTML = teamGuide;
+      return;
+    }
+    const startsAt = new Date(`${period.startDate}T00:00:00`);
+    const body = rows
+      .map((row) => {
+        const done =
+          row.verified !== false &&
+          row.plan_status === "DONE" &&
+          row.completion &&
+          new Date(row.completed_at || row.completion.completedAt) >= startsAt;
+        const closing = done
+          ? `✅ 완료 · 대 ${fmt(row.completion.majorNv)} / 소 ${fmt(row.completion.minorNv)}`
+          : row.verified === false
+            ? "⚠ 수집 확인 전"
+            : "⏳ 대기";
+        return `<tr>${td(`${safe(row.member_name || "")} (${safe(row.member_no)})${row.is_me ? " · 나" : ""}`)}${td(
+          row.last_activity ? safe(row.last_activity) : "-",
+        )}${td(`${fmt(row.activity_days)}일`)}${td(`${fmt(row.activation_count)}건`)}${td(
+          `${fmt(row.posting_count)}건`,
+        )}${td(closing)}</tr>`;
+      })
+      .join("");
+    box.innerHTML = `<div class="card" style="margin:8px 0"><b>마케팅 팀 활동 현황 · ${period.year}년 ${period.month}월</b><div class="help">팀(${safe(rows[0].team_name || "")})에 합류한 사람끼리 서로 이번 달 활동 개수를 봅니다. 고객 이름·전화번호 같은 내용은 보이지 않고 개수만 보입니다. 오더는 계보 위 계정이 정합니다.</div><table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr>${th("사람")}${th("마지막 기록")}${th("일지")}${th("개통")}${th("포스팅")}${th("마감(이번 차수)")}</tr></thead><tbody>${body}</tbody></table></div>`;
+  };
 
   const renderJoin = async () => {
     const box = part("join");
@@ -283,5 +317,5 @@ export async function mountTeamClosing(root) {
     await renderJoin();
   };
 
-  await Promise.all([renderMine(), renderOrders(), renderJoin()]);
+  await Promise.all([renderMine(), renderOrders(), renderJoin(), renderTeamActivity()]);
 }
