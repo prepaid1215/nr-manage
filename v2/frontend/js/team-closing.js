@@ -20,7 +20,7 @@ export async function mountTeamClosing(root) {
   if (!root) return;
   const period = closingPeriodForDate(new Date());
   root.innerHTML =
-    '<div data-tc="mine"></div><div data-tc="join"></div><div data-tc="orders"></div><div data-tc="team"></div>';
+    '<div data-tc="gather"></div><div data-tc="mine"></div><div data-tc="join"></div><div data-tc="orders"></div><div data-tc="team"></div>';
   const part = (name) => root.querySelector(`[data-tc="${name}"]`);
 
   const renderMine = async () => {
@@ -83,7 +83,52 @@ export async function mountTeamClosing(root) {
     );
 
   const teamGuide =
-    '<div class="card" style="margin:8px 0"><b>마케팅 팀 활동 현황</b><div class="help">팀은 계보와 상관없이 사람을 한 묶음으로 묶어서 서로 뭘 했는지 확인하는 용도입니다(관리·오더는 계보 위 계정이 합니다). 아래 "팀 관리"에서 팀을 만들고 초대코드를 팀원에게 보내세요. 팀원이 합류하면 이 칸에 서로의 활동이 나타납니다.</div></div>';
+    '<div class="card" style="margin:8px 0"><b>마케팅 모임 활동 현황</b><div class="help">모임은 계보와 상관없이 사람을 한 묶음으로 묶어서 서로 뭘 했는지 확인하는 용도입니다(관리·오더는 계보 위 계정이 합니다). 위 "마케팅 모임"에서 모임을 만들고 초대코드를 보내거나, 받은 초대코드로 합류하세요. 합류하면 이 칸에 서로의 활동이 나타납니다.</div></div>';
+
+  // 마케팅 모임: 만든 사람은 팀장이 아니라 초대코드를 보내는 사람일 뿐이다(합류해도 누구에게도
+  // 실적·계보 읽기 권한이 생기지 않는다). DB 함수가 없으면 이 칸은 보이지 않는다.
+  const renderGatherings = async () => {
+    const box = part("gather");
+    const { data: rows, error } = await supabase.rpc("get_my_gatherings");
+    if (error || !Array.isArray(rows)) {
+      box.innerHTML = "";
+      return;
+    }
+    const list = rows
+      .map(
+        (row) =>
+          `<div style="padding:6px 0;border-top:1px solid #e5e7eb"><b>${safe(row.team_name)}</b> · ${fmt(row.member_count)}명${
+            row.made_by_me
+              ? ` <button type="button" class="compact" data-gather-invite="${safe(row.team_id)}">초대코드 만들기</button><span data-gather-code="${safe(row.team_id)}" class="help"></span>`
+              : ""
+          }</div>`,
+      )
+      .join("");
+    box.innerHTML = `<div class="card" style="margin:8px 0"><b>마케팅 모임</b><div class="help">계보와 상관없이 사람을 한 묶음으로 묶어 서로 뭘 했는지 확인하는 모임입니다. 만든 사람은 팀장이 아니라 초대코드를 보내는 사람일 뿐이고, 합류해도 누구에게도 실적·계보 읽기 권한이 생기지 않습니다. 관리·오더는 계보 위 계정이 합니다.</div>${list || '<div class="help">아직 속한 모임이 없습니다.</div>'}<form data-gather-create style="margin-top:8px"><input name="name" placeholder="모임 이름 (예: 마케팅 모임)" minlength="2" required> <button type="submit" class="compact">모임 만들기</button></form><form data-gather-join style="margin-top:6px"><input name="code" placeholder="받은 초대코드" required> <button type="submit" class="compact">코드로 합류</button></form><div data-gather-msg class="help"></div></div>`;
+  };
+
+  root.addEventListener("submit", async (event) => {
+    const create = event.target.closest("[data-gather-create]");
+    const join = event.target.closest("[data-gather-join]");
+    if (!create && !join) return;
+    event.preventDefault();
+    const message = root.querySelector("[data-gather-msg]");
+    const { error, data } = create
+      ? await supabase.rpc("create_gathering", { p_name: create.elements.name.value })
+      : await supabase.rpc("join_gathering", { p_code: join.elements.code.value });
+    if (error) {
+      message.textContent = error.message;
+      return;
+    }
+    await renderGatherings();
+    await renderTeamActivity();
+    const done = root.querySelector("[data-gather-msg]");
+    if (done) {
+      done.textContent = create
+        ? "모임을 만들었습니다. 초대코드를 만들어 보내세요."
+        : `${data?.[0]?.team_name || "모임"}에 합류했습니다.`;
+    }
+  });
 
   const renderTeamActivity = async () => {
     const box = part("team");
@@ -183,6 +228,17 @@ export async function mountTeamClosing(root) {
   };
 
   root.onclick = async (event) => {
+    const invite = event.target.closest("[data-gather-invite]");
+    if (invite) {
+      const teamId = invite.dataset.gatherInvite;
+      const { data: code, error } = await supabase.rpc("create_gathering_invite", {
+        p_team_id: teamId,
+      });
+      const target = root.querySelector(`[data-gather-code="${CSS.escape(teamId)}"]`);
+      if (error) root.querySelector("[data-gather-msg]").textContent = error.message;
+      else if (target) target.textContent = ` 초대코드 ${code} (7일간 유효 · 지금 한 번만 보여줍니다)`;
+      return;
+    }
     if (event.target.closest("[data-tc-copy]")) {
       const text =
         "NRC 사업관리 앱 가입 안내\n" +
@@ -317,5 +373,11 @@ export async function mountTeamClosing(root) {
     await renderJoin();
   };
 
-  await Promise.all([renderMine(), renderOrders(), renderJoin(), renderTeamActivity()]);
+  await Promise.all([
+    renderGatherings(),
+    renderMine(),
+    renderOrders(),
+    renderJoin(),
+    renderTeamActivity(),
+  ]);
 }
