@@ -1,5 +1,8 @@
 import { supabase } from "./supabase.js?v=20260829-34";
-import { buildPerformanceModel } from "./performance-calculator.js?v=20261031-4";
+import {
+  attachPerformanceSubtree,
+  buildPerformanceModel,
+} from "./performance-calculator.js?v=20261031-4";
 
 // 직접계산: 추천은 하지 않는다. 수집 자료로 박스(동그라미)를 미리 채워 두고, 박스마다 넣을 매출(원)을
 // 사람이 직접 입력하면 그 금액이 위로 올라가며 대실적·소실적이 어떻게 바뀌는지 계산 과정을 그대로 보여준다.
@@ -81,6 +84,51 @@ export async function manualClosePage(root, me) {
     if (error || !data) throw new Error(error?.message || "수집 자료를 불러오지 못했습니다.");
     const payload = typeof data.payload === "string" ? JSON.parse(data.payload) : data.payload;
     model = buildPerformanceModel(payload);
+    // 수집 깊이 제한으로 아래쪽이 잘린 계보는, 내가 읽을 수 있는 다른 계정의 수집 자료로 이어붙인다.
+    // 같은 회원이 겹치면 최신 자료가 이기도록 오래된 것부터 붙인다.
+    try {
+      const { data: allMeta } = await supabase
+        .from("nrc_sync_snapshots")
+        .select("id,source_account_id,collected_at")
+        .eq("snapshot_type", "combined")
+        .order("collected_at", { ascending: false })
+        .limit(100);
+      const latest = [];
+      const seenSources = new Set();
+      (allMeta || []).forEach((meta) => {
+        const key = String(meta.source_account_id || "");
+        if (seenSources.has(key)) return;
+        seenSources.add(key);
+        latest.push(meta);
+      });
+      const parts = [{ collectedAt: data.collected_at, model }];
+      for (const meta of latest) {
+        if (meta.id === snapshotId || String(meta.source_account_id || "") === String(data.source_account_id || "")) continue;
+        const { data: other } = await supabase
+          .from("nrc_sync_snapshots")
+          .select("payload,collected_at")
+          .eq("id", meta.id)
+          .maybeSingle();
+        if (!other) continue;
+        const otherPayload = typeof other.payload === "string" ? JSON.parse(other.payload) : other.payload;
+        parts.push({ collectedAt: other.collected_at, model: buildPerformanceModel(otherPayload) });
+      }
+      parts.sort((a, b) => new Date(a.collectedAt) - new Date(b.collectedAt));
+      let changed = true;
+      let passes = 0;
+      while (changed && passes <= parts.length) {
+        changed = false;
+        passes += 1;
+        parts.forEach(({ model: source }) => {
+          if (source === model) return;
+          [...model.byId.keys()]
+            .filter((id) => source.byId.has(id))
+            .forEach((id) => {
+              if (attachPerformanceSubtree(model, source, id) > 0) changed = true;
+            });
+        });
+      }
+    } catch {}
     collectedAt = data.collected_at;
     sourceId = data.source_account_id || "";
     loadState();
@@ -159,7 +207,7 @@ export async function manualClosePage(root, me) {
       : "";
     const sale = sales[id] ? sales[id] : "";
     const isSel = id === selectedId;
-    return `<div data-mc-row="${safe(id)}" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:5px 6px;margin-left:${depth * 14}px;border-left:3px solid ${isSel ? "#5b4fc9" : "#e5e7eb"};background:${isSel ? "#f5f3ff" : "transparent"}"><button type="button" class="compact" data-mc-pick="${safe(id)}" style="min-width:0">${isSel ? "●" : "○"}</button><b style="min-width:84px">${safe(row.userName)} <small>*${safe(id.slice(-6))}</small></b><small>${safe(row.rankMaxName || row.rankName || "")}</small><span style="font-size:12px">소 <b data-mc-minor="${safe(id)}">${fmt(c.minor)}</b> / 대 <b data-mc-major="${safe(id)}">${fmt(c.major)}</b></span> <span data-mc-sixty="${safe(id)}" style="font-size:12px">${sixty}</span><label style="margin-left:auto;font-size:12px">매출(원) <input type="number" inputmode="numeric" min="0" step="1000" style="width:96px" data-mc-sale="${safe(id)}" value="${safe(sale)}"></label></div>`;
+    return `<div data-mc-row="${safe(id)}" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:2px 6px;margin-left:${depth * 14}px;border-left:3px solid ${isSel ? "#5b4fc9" : "#e5e7eb"};background:${isSel ? "#f5f3ff" : "transparent"}"><button type="button" class="compact" data-mc-pick="${safe(id)}" style="min-width:0;height:24px;padding:0 8px">${isSel ? "●" : "○"}</button><b style="min-width:84px">${safe(row.userName)} <small>*${safe(id.slice(-6))}</small></b><small>${safe(row.rankMaxName || row.rankName || "")}</small><span style="font-size:12px">소 <b data-mc-minor="${safe(id)}">${fmt(c.minor)}</b> / 대 <b data-mc-major="${safe(id)}">${fmt(c.major)}</b></span> <span data-mc-sixty="${safe(id)}" style="font-size:12px">${sixty}</span><label style="margin-left:auto;font-size:12px">매출(원) <input type="number" inputmode="numeric" min="0" step="1000" style="width:96px;height:26px;padding:2px 6px;font-size:13px" data-mc-sale="${safe(id)}" value="${safe(sale)}"></label></div>`;
   };
 
   const walk = (id, depth, out, seenIds) => {
@@ -213,7 +261,7 @@ export async function manualClosePage(root, me) {
       )
       .join("");
     $("mcSource").innerHTML = `수집 자료 <select id="mcSnap">${sourceOptions}</select> · 기준일 ${new Date(collectedAt).toLocaleString("ko-KR")}`;
-    $("mcBody").innerHTML = `<section class="card"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><label>계산할 박스 <select id="mcSelect">${options}</select></label><label>목표 대 <input id="mcTargetMajor" type="number" min="0" step="1" style="width:64px" value="${targets.major}"> 만</label><label>소 <input id="mcTargetMinor" type="number" min="0" step="1" style="width:64px" value="${targets.minor}"> 만</label><button type="button" class="secondary compact" id="mcReset">입력 초기화</button></div><div id="mcTotal" class="help" style="margin-top:6px"></div></section><div id="mcExplain"></div><section class="card"><h3 style="margin:0 0 6px">박스별 매출 입력</h3><div class="help">○를 누르면 그 박스가 위 계산 과정에 나옵니다. 매출(원)은 1,000원 단위로 반영되고 위쪽 박스까지 바로 올라갑니다.</div><div id="mcTree"></div></section>`;
+    $("mcBody").innerHTML = `<section class="card"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><label>계산할 박스 <select id="mcSelect">${options}</select></label><label>목표 대 <input id="mcTargetMajor" type="number" min="0" step="1" style="width:64px" value="${targets.major}"> 만</label><label>소 <input id="mcTargetMinor" type="number" min="0" step="1" style="width:64px" value="${targets.minor}"> 만</label><button type="button" class="secondary compact" id="mcReset">입력 초기화</button><label>박스 찾기 <input id="mcFind" placeholder="이름·회원번호" style="width:120px"></label></div><div id="mcTotal" class="help" style="margin-top:6px"></div></section><div id="mcExplain"></div><section class="card"><h3 style="margin:0 0 6px">박스별 매출 입력</h3><div class="help">○를 누르면 그 박스가 위 계산 과정에 나옵니다. 매출(원)은 1,000원 단위로 반영되고 위쪽 박스까지 바로 올라갑니다.</div><div id="mcTree"></div></section>`;
     renderTree();
     refreshNumbers();
   };
@@ -229,6 +277,13 @@ export async function manualClosePage(root, me) {
       else delete sales[id];
       saveState();
       refreshNumbers();
+      return;
+    }
+    if (event.target.id === "mcFind") {
+      const query = event.target.value.trim();
+      document.querySelectorAll("[data-mc-row]").forEach((rowEl) => {
+        rowEl.style.display = !query || rowEl.textContent.includes(query) ? "" : "none";
+      });
       return;
     }
     if (event.target.id === "mcTargetMajor" || event.target.id === "mcTargetMinor") {
