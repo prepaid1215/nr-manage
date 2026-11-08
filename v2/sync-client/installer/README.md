@@ -54,6 +54,6 @@
 3. 그 환경의 Python으로 `build_release.py`를 실행합니다. 후보 파일만 `build/candidate`에 만들며 자동 게시하지 않습니다.
 4. 후보 EXE를 Defender 사용자 지정 검사로 검사하고 완료 이벤트와 탐지 기록을 확인합니다. 차단되면 배포하지 않습니다.
 5. 검사한 동일한 EXE와 `version.json`을 이 폴더에 복사하고 검사 시점·엔진·SHA-256을 `security-check.json`에 기록합니다.
-6. EXE와 manifest를 같은 커밋으로 게시합니다. 게시 후 해시를 다시 확인합니다. 배포 중단 시 manifest에 `disabled: true`를 설정합니다.
+6. EXE와 manifest를 같은 커밋으로 게시합니다. 게시 후 해시를 다시 확인합니다. 웹 앱의 `SYNC_DOWNLOAD`는 이 게시 커밋의 고정 URL로 변경하여 이전 다운로드 캐시를 방지합니다. 배포 중단 시 manifest에 `disabled: true`를 설정하고 웹 앱의 다운로드 링크도 중단합니다.
 
 다운로드 검증은 파일 변조·손상을 확인합니다. 악성코드 검사나 실행 파일 서명을 대신하지 않습니다.

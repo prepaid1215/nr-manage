@@ -11,5 +11,8 @@
   "windowsReplacementTest": "passed",
   "settingsPreservationTest": "passed",
   "pythonTestsPassed": 29,
-  "scope": "Local scan at the recorded time; not a guarantee of all security products or future verdicts"
+  "scope": "Local scan at the recorded time; not a guarantee of all security products or future verdicts",
+  "installedFileScanCompletedAt": "2026-11-08T17:20:52+09:00",
+  "installedFileScanDetections": 0,
+  "installedFileSha256": "08cd839a52740bb93013924421e6f158dd3ede5db239ce4841e7b883a48e81c8"
 }
