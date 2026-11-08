@@ -1,4 +1,5 @@
 import { supabase } from "./supabase.js?v=20260829-34";
+import { memberLineMetrics } from "./line-metrics.js?v=20261108-2";
 import {
   attachPerformanceSubtree,
   buildPerformanceModel,
@@ -20,7 +21,7 @@ const safe = (value) =>
 const wonOfNv = (nv) => (nv > 0 ? Math.ceil(nv / NV_PER_THOUSAND) * 1000 : 0); // 그 NV를 채우는 데 드는 매출(원), 1,000원 단위 올림
 
 export async function manualClosePage(root, me) {
-  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>마감 계산</h2><p class="help">박스에 넣을 매출(NV)을 적으면 위쪽 박스의 서브·대실적·소실적이 바로 바뀝니다. 바뀐 숫자는 <b>이전 → 이후</b>로 보입니다. (대실적·소실적에는 본인 NV가 작은 쪽에 더해져 있습니다)</p></div></div><div id="mcSource" class="help">불러오는 중...</div><div id="mcError" class="error"></div></section><div id="mcBody"></div>`;
+  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>마감 계산</h2><p class="help">박스에 넣을 매출(NV)을 적으면 위쪽 박스의 서브 실적이 바로 바뀝니다. 바뀐 숫자는 <b>이전 → 이후</b>로 보입니다. 실회선은 수집된 회원 정보를 표시합니다.</p></div></div><div id="mcSource" class="help">불러오는 중...</div><div id="mcError" class="error"></div></section><div id="mcBody"></div>`;
   const $ = (id) => document.getElementById(id);
 
   // ── 수집 자료 고르기 (계정별 가장 최근 것) ─────────────────────────────
@@ -181,7 +182,8 @@ export async function manualClosePage(root, me) {
   const val = (id, field) => `<b data-mc-v="${safe(id)}:${field}"></b>`;
   const cardHtml = (row) => {
     const id = String(row.userId);
-    return `<div class="box-node" data-mc-card="${safe(id)}" style="min-width:150px"><b>${safe(row.userName || "이름 없음")}</b><small>*${safe(id)}</small><small>${safe(row.rankName || "회원")}/${safe(row.rankMaxName || "회원")}</small><em>본인 ${fmt(row.ordPv)} NV</em><div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 6px;margin-top:4px;text-align:center"><span>서브1</span><span>서브2</span>${val(id, "l0")}${val(id, "l1")}<span>대실적</span><span>소실적</span>${val(id, "major")}${val(id, "minor")}</div><div style="margin-top:6px"><input type="number" inputmode="numeric" min="0" step="1" placeholder="${unit === "won" ? "매출(원)" : "매출(NV)"}" data-mc-sale="${safe(id)}" value="${safe(shown(id))}" style="width:96px;height:26px;padding:2px 6px;font-size:12px"><small data-mc-won="${safe(id)}" style="display:block"></small></div></div>`;
+    const realLines = memberLineMetrics(row).real;
+    return `<div class="box-node" data-mc-card="${safe(id)}" style="min-width:150px"><b>${safe(row.userName || "이름 없음")}</b><small>*${safe(id)}</small><small>${safe(row.rankName || "회원")}/${safe(row.rankMaxName || "회원")}</small><em>본인 ${fmt(row.ordPv)} NV</em><div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 6px;margin-top:4px;text-align:center"><span>서브1</span><span>서브2</span>${val(id, "l0")}${val(id, "l1")}</div><div style="margin-top:4px">실회선 <b>${realLines == null ? "미수집" : `${fmt(realLines)}회선`}</b></div><div style="margin-top:6px"><input type="number" inputmode="numeric" min="0" step="1" placeholder="${unit === "won" ? "매출(원)" : "매출(NV)"}" data-mc-sale="${safe(id)}" value="${safe(shown(id))}" style="width:96px;height:26px;padding:2px 6px;font-size:12px"><small data-mc-won="${safe(id)}" style="display:block"></small></div></div>`;
   };
   const treeHtml = (rid) => {
     const node = (row, level, path) => {
@@ -226,8 +228,6 @@ export async function manualClosePage(root, me) {
       };
       set("l0", b.lines[0], n.lines[0]);
       set("l1", b.lines[1], n.lines[1]);
-      set("major", b.major, n.major);
-      set("minor", b.minor, n.minor);
       const changed = b.major !== n.major || b.minor !== n.minor || b.lines[0] !== n.lines[0] || b.lines[1] !== n.lines[1];
       card.style.borderColor = changed || sales[id] ? "#dc2626" : "";
       const saleInput = card.querySelector("[data-mc-sale]");
