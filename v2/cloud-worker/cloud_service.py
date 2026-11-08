@@ -204,6 +204,8 @@ def is_app_admin(user_id):
 
 
 def _is_online(row):
+    if row.get("revoked_at") or not row.get("collector_version"):
+        return False
     if row.get("status") not in ("ONLINE", "BUSY"):
         return False
     try:
@@ -220,17 +222,103 @@ def devices():
     try:
         user = user_from_request()
         rows = admin_request(
-            "nrc_sync_devices?select=device_name,status,last_seen_at&order=last_seen_at.desc"
+            "nrc_sync_devices?select=id,owner_id,device_name,status,last_seen_at,revoked_at,collector_version&order=last_seen_at.desc"
         ) or []
-        if is_app_admin(user["id"]):
-            return jsonify({"ok": True, "devices": rows})
-        # 관리자가 아니면 PC 이름 등 세부 정보 없이 전체/온라인 대수만 알려준다.
+        admin = is_app_admin(user["id"])
+        visible = rows if admin else [row for row in rows if row["owner_id"] == user["id"]]
         online = sum(1 for row in rows if _is_online(row))
-        return jsonify({"ok": True, "summary": {"total": len(rows), "online": online}})
+        return jsonify({"ok": True, "devices": visible, "isAdmin": admin,
+                        "summary": {"total": sum(not row.get("revoked_at") for row in rows), "online": online}})
     except PermissionError as exc:
         return jsonify({"ok": False, "message": str(exc)}), 401
     except Exception as exc:
         return jsonify({"ok": False, "message": str(exc)}), 500
+
+
+def owned_device(user_id, device_id, active=True):
+    device_id = str(uuid.UUID(str(device_id)))
+    suffix = "&revoked_at=is.null" if active else ""
+    rows = admin_request(f"nrc_sync_devices?id=eq.{device_id}&owner_id=eq.{user_id}&select=*{suffix}") or []
+    if not rows:
+        raise PermissionError("등록되지 않았거나 등록 해제된 PC입니다.")
+    return rows[0]
+
+
+@app.route("/devices/<uuid:device_id>/registration", methods=["POST", "DELETE", "OPTIONS"])
+def device_registration(device_id):
+    if request.method == "OPTIONS":
+        return "", 204
+    try:
+        user = user_from_request()
+        rows = admin_request(f"nrc_sync_devices?id=eq.{device_id}&select=id,owner_id") or []
+        if not rows:
+            return jsonify(ok=False, message="PC를 찾을 수 없습니다."), 404
+        if rows[0]["owner_id"] != user["id"] and not is_app_admin(user["id"]):
+            return jsonify(ok=False, message="본인 PC 또는 관리자 권한이 필요합니다."), 403
+        admin_request("rpc/set_pc_registration", "POST", {
+            "p_actor":user["id"], "p_device":str(device_id), "p_enabled":request.method == "POST"})
+        return jsonify(ok=True)
+    except PermissionError as exc:
+        return jsonify(ok=False, message=str(exc)), 401
+    except Exception as exc:
+        return jsonify(ok=False, message=str(exc)), 500
+
+
+@app.route("/devices/register", methods=["POST", "OPTIONS"])
+def register_pc():
+    if request.method == "OPTIONS":
+        return "", 204
+    try:
+        user = user_from_request()
+        body = request.get_json(silent=True) or {}
+        device_id = str(uuid.UUID(str(body.get("deviceId", ""))))
+        rows = admin_request(f"nrc_sync_devices?id=eq.{device_id}&select=id,owner_id") or []
+        if rows and rows[0]["owner_id"] != user["id"]:
+            return jsonify(ok=False, message="다른 계정의 PC입니다."), 403
+        if rows:
+            admin_request("rpc/set_pc_registration", "POST", {"p_actor":user["id"], "p_device":device_id, "p_enabled":True})
+        metadata = dict(owner_id=user["id"], device_name=str(body.get("deviceName", "PC"))[:100],
+                        source_account_id=str(body.get("sourceAccountId", ""))[:100],
+                        collector_version=str(body.get("collectorVersion", ""))[:80],
+                        status="ONLINE", last_seen_at=datetime.now(timezone.utc).isoformat())
+        if rows:
+            admin_request(f"nrc_sync_devices?id=eq.{device_id}", "PATCH", metadata)
+        else:
+            admin_request("nrc_sync_devices", "POST", {"id":device_id, **metadata})
+        return jsonify(ok=True)
+    except PermissionError as exc:
+        return jsonify(ok=False, message=str(exc)), 401
+    except (ValueError, TypeError):
+        return jsonify(ok=False, message="PC 정보가 올바르지 않습니다."), 400
+    except Exception as exc:
+        return jsonify(ok=False, message=str(exc)), 500
+
+
+@app.route("/worker/heartbeat", methods=["POST", "OPTIONS"])
+def pc_heartbeat():
+    if request.method == "OPTIONS":
+        return "", 204
+    try:
+        user = user_from_request()
+        body = request.get_json(silent=True) or {}
+        device = owned_device(user["id"], body.get("deviceId"), active=False)
+        if device.get("revoked_at"):
+            return jsonify(ok=True, revoked=True)
+        status = body.get("status", "ONLINE")
+        if status not in ("ONLINE", "BUSY", "OFFLINE", "ERROR"):
+            return jsonify(ok=False, message="잘못된 PC 상태입니다."), 400
+        # Conditional update cannot resurrect a device revoked between the read and write.
+        admin_request(f"nrc_sync_devices?id=eq.{device['id']}&revoked_at=is.null", "PATCH", {
+            "status":status, "last_seen_at":datetime.now(timezone.utc).isoformat(),
+            "collector_version":str(body.get("collectorVersion", ""))[:80],
+            "last_error":str(body.get("error") or "")[:1000] or None})
+        return jsonify(ok=True, revoked=False)
+    except PermissionError as exc:
+        return jsonify(ok=False, message=str(exc)), 401
+    except (ValueError, TypeError):
+        return jsonify(ok=False, message="PC 정보가 올바르지 않습니다."), 400
+    except Exception as exc:
+        return jsonify(ok=False, message=str(exc)), 500
 
 
 @app.route("/wake", methods=["POST", "OPTIONS"])
@@ -348,12 +436,10 @@ def worker_claim():
         user = user_from_request()
         body = request.get_json(silent=True) or {}
         device_id = str(body.get("deviceId", "")).strip()
+        owned_device(user["id"], device_id)
+        if body.get("lineMetricsVersion") != 2 or not body.get("collectorVersion"):
+            return jsonify(ok=True, job=None, updateRequired=True)
         worker_id = pc_worker_id(user["id"], device_id)
-        devices = user_rest_request(
-            f"nrc_sync_devices?id=eq.{device_id}&owner_id=eq.{user['id']}&select=id"
-        ) or []
-        if not devices:
-            raise PermissionError("이 앱 계정에 등록된 수집 PC가 아닙니다.")
         rows = admin_request(
             "rpc/claim_cloud_sync_job", "POST", {"p_worker_id": worker_id}
         ) or []
@@ -373,15 +459,8 @@ def worker_claim():
                 },
             )
             raise
-        patch_job(
-            job["id"],
-            {
-                "status": "RUNNING",
-                "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                "message": "승인된 Windows PC에서 수집 중...",
-                "error": None,
-            },
-        )
+        admin_request("rpc/start_pc_sync_job", "POST", {
+            "p_actor":user["id"], "p_device":device_id, "p_job":job["id"]})
         return jsonify(
             {
                 "ok": True,
@@ -414,57 +493,13 @@ def worker_complete():
             supplied_lease, lease_token(job_id, worker_id)
         ):
             raise PermissionError("수집 작업 인증이 만료되었습니다.")
-        rows = admin_request(
-            f"nrc_sync_jobs?id=eq.{job_id}&select=id,owner_id,source_account_id,cloud_worker_id,status,snapshot_id"
-        ) or []
-        if not rows or rows[0].get("cloud_worker_id") != worker_id:
-            raise PermissionError("이 PC에 배정된 작업이 아닙니다.")
-        job = rows[0]
-        if job.get("status") == "SUCCESS" and job.get("snapshot_id"):
-            return jsonify({"ok": True, "alreadyCompleted": True})
-        if job.get("status") != "RUNNING":
-            raise PermissionError("이미 종료되었거나 유효하지 않은 수집 작업입니다.")
-        error_message = str(body.get("error", "")).strip()
-        if error_message:
-            patch_job(
-                job_id,
-                {
-                    "status": "ERROR",
-                    "completed_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                    "message": "Windows PC 수집 실패",
-                    "error": error_message[:4000],
-                },
-            )
-            return jsonify({"ok": True})
-        data = body.get("payload") or {}
-        collected_account = str(data.get("sourceAccountId") or "").strip()
-        if collected_account != job["source_account_id"]:
-            raise ValueError("요청 계정과 수집 결과 계정이 다릅니다.")
-        snapshots = admin_request(
-            "nrc_sync_snapshots",
-            "POST",
-            {
-                "owner_id": job["owner_id"],
-                "source_account_id": collected_account,
-                "snapshot_type": "combined",
-                "payload": data,
-                "collected_at": data.get("수집일시")
-                or data.get("collectedAt")
-                or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            },
-            "return=representation",
-        )
-        patch_job(
-            job_id,
-            {
-                "status": "SUCCESS",
-                "snapshot_id": snapshots[0]["id"],
-                "completed_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                "message": "승인된 Windows PC 수집 완료",
-                "error": None,
-            },
-        )
-        return jsonify({"ok": True})
+        device_id = str(uuid.UUID(str(body.get("deviceId", ""))))
+        owned_device(user["id"], device_id)
+        result = admin_request("rpc/complete_pc_sync_job", "POST", {
+            "p_actor":user["id"], "p_device":device_id, "p_job":str(uuid.UUID(job_id)),
+            "p_payload":body.get("payload") or {}, "p_error":str(body.get("error") or "").strip(),
+        })
+        return jsonify(result or {"ok":True})
     except PermissionError as exc:
         return jsonify({"ok": False, "message": str(exc)}), 401
     except Exception as exc:

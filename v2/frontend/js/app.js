@@ -1026,7 +1026,7 @@ function setupAdminToggle() {
 }
 async function settings(initialView = "profile") {
   $("content").innerHTML =
-    `<div class="view-tabs settings-tabs"><button class="active" data-settings-view="profile" type="button">내 정보</button><button data-settings-view="connection" type="button">수집 PC</button><button data-settings-view="collection" type="button">수집</button><button data-settings-view="account" type="button">계정</button></div><section id="profileSettings" class="card"><div class="section-head"><div><h2>내 정보</h2><p class="help">이름을 바꾸면 화면 상단 인사말에도 바로 반영됩니다.</p></div></div><form id="profileForm"><div class="profile-form-grid"><label>이름<input id="profileName" required maxlength="40"></label><label>전화번호<input id="profilePhone" type="tel" inputmode="tel" placeholder="010-0000-0000"></label><label>이메일<input id="profileEmail" type="email" placeholder="name@example.com"></label><label>회원번호<input id="profileMemberNo" inputmode="numeric"></label><label>상호명<input id="profileBusiness" placeholder="예: 주하루"></label><label class="full">주소<input id="profileAddress"></label></div><button class="primary" id="saveProfile" type="submit">내 정보 저장</button><div id="profileStatus" class="connection-status" hidden></div><div id="profileError" class="error"></div></form></section><section id="connectionSettings" class="card" hidden><div class="section-head"><div><h2>수집 PC</h2><p class="help">여러 PC를 등록하면 켜져 있는 PC가 자동으로 수집 작업을 처리합니다. 연결 코드는 필요 없습니다.</p></div><div class="connection-actions"><button class="primary compact" id="autoRegisterPc" type="button">이 PC 자동 등록</button><a class="secondary compact" href="${SYNC_DOWNLOAD}" target="_blank" rel="noopener">NRC Sync 받기</a><a class="secondary compact" href="${LOCAL_SYNC}/setup" target="_blank" rel="noopener">수동 등록</a></div></div><p class="help">이 컴퓨터에 NRC Sync 프로그램이 없으면 먼저 "NRC Sync 받기"로 내려받아 한 번 실행해 두세요. 그다음 "이 PC 자동 등록"을 누르면 입력창 없이 이 PC에 자동으로 설치·등록됩니다(미리 '공유 PC 수집 승인'을 해둔 계정이어야 합니다).</p><p class="help">자동 업데이트가 없던 기존 PC는 이번 버전을 한 번 받아 설치해 주세요. 이후에는 30분마다 새 버전을 확인하고, 수집 작업이 끝난 뒤 자동으로 업데이트합니다.</p><div id="autoRegisterStatus" class="connection-status" hidden></div><div id="nrcStatus" class="connection-status">등록된 PC 확인 중...</div><div id="deviceList" class="schedule-list"></div><div id="nrcError" class="error"></div></section><section id="accountSettings" class="card" hidden><h2 id="accountHeading">앱 계정</h2><p class="help" id="profileUsername"></p><button class="secondary" id="logout">로그아웃</button><div id="adminToggleWrap" hidden><button class="secondary" id="adminToggle" type="button"></button><div id="adminToggleStatus" class="connection-status" hidden></div></div></section>`;
+    `<div class="view-tabs settings-tabs"><button class="active" data-settings-view="profile" type="button">내 정보</button><button data-settings-view="connection" type="button">수집 PC</button><button data-settings-view="collection" type="button">수집</button><button data-settings-view="account" type="button">계정</button></div><section id="profileSettings" class="card"><div class="section-head"><div><h2>내 정보</h2><p class="help">이름을 바꾸면 화면 상단 인사말에도 바로 반영됩니다.</p></div></div><form id="profileForm"><div class="profile-form-grid"><label>이름<input id="profileName" required maxlength="40"></label><label>전화번호<input id="profilePhone" type="tel" inputmode="tel" placeholder="010-0000-0000"></label><label>이메일<input id="profileEmail" type="email" placeholder="name@example.com"></label><label>회원번호<input id="profileMemberNo" inputmode="numeric"></label><label>상호명<input id="profileBusiness" placeholder="예: 주하루"></label><label class="full">주소<input id="profileAddress"></label></div><button class="primary" id="saveProfile" type="submit">내 정보 저장</button><div id="profileStatus" class="connection-status" hidden></div><div id="profileError" class="error"></div></form></section><section id="connectionSettings" class="card" hidden><div class="section-head"><div><h2>수집 PC</h2><p class="help">여러 PC를 등록하면 켜져 있는 PC가 자동으로 수집 작업을 처리합니다. 연결 코드는 필요 없습니다.</p></div><div class="connection-actions"><button class="primary compact" id="autoRegisterPc" type="button">이 PC 자동 등록</button><a class="secondary compact" href="${SYNC_DOWNLOAD}" target="_blank" rel="noopener">NRC Sync 받기</a><a class="secondary compact" href="${LOCAL_SYNC}/setup" target="_blank" rel="noopener">수동 등록</a></div></div><p class="help">이 컴퓨터에 NRC Sync 프로그램이 없으면 먼저 "NRC Sync 받기"로 내려받아 한 번 실행해 두세요. 그다음 "이 PC 자동 등록"을 누르면 입력창 없이 이 PC에 자동으로 설치·등록됩니다(미리 '공유 PC 수집 승인'을 해둔 계정이어야 합니다).</p><p class="help">본인 PC 또는 관리자 권한으로 등록 해제·다시 등록할 수 있습니다. 해제된 PC는 수집이 차단되며, 기존 자료는 유지됩니다. 매출받기는 이 PC에 먼저 배정하고 15초 안에 응답이 없으면 다른 승인 PC로 넘깁니다. 자동 업데이트가 없던 기존 PC는 이번 버전을 한 번 받아 설치해 주세요. 이후에는 30분마다 새 버전을 확인하고, 수집 작업이 끝난 뒤 자동으로 업데이트합니다.</p><div id="autoRegisterStatus" class="connection-status" hidden></div><div id="nrcStatus" class="connection-status">등록된 PC 확인 중...</div><div id="deviceList" class="schedule-list"></div><div id="nrcError" class="error"></div></section><section id="accountSettings" class="card" hidden><h2 id="accountHeading">앱 계정</h2><p class="help" id="profileUsername"></p><button class="secondary" id="logout">로그아웃</button><div id="adminToggleWrap" hidden><button class="secondary" id="adminToggle" type="button"></button><div id="adminToggleStatus" class="connection-status" hidden></div></div></section>`;
   const profile = await currentProfile();
   if (profile) {
     $("profileName").value = profile.name || "";
@@ -1300,16 +1300,22 @@ async function deleteCloudCredential(sourceAccountId) {
 async function loadSyncDevices() {
   const { data, error } = await supabase
     .from("nrc_sync_devices")
-    .select("id,device_name,source_account_id,status,last_seen_at,last_error")
+    .select("id,device_name,source_account_id,status,last_seen_at,last_error,revoked_at,collector_version")
     .order("last_seen_at", { ascending: false });
   if (error) throw error;
   return data || [];
 }
 function isDeviceOnline(device) {
+  if (device.revoked_at || !device.collector_version) return false;
   const age = Date.now() - new Date(device.last_seen_at).getTime();
   return age < 45000 && ["ONLINE", "BUSY"].includes(device.status);
 }
 async function enqueueCollection(sourceAccountId = null) {
+  const local = await fetch(`${LOCAL_SYNC}/health`, {
+    signal: AbortSignal.timeout(1800), targetAddressSpace: "local",
+  }).then((response) => response.ok ? response.json() : null).catch(() => null);
+  const preferredId = local?.ok && !local.deviceRevoked &&
+    /^[0-9a-f-]{36}$/i.test(local.deviceId || "") ? local.deviceId : null;
   const cloud = await cloudApi("/credentials").catch(() => null);
   const cloudAccounts = (cloud?.credentials || []).map(
     (item) => item.source_account_id,
@@ -1334,8 +1340,10 @@ async function enqueueCollection(sourceAccountId = null) {
       owner_id: me.id,
       source_account_id: selectedAccount,
       status: "QUEUED",
+      target_device_id: preferredId,
+      preferred_until: preferredId ? new Date(Date.now() + 15000).toISOString() : null,
       message: useCloud
-        ? "수집 가능한 승인 PC 배정 대기 중..."
+        ? preferredId ? "이 PC에 우선 배정 중 · 응답이 없으면 다른 승인 PC로 전환합니다." : "수집 가능한 승인 PC 배정 대기 중..."
         : "온라인 PC의 작업 수신 대기 중...",
     })
     .select("id,status,message")
@@ -1420,7 +1428,6 @@ async function loadSharedDevices() {
     lastSharedDevicesError = "";
     if (data.summary) {
       lastSharedDevicesSummary = data.summary;
-      return [];
     }
     return data.devices || [];
   } catch (err) {
@@ -1474,13 +1481,9 @@ async function loadLocalStatus() {
       box.textContent = total
         ? `공유 수집 PC ${total}대 · 현재 온라인 ${online}대`
         : "등록된 수집 PC가 없습니다. ‘이 PC 등록’을 눌러 최초 설정해 주세요.";
-      if (list) list.innerHTML = "";
-      nrcErrorBox.classList.remove("error");
-      nrcErrorBox.textContent = "";
-      return;
     }
     const online = devices.filter(isDeviceOnline);
-    box.textContent = devices.length
+    if (!lastSharedDevicesSummary) box.textContent = devices.length
       ? `공유 수집 PC ${devices.length}대 · 현재 온라인 ${online.length}대`
       : "등록된 수집 PC가 없습니다. ‘이 PC 등록’을 눌러 최초 설정해 주세요.";
     if (list)
@@ -1488,10 +1491,13 @@ async function loadLocalStatus() {
         ? devices
             .map(
               (device) =>
-                `<article class="schedule-item"><div><b>${safe(device.device_name)}</b><small>${isDeviceOnline(device) ? "온라인 · 수집 가능" : "오프라인"}</small><small>최근 확인: ${safe(new Date(device.last_seen_at).toLocaleString("ko-KR"))}</small></div><span class="device-dot ${isDeviceOnline(device) ? "online" : "offline"}"></span></article>`,
+                `<article class="schedule-item"><div><b>${safe(device.device_name)}</b><small>${device.revoked_at ? "등록 해제됨 · 수집 차단" : !device.collector_version ? "업데이트 필요 · 수집 대기" : isDeviceOnline(device) ? "온라인 · 수집 가능" : "오프라인"}</small><small>최근 확인: ${safe(new Date(device.last_seen_at).toLocaleString("ko-KR"))}</small><small>${device.collector_version ? `버전: ${safe(device.collector_version)}` : "구버전 · NRC Sync 업데이트 필요"}</small></div><button class="secondary compact" data-device-registration="${safe(device.id)}" data-device-name="${safe(device.device_name)}" data-enable="${Boolean(device.revoked_at)}" type="button">${device.revoked_at ? "다시 등록" : "등록 해제"}</button></article>`,
             )
             .join("")
-        : "";
+        : '<p class="help">관리할 수 있는 본인 PC가 없습니다. 관리자는 전체 PC를 관리할 수 있습니다.</p>';
+    list?.querySelectorAll("[data-device-registration]").forEach((button) => {
+      button.onclick = () => setDeviceRegistration(button);
+    });
     nrcErrorBox.classList.add("error");
     nrcErrorBox.textContent = lastSharedDevicesError
       ? `(진단) 공유 PC 상태 조회 실패: ${lastSharedDevicesError}`
@@ -1501,6 +1507,27 @@ async function loadLocalStatus() {
     $("nrcError").textContent = /nrc_sync_devices|schema cache/i.test(err.message)
       ? "Supabase에서 RUN_013_MULTI_PC_SYNC_QUEUE.sql을 먼저 실행해 주세요."
       : friendlyError(err);
+  }
+}
+async function setDeviceRegistration(button) {
+  const enabled = button.dataset.enable === "true";
+  const name = button.dataset.deviceName || "이 PC";
+  if (!confirm(enabled ? `${name}를 다시 등록하고 수집을 허용할까요?` :
+    `${name}의 등록을 해제할까요? 실행 중인 수집 요청은 취소되고, 다시 등록할 때까지 수집이 차단됩니다. 기존 수집 자료는 유지됩니다.`)) return;
+  button.disabled = true;
+  try {
+    await cloudApi(`/devices/${encodeURIComponent(button.dataset.deviceRegistration)}/registration`, {
+      method: enabled ? "POST" : "DELETE",
+    });
+    const status = $("autoRegisterStatus");
+    status.hidden = false;
+    status.classList.remove("error");
+    status.textContent = enabled ? `${name} 다시 등록 완료` : `${name} 등록 해제 완료`;
+    await loadLocalStatus();
+  } catch (err) {
+    $("nrcError").textContent = friendlyError(err);
+  } finally {
+    button.disabled = false;
   }
 }
 async function runCollection(e) {

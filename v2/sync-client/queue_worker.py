@@ -17,6 +17,7 @@ import keyring
 import scraper as scraper_module
 from scraper import run_combined
 from work_guard import ACTIVITY
+from sync_version import COLLECTOR_VERSION
 
 
 SUPABASE_URL = "https://ymagjzwebshfnjiisrao.supabase.co"
@@ -103,6 +104,8 @@ def _finish_configure(user_id, access_token, refresh_token, expires_in, nrc_logi
             expiresAt=time.time() + int(expires_in or 3600) - 60,
             userId=user_id,
         )
+    _coordinator("/devices/register", {"deviceId":device["id"], "deviceName":device["device_name"],
+                                     "sourceAccountId":nrc_login_id, "collectorVersion":COLLECTOR_VERSION})
     heartbeat("ONLINE", None)
     return device
 
@@ -211,21 +214,18 @@ def heartbeat(status="ONLINE", error=None):
     device = _load_device()
     if not device:
         return
-    _rest(
-        "nrc_sync_devices?on_conflict=id",
-        "POST",
-        {
-            "id": device["id"],
-            "owner_id": device["owner_id"],
-            "device_name": device["device_name"],
-            "source_account_id": device["source_account_id"],
-            "status": status,
-            "last_seen_at": utc_now(),
-            "last_error": error,
-            "updated_at": utc_now(),
-        },
-        "resolution=merge-duplicates,return=minimal",
-    )
+    result = _coordinator("/worker/heartbeat", {"deviceId":device["id"], "status":status,
+                          "error":error, "collectorVersion":COLLECTOR_VERSION}) or {}
+    revoked = bool(result.get("revoked"))
+    if bool(device.get("revoked")) != revoked:
+        device["revoked"] = revoked
+        _save_device(device)
+    return not revoked
+
+
+def local_device_status():
+    device = _load_device() or {}
+    return {"deviceId":device.get("id"), "deviceRevoked":bool(device.get("revoked"))}
 
 
 def _patch_job(job_id, values):
@@ -241,7 +241,10 @@ def claim_job():
     device = _load_device()
     if not device:
         return None
-    result = _coordinator("/worker/claim", {"deviceId": device["id"]}) or {}
+    if device.get("revoked"):
+        return None
+    result = _coordinator("/worker/claim", {"deviceId": device["id"],
+                          "collectorVersion":COLLECTOR_VERSION, "lineMetricsVersion":2}) or {}
     return result.get("job")
 
 
@@ -266,7 +269,8 @@ def process_job(job):
     if requested_account and requested_account != login_id:
         raise RuntimeError("배정된 NRC 계정 정보가 일치하지 않습니다.")
 
-    heartbeat("BUSY", None)
+    if not heartbeat("BUSY", None):
+        raise RuntimeError("이 PC의 등록이 해제되어 수집을 중단했습니다.")
     try:
         (DATA_DIR / "combined_latest.json").unlink(missing_ok=True)
         scraper_module.USER_ID = login_id
@@ -312,8 +316,9 @@ def worker_loop():
                 time.sleep(5)
                 continue
             if time.time() - last_heartbeat > 15:
-                heartbeat("ONLINE", None)
-                enqueue_due_schedules()
+                active = heartbeat("ONLINE", None)
+                if active:
+                    enqueue_due_schedules()
                 last_heartbeat = time.time()
             # Claiming a lease and finishing its upload are one update-protected unit.
             with ACTIVITY.activity():

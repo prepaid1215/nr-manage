@@ -82,7 +82,8 @@ if "--updated-token" in sys.argv:
 @app.get("/health")
 def health():
     return jsonify(ok=True, collectorVersion=scraper_module.COLLECTOR_VERSION,
-                   release=APP_RELEASE, startupToken=STARTUP_TOKEN, update=update_manager.snapshot())
+                   release=APP_RELEASE, startupToken=STARTUP_TOKEN, update=update_manager.snapshot(),
+                   **queue_worker.local_device_status())
 
 
 @app.get("/update-status")

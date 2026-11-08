@@ -1,18 +1,15 @@
 {
-  "sha256": "08cd839a52740bb93013924421e6f158dd3ede5db239ce4841e7b883a48e81c8",
-  "release": 2026110803,
+  "sha256": "7748b4919f0794016e7dad0c886202bbdd4f075f35f9aa3955e590891acdc67d",
+  "release": 2026110804,
   "scanner": "Microsoft Defender Antivirus",
   "scanType": "CustomScan",
-  "scanCompletedAt": "2026-11-08T17:14:40+09:00",
+  "scanCompletedAt": "2026-11-08T17:41:38+09:00",
   "engineVersion": "1.1.26100.4",
   "signatureVersion": "1.463.184.0",
   "realtimeProtectionEnabled": true,
   "candidateDetections": 0,
-  "windowsReplacementTest": "passed",
-  "settingsPreservationTest": "passed",
-  "pythonTestsPassed": 29,
-  "scope": "Local scan at the recorded time; not a guarantee of all security products or future verdicts",
-  "installedFileScanCompletedAt": "2026-11-08T17:20:52+09:00",
-  "installedFileScanDetections": 0,
-  "installedFileSha256": "08cd839a52740bb93013924421e6f158dd3ede5db239ce4841e7b883a48e81c8"
+  "pythonTestsPassed": 33,
+  "cloudTestsPassed": 25,
+  "databaseIntegration": "passed with rollback",
+  "scope": "Local scan at the recorded time; not a guarantee of all security products or future verdicts"
 }
