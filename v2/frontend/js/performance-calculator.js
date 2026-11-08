@@ -1066,3 +1066,100 @@ export function planSixtyKSplit(model, lineRootId, deficitNv, defaultPlacements 
     improves: best.qualified.length > baselineQualified.length,
   };
 }
+
+// 균형 분산 추천: 부족분을 한두 박스에 몰지 않고, 각 박스에서 "작은 쪽 라인"부터 채워
+// 두 라인이 같아지면 양쪽에 반반 나누며 아래 박스로 계속 내려간다. (소실적 = 작은 쪽이므로
+// 균형 있게 채워야 소실적이 가장 많이 오르고 6만 NV를 넘는 박스가 늘어난다.)
+// 1,000원 = 810 NV 단위로 계산하고, 한 곳에 넣는 금액은 최소 1만원이다.
+// excludedIds: 매출을 넣지 않을 회원(실적 계산에는 그대로 포함, 넣을 자리는 가까운 윗사람으로 올린다).
+export function planBalancedSplit(model, lineRootId, deficitNv, excludedIds = new Set()) {
+  const topUp = salesTopUpForDeficit(deficitNv);
+  if (topUp.salesWon <= 0) return null;
+  const ids = subtreeMemberIds(model, lineRootId);
+  if (!ids.length) return null;
+  const idSet = new Set(ids);
+  const UNIT_NV = 810;
+  const MIN_UNITS = 10;
+  const totalUnits = topUp.salesWon / 1000;
+  const placed = new Map(); // 회원번호 → 넣은 단위(1,000원)
+  const kidsOf = (id) => model.children.get(String(id)) || [];
+  const nvOf = (won) => Math.floor(won / 1000) * UNIT_NV;
+
+  const subSalesNv = (id, seen = new Set()) => {
+    if (seen.has(id)) return 0;
+    seen.add(id);
+    let sum = numeric(placed.get(id)) * UNIT_NV;
+    kidsOf(id).forEach((kid) => {
+      sum += subSalesNv(memberId(kid), seen);
+    });
+    return sum;
+  };
+  const lineTotal = (row) => branchBreakdown(row).total + subSalesNv(memberId(row));
+  const place = (id, units) => {
+    let target = String(id);
+    while (target && excludedIds.has(target)) target = String(model.byId.get(target)?.ppId ?? "");
+    if (!idSet.has(target)) return false;
+    placed.set(target, numeric(placed.get(target)) + units);
+    return true;
+  };
+
+  const distribute = (id, units, depth = 0) => {
+    if (units <= 0) return;
+    const kids = kidsOf(id);
+    if (!kids.length || depth > 60) {
+      if (!place(id, units)) leftover += units;
+      return;
+    }
+    const row = model.byId.get(id);
+    const lines = [kids[0] ? lineTotal(kids[0]) : 0, kids[1] ? lineTotal(kids[1]) : 0];
+    const own = numeric(row.ordPv) + numeric(placed.get(id)) * UNIT_NV;
+    const small = lines[0] < lines[1] ? 0 : 1; // 본인 NV는 작은 쪽(같으면 서브2)에 합산
+    const sums = [lines[0] + (small === 0 ? own : 0), lines[1] + (small === 1 ? own : 0)];
+    const weak = sums[0] < sums[1] ? 0 : 1; // 소실적을 올리려면 작은 쪽을 채운다
+    const gapUnits = Math.ceil(Math.abs(sums[0] - sums[1]) / UNIT_NV);
+    const toWeak = Math.min(units, gapUnits);
+    const rest = units - toWeak;
+    const amounts = [0, 0];
+    amounts[weak] = toWeak + Math.ceil(rest / 2);
+    amounts[1 - weak] = Math.floor(rest / 2);
+    // 1만원보다 작은 조각은 다른 쪽으로 합친다
+    [0, 1].forEach((side) => {
+      if (amounts[side] > 0 && amounts[side] < MIN_UNITS && amounts[1 - side] > 0) {
+        amounts[1 - side] += amounts[side];
+        amounts[side] = 0;
+      }
+    });
+    [0, 1].forEach((side) => {
+      if (amounts[side] <= 0) return;
+      if (kids[side]) distribute(memberId(kids[side]), amounts[side], depth + 1);
+      else if (!place(id, amounts[side])) leftover += amounts[side];
+    });
+  };
+
+  let leftover = 0;
+  distribute(String(lineRootId), totalUnits);
+  if (leftover > 0) {
+    const fallback = ids.find((id) => !excludedIds.has(id));
+    if (fallback === undefined) return null;
+    place(fallback, leftover);
+  }
+
+  const placements = [...placed.entries()]
+    .filter(([, units]) => units > 0)
+    .map(([memberIdValue, units]) => ({ memberId: memberIdValue, salesWon: units * 1000 }));
+  const eligible = ids.filter((id) => isSixtyKEligible(model.byId.get(id)));
+  const base = minorNvByMember(model, lineRootId);
+  const salesNv = new Map(placements.map((p) => [p.memberId, nvOf(p.salesWon)]));
+  const after = minorNvByMember(model, lineRootId, salesNv);
+  const qualified = eligible.filter(
+    (id) => numeric(base.get(id)) < SIXTY_K_NV && numeric(after.get(id)) >= SIXTY_K_NV,
+  );
+  return {
+    totalWon: topUp.salesWon,
+    alternatives: [],
+    placements: placements.map((p) => ({ ...p, addedNv: nvOf(p.salesWon) })),
+    qualified,
+    baselineQualified: [],
+    improves: qualified.length > 0,
+  };
+}

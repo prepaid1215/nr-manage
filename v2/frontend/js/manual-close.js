@@ -3,9 +3,9 @@ import { memberLineMetrics } from "./line-metrics.js?v=20261108-2";
 import {
   attachPerformanceSubtree,
   buildPerformanceModel,
-  planSixtyKSplit,
-} from "./performance-calculator.js?v=20261031-4";
-import { loadExclusions } from "./custom-tree.js?v=20261108-2";
+  planBalancedSplit,
+} from "./performance-calculator.js?v=20261108-1";
+import { loadExclusions } from "./custom-tree.js?v=20261108-3";
 import { activeExclusions, visibleChildrenMap } from "./custom-tree-logic.js?v=20261108-1";
 
 // 직접계산: 추천은 하지 않는다. NRC 계보도처럼 박스 그림을 그리고, 박스에 매출(원)을 직접 넣으면
@@ -346,7 +346,7 @@ export async function manualClosePage(root, me) {
         blocks.push(`<div>${title} → <span style="color:#047857"><b>✅ 채웠음</b></span></div>`);
         return;
       }
-      const plan = planSixtyKSplit(model, String(lineRoot.userId), deficit, [], excluded);
+      const plan = planBalancedSplit(model, String(lineRoot.userId), deficit, excluded);
       if (!plan) {
         blocks.push(`<div>${title} → 부족 <b>${fmt(deficit)} NV</b> (추천 계산 불가)</div>`);
         return;
@@ -365,7 +365,7 @@ export async function manualClosePage(root, me) {
     if (box) {
       box.innerHTML = `<div style="line-height:1.7;font-size:13px">${blocks.join("") || "서브 박스가 없습니다."}</div>${
         list.length ? `<button type="button" class="primary compact" data-mc-apply="${safe(rid)}" style="margin-top:6px">이 추천 넣기</button>` : ""
-      }<div class="help">추천 기준: 부족분을 1,000원 단위(최소 1만원)로 올려 계산하고, 소실적 6만 NV를 새로 넘는 박스가 가장 많아지는 곳을 고릅니다. 마음에 안 들면 박스의 NV를 직접 바꿔도 됩니다.</div>`;
+      }<div class="help">추천 기준: 부족분을 1,000원 단위(최소 1만원)로 올려 계산하고, 각 박스에서 작은 쪽 라인부터 채워 두 라인이 같아지면 양쪽에 나눠 아래 박스로 내려갑니다. 마음에 안 들면 박스의 NV를 직접 바꿔도 됩니다.</div>`;
     }
   };
 
