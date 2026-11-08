@@ -16,6 +16,7 @@ from pathlib import Path
 import requests
 from cryptography.fernet import Fernet, InvalidToken
 from flask import Flask, jsonify, request
+from account_recovery import SupabaseRecoveryStore, create_recovery_blueprint
 
 import scraper as scraper_module
 from scraper import run_combined
@@ -33,6 +34,10 @@ POLL_SECONDS = int(os.getenv("POLL_SECONDS", "4"))
 RUN_BROWSER_WORKER = os.getenv("RUN_BROWSER_WORKER", "false").lower() == "true"
 
 app = Flask(__name__)
+app.register_blueprint(create_recovery_blueprint(
+    SupabaseRecoveryStore(SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY),
+    SUPABASE_SERVICE_ROLE_KEY, APP_ORIGIN,
+))
 worker_state = {"running": False, "job_id": None, "message": "대기 중", "error": None}
 _wake_event = threading.Event()
 _worker_started = False

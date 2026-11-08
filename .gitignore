@@ -5,3 +5,4 @@ v2/sync-client/build/
 v2/sync-client/dist/
 v2/sync-client/*.spec
 *.py[cod]
+v2/supabase/.temp/

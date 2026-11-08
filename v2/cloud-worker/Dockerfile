@@ -4,6 +4,7 @@ WORKDIR /app
 COPY v2/cloud-worker/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 COPY v2/cloud-worker/cloud_service.py ./cloud_service.py
+COPY v2/cloud-worker/account_recovery.py ./account_recovery.py
 COPY v2/sync-client/scraper.py ./scraper.py
 
 ENV PYTHONUNBUFFERED=1
