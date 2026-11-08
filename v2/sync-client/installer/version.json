@@ -1,8 +1,8 @@
 {
-  "disabled": true,
-  "disabledReason": "보안 검사 확인을 위해 실행 파일 배포를 일시 중단했습니다.",
-  "collectorVersion": "20261108-line-metrics-2",
-  "builtOn": "2026-11-08",
-  "bytes": 72802789,
-  "sha256": "c05f2d6ad0cc148547ff49d070a4b1080f9b93b5ce2d5aeb6194dfa1d7d52363"
+  "schema": 1,
+  "release": 2026110803,
+  "collectorVersion": "20261108-auto-update-1",
+  "builtAt": "2026-11-08T08:14:20.378959+00:00",
+  "bytes": 57973552,
+  "sha256": "08cd839a52740bb93013924421e6f158dd3ede5db239ce4841e7b883a48e81c8"
 }

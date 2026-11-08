@@ -16,6 +16,7 @@ from pathlib import Path
 import keyring
 import scraper as scraper_module
 from scraper import run_combined
+from work_guard import ACTIVITY
 
 
 SUPABASE_URL = "https://ymagjzwebshfnjiisrao.supabase.co"
@@ -314,15 +315,17 @@ def worker_loop():
                 heartbeat("ONLINE", None)
                 enqueue_due_schedules()
                 last_heartbeat = time.time()
-            job = claim_job()
+            # Claiming a lease and finishing its upload are one update-protected unit.
+            with ACTIVITY.activity():
+                job = claim_job()
+                if job:
+                    try:
+                        process_job(job)
+                    except Exception as exc:
+                        message = str(exc)
+                        heartbeat("ERROR", message)
             if not job:
                 time.sleep(5)
-                continue
-            try:
-                process_job(job)
-            except Exception as exc:
-                message = str(exc)
-                heartbeat("ERROR", message)
         except Exception as exc:
             print(f"Supabase 작업 대기열 오류: {exc}")
             time.sleep(10)

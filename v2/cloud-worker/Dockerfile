@@ -6,6 +6,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY v2/cloud-worker/cloud_service.py ./cloud_service.py
 COPY v2/cloud-worker/account_recovery.py ./account_recovery.py
 COPY v2/sync-client/scraper.py ./scraper.py
+COPY v2/sync-client/sync_version.py ./sync_version.py
+COPY v2/sync-client/work_guard.py ./work_guard.py
 
 ENV PYTHONUNBUFFERED=1
 CMD ["gunicorn", "--bind", "0.0.0.0:10000", "--workers", "1", "--threads", "4", "--timeout", "900", "cloud_service:app"]

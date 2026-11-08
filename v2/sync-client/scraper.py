@@ -13,6 +13,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
+from sync_version import COLLECTOR_VERSION
+from work_guard import collection_activity
 
 # Windows 콘솔 UTF-8 출력
 if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
@@ -24,7 +26,6 @@ if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
 load_dotenv()
 
 BASE_URL = "https://www.nrcom.com:447"
-COLLECTOR_VERSION = "20261108-line-metrics-2"
 USER_ID = os.getenv("NRC_USER_ID")
 USER_PW = os.getenv("NRC_USER_PW")
 DATA_DIR = (
@@ -269,6 +270,7 @@ def scrape_main_stats(page):
     return result
 
 
+@collection_activity
 def run_daily():
     """매일 자동 실행: 소비자현황 + 메인실적요약"""
     print(f"\n{'='*50}")
@@ -289,6 +291,7 @@ def run_daily():
             browser.close()
 
 
+@collection_activity
 def run_sales_now(period="당월"):
     """매출내역 즉시 수집 (버튼 클릭 시 호출)"""
     print(f"\n{'='*50}")
@@ -652,6 +655,7 @@ def scrape_monthly_closings(page, year, month, rounds=(1, 2, 3, 4), depth=10):
     return result
 
 
+@collection_activity
 def run_closings(year, month, rounds=(1, 2, 3, 4), depth=10):
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -744,6 +748,7 @@ def scrape_combined_json(page):
     return combined
 
 
+@collection_activity
 def run_combined():
     """계보+NV 통합 JSON 즉시 생성"""
     with sync_playwright() as p:

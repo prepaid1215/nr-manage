@@ -24,7 +24,20 @@ import urllib.request
 from urllib.parse import quote
 from datetime import datetime
 from pathlib import Path
-from flask import Flask, Response, jsonify, request
+if __name__ == "__main__" and "--apply-update" in sys.argv:
+    from auto_update import helper_main
+    position = sys.argv.index("--apply-update")
+    sys.exit(helper_main(sys.argv[position + 1]) if position + 1 < len(sys.argv) else 2)
+
+from auto_update import UpdateManager, take_instance_lock
+from sync_version import APP_RELEASE
+from work_guard import ACTIVITY
+
+if (__name__ == "__main__" and getattr(sys, "frozen", False)
+        and "--playwright-install" not in sys.argv and not take_instance_lock()):
+    sys.exit(0)
+
+from flask import Flask, Response, jsonify, request, g
 from flask_cors import CORS
 if getattr(sys, "frozen", False):
     # One-file extraction directories change on every run. Keep managed browsers outside that directory.
@@ -59,11 +72,29 @@ CORS(
     allow_private_network=True,
 )
 SYNC_TOKEN = os.getenv("NRC_SYNC_TOKEN", "")
+STARTUP_TOKEN = ""
+if "--updated-token" in sys.argv:
+    _position = sys.argv.index("--updated-token")
+    if _position + 1 < len(sys.argv) and re.fullmatch(r"[0-9a-f]{32}", sys.argv[_position + 1]):
+        STARTUP_TOKEN = sys.argv[_position + 1]
 
 
 @app.get("/health")
 def health():
-    return jsonify(ok=True, collectorVersion=scraper_module.COLLECTOR_VERSION)
+    return jsonify(ok=True, collectorVersion=scraper_module.COLLECTOR_VERSION,
+                   release=APP_RELEASE, startupToken=STARTUP_TOKEN, update=update_manager.snapshot())
+
+
+@app.get("/update-status")
+def update_status():
+    state = update_manager.snapshot()
+    checked = datetime.fromtimestamp(state["lastChecked"]).strftime("%Y-%m-%d %H:%M:%S") if state.get("lastChecked") else "실행 후 자동 확인 예정"
+    return Response(f'''<!doctype html><meta charset="utf-8"><title>NRC Sync 업데이트</title>
+    <main style="font-family:system-ui;max-width:560px;margin:48px auto;padding:24px">
+    <h1>NRC Sync 자동 업데이트</h1><p>현재 버전: {html.escape(scraper_module.COLLECTOR_VERSION)}</p>
+    <p>{html.escape(state.get('message') or '실행 후와 이후 30분마다 새 버전을 확인합니다.')}</p>
+    <p>최근 확인: {html.escape(checked)}</p><p>수집·메모장 작업이 끝난 뒤 업데이트합니다. 업데이트 실패 시 이전 버전으로 복구합니다.</p>
+    </main>''', content_type="text/html; charset=utf-8")
 
 
 @app.before_request
@@ -75,6 +106,20 @@ def require_sync_token():
         return jsonify({"ok": False, "message": "내 컴퓨터 연결 코드가 맞지 않습니다."}), 401
 
 
+@app.before_request
+def protect_active_request():
+    if request.path not in ("/health", "/update-status") and request.method != "OPTIONS":
+        g.update_activity = ACTIVITY.activity()
+        g.update_activity.__enter__()
+
+
+@app.teardown_request
+def release_active_request(_error):
+    context = g.pop("update_activity", None)
+    if context is not None:
+        context.__exit__(None, None, None)
+
+
 def install_dir():
     return Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "NRCSync"
 
@@ -83,6 +128,7 @@ DATA_DIR = (
     install_dir() / "data" if getattr(sys, "frozen", False) else Path(__file__).parent / "data"
 )
 sync_state = {"running": False, "completed": False, "error": None, "message": "대기 중"}
+update_manager = UpdateManager()
 SCHEDULES_FILE = DATA_DIR / "sync_schedules.json"
 KEYRING_SERVICE = "NRC-Management-Scheduler"
 MANUAL_KEYRING_SERVICE = "NRC-Management-Manual"
@@ -296,7 +342,7 @@ def open_sticky_note():
 
         root.mainloop()
 
-    threading.Thread(target=_run, daemon=True).start()
+    ACTIVITY.start_thread(_run)
 
 
 def naver_credential(label):
@@ -543,8 +589,7 @@ def get_sales():
         period = request.args.get("period", "당월")
         def _run():
             run_sales_now(period)
-        thread = threading.Thread(target=_run)
-        thread.start()
+        thread = ACTIVITY.start_thread(_run)
         thread.join(timeout=60)
 
     data = load_json("sales_latest.json")
@@ -587,8 +632,7 @@ def sync_daily():
     """소비자현황 + 실적요약 즉시 수집"""
     def _run():
         run_daily()
-    thread = threading.Thread(target=_run)
-    thread.start()
+    ACTIVITY.start_thread(_run)
     return jsonify({"ok": True, "message": "백그라운드에서 수집 시작됨. /api/consumers 로 결과 확인 가능."})
 
 
@@ -598,8 +642,7 @@ def sync_sales():
     period = request.json.get("period", "당월") if request.json else "당월"
     def _run():
         run_sales_now(period)
-    thread = threading.Thread(target=_run)
-    thread.start()
+    ACTIVITY.start_thread(_run)
     return jsonify({"ok": True, "message": f"매출내역({period}) 수집 시작. /api/sales 로 결과 확인."})
 
 
@@ -609,8 +652,7 @@ def sync_closings():
     now = datetime.now()
     year = int(body.get("year", now.year))
     month = int(body.get("month", now.month))
-    thread = threading.Thread(target=run_closings, args=(year, month))
-    thread.start()
+    ACTIVITY.start_thread(run_closings, args=(year, month))
     return jsonify({"ok": True, "message": f"{year}년 {month}월 마감차수 수집 시작"})
 
 
@@ -642,7 +684,7 @@ def start_combined_collection(body):
         except Exception as exc:
             sync_state.update(running=False, completed=False, error=str(exc), message="수집 실패")
 
-    threading.Thread(target=_run, daemon=True).start()
+    ACTIVITY.start_thread(_run)
     return True, "계보·NV·소비자회선 수집을 시작했습니다."
 
 
@@ -722,7 +764,7 @@ def scheduler_loop():
                 for item in load_schedules():
                     last_day = str(item.get("last_run") or "")[:10]
                     if item.get("enabled", True) and last_day != today and current_time >= item["time"]:
-                        threading.Thread(target=run_scheduled_collection, args=(item,), daemon=True).start()
+                        ACTIVITY.start_thread(run_scheduled_collection, args=(item,))
                         break
         except Exception as exc:
             print(f"스케줄 확인 오류: {exc}")
@@ -860,6 +902,8 @@ def install_persistently():
             pass
     ensure_startup_registered(target_exe)
 
+    update_manager.wake()
+
 
 def ensure_chromium_installed():
     """처음 실행될 때 Playwright 브라우저를 한 번 자동 설치한다."""
@@ -948,6 +992,10 @@ def run_with_tray():
     def open_naver(icon_obj=None, item=None):
         webbrowser.open("http://127.0.0.1:5050/naver/accounts")
 
+    def check_update(icon_obj=None, item=None):
+        update_manager.wake()
+        webbrowser.open("http://127.0.0.1:5050/update-status")
+
     def quit_app(icon_obj=None, item=None):
         icon_obj.stop()
         os._exit(0)
@@ -956,6 +1004,7 @@ def run_with_tray():
         pystray.MenuItem("앱 열기", open_setup, default=True),
         pystray.MenuItem("오늘 제목 메모장", open_notes),
         pystray.MenuItem("네이버 계정 로그인", open_naver),
+        pystray.MenuItem("업데이트 확인", check_update),
         pystray.MenuItem("종료", quit_app),
     )
     icon = pystray.Icon("NRCSync", _tray_icon_image(), "NRC Sync 실행 중", menu)
@@ -990,4 +1039,5 @@ if __name__ == "__main__":
     open_setup_page_if_needed()
     threading.Thread(target=scheduler_loop, daemon=True).start()
     threading.Thread(target=worker_loop, daemon=True).start()
+    update_manager.start(initial_delay=180 if STARTUP_TOKEN else 15)
     run_with_tray()

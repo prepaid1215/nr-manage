@@ -1,0 +1,15 @@
+{
+  "sha256": "08cd839a52740bb93013924421e6f158dd3ede5db239ce4841e7b883a48e81c8",
+  "release": 2026110803,
+  "scanner": "Microsoft Defender Antivirus",
+  "scanType": "CustomScan",
+  "scanCompletedAt": "2026-11-08T17:14:40+09:00",
+  "engineVersion": "1.1.26100.4",
+  "signatureVersion": "1.463.184.0",
+  "realtimeProtectionEnabled": true,
+  "candidateDetections": 0,
+  "windowsReplacementTest": "passed",
+  "settingsPreservationTest": "passed",
+  "pythonTestsPassed": 29,
+  "scope": "Local scan at the recorded time; not a guarantee of all security products or future verdicts"
+}
