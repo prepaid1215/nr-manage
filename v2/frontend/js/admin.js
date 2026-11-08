@@ -2,6 +2,7 @@ import { supabase } from "./supabase.js?v=20260829-34";
 import { friendlyError } from "./errors.js?v=20260830-1";
 import { branchBreakdown, buildPerformanceModel } from "./performance-calculator.js?v=20260831-61";
 import { boxTreeHtml } from "./box-tree.js?v=20260831-60";
+import { installAdminPasswordReset } from "./account-recovery.js?v=20261108-1";
 
 const safe = (value) =>
   String(value ?? "").replace(
@@ -25,6 +26,7 @@ export async function isAppAdmin() {
 export async function adminPage(root) {
   root.innerHTML = `<section class="card"><div class="section-head"><div><h2>오류확인 사용현황</h2><p class="help">가입자별 접속·수집·마감 사용 현황입니다. 비밀번호와 입력 내용은 기록하지 않습니다.</p></div><button id="adminReload" class="secondary compact" type="button">새로고침</button></div><div id="adminSummary" class="admin-summary"></div><label>사용자 검색<input id="adminSearch" type="search" placeholder="이름, 앱 아이디, 회원번호"></label><div id="adminError" class="error"></div></section><section class="card"><h2>가입자 현황</h2><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>사용자</th><th>최근 활동</th><th>최근 화면</th><th>수집 (성공/실패)</th><th>마감 계획</th></tr></thead><tbody id="adminUsers"></tbody></table></div></section><section class="card"><h2>최근 행동</h2><div id="adminEvents" class="admin-events"></div></section><dialog id="adminGenealogyDialog" class="member-dialog admin-genealogy-dialog"><div class="dialog-head"><h2 id="adminGenealogyTitle">사용자 계보도</h2><button class="secondary compact" id="adminGenealogyDownload" type="button" hidden>💾 JSON 다운로드</button><button id="adminGenealogyClose" type="button">×</button></div><div class="admin-genealogy-body"><p id="adminGenealogyMeta" class="help"></p><div id="adminPlanSummary" class="admin-plan-summary"></div><div id="adminGenealogyError" class="error"></div><div class="tree-focus-bar admin-tree-tools"><span>기준: <b id="adminTreeFocus">-</b></span><div><button class="secondary compact" id="adminTreeHome" type="button">맨 위로</button><button class="secondary compact" id="adminTreeUp" type="button">상위로</button><span class="tree-zoom-controls"><button class="secondary compact" id="adminZoomOut" type="button">−</button><button class="secondary compact" id="adminZoomReset" type="button">100%</button><button class="secondary compact" id="adminZoomIn" type="button">＋</button></span></div></div><p class="help">회원을 클릭하면 그 사람을 맨 위로 놓고 다시 그립니다. 빈 공간을 끌면 계보도가 이동합니다.</p><div id="adminGenealogyTree" class="box-tree pannable-tree"><div class="tree-stage" id="adminGenealogyStage"><p class="help">계보도를 불러오는 중...</p></div></div></div></dialog>`;
   const $ = (id) => document.getElementById(id);
+  const openPasswordReset = installAdminPasswordReset(root);
   let users = [], genealogyModel = null, genealogyHomeId = null,
     genealogyFocusId = null, genealogyZoom = 1, genealogyPayload = null, genealogyPayloadName = "";
   const centerAdminTree = () => {
@@ -58,7 +60,7 @@ export async function adminPage(root) {
       [row.name, row.username, row.member_no].some((value) => String(value || "").toLowerCase().includes(query)),
     );
     $("adminUsers").innerHTML = filtered.length
-      ? filtered.map((row) => `<tr><td><b>${safe(row.name || "이름 없음")}</b><small>${safe(row.username || "-")} · ${safe(row.member_no || "회원번호 없음")}</small></td><td>${safe(date(row.last_seen_at))}<small>기록 ${Number(row.event_count || 0).toLocaleString()}건</small></td><td>${safe(pageNames[row.last_page] || row.last_page || "-")}</td><td>${safe(date(row.last_snapshot_at))}<small>총 ${Number(row.collection_count || 0).toLocaleString()}회 · 성공 ${Number(row.job_success_count || 0).toLocaleString()} · 실패 ${Number(row.job_error_count || 0).toLocaleString()}</small>${row.last_snapshot_at ? `<button class="secondary compact admin-tree-button" data-admin-user="${safe(row.user_id)}" type="button">계보도 보기</button>` : ""}</td><td>진행 ${Number(row.draft_plan_count || 0)} · 완료 ${Number(row.done_plan_count || 0)}</td></tr>`).join("")
+      ? filtered.map((row) => `<tr><td><b>${safe(row.name || "이름 없음")}</b><small>${safe(row.username || "-")} · ${safe(row.member_no || "회원번호 없음")}</small>${row.status === "ACTIVE" ? `<button class="secondary compact admin-reset-button" data-admin-reset="${safe(row.user_id)}" type="button">비밀번호 초기화</button>` : ""}</td><td>${safe(date(row.last_seen_at))}<small>기록 ${Number(row.event_count || 0).toLocaleString()}건</small></td><td>${safe(pageNames[row.last_page] || row.last_page || "-")}</td><td>${safe(date(row.last_snapshot_at))}<small>총 ${Number(row.collection_count || 0).toLocaleString()}회 · 성공 ${Number(row.job_success_count || 0).toLocaleString()} · 실패 ${Number(row.job_error_count || 0).toLocaleString()}</small>${row.last_snapshot_at ? `<button class="secondary compact admin-tree-button" data-admin-user="${safe(row.user_id)}" type="button">계보도 보기</button>` : ""}</td><td>진행 ${Number(row.draft_plan_count || 0)} · 완료 ${Number(row.done_plan_count || 0)}</td></tr>`).join("")
       : '<tr><td colspan="5">일치하는 사용자가 없습니다.</td></tr>';
   };
   const load = async () => {
@@ -104,6 +106,12 @@ export async function adminPage(root) {
     URL.revokeObjectURL(url);
   };
   $("adminUsers").onclick = async (event) => {
+    const resetButton = event.target.closest("[data-admin-reset]");
+    if (resetButton) {
+      const user = users.find((row) => row.user_id === resetButton.dataset.adminReset);
+      if (user) openPasswordReset(user);
+      return;
+    }
     const button = event.target.closest("[data-admin-user]");
     if (!button) return;
     const user = users.find((row) => row.user_id === button.dataset.adminUser);

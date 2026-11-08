@@ -5,6 +5,9 @@ import {
   currentProfile,
   setRememberLogin,
 } from "./supabase.js?v=20260829-34";
+import {
+  installRecoveryUi, signupQuiz, saveSignupQuiz, mountRecoverySettings, enforcePasswordChange,
+} from "./account-recovery.js?v=20261108-1";
 import { customersPage } from "./customers.js?v=20260917-2";
 import { activityPage } from "./activity.js?v=20260916-4";
 import {
@@ -17,7 +20,7 @@ import { manualClosePage } from "./manual-close.js?v=20261101-17";
 import { teamPage } from "./team.js?v=20261101-10";
 import { localDate, monthRange } from "./date.js?v=20260829-25";
 import { friendlyError } from "./errors.js?v=20260830-1";
-import { adminPage, isAppAdmin } from "./admin.js?v=20260915-1";
+import { adminPage, isAppAdmin } from "./admin.js?v=20261108-1";
 import {
   loadManualLinks,
   mergeManualLinks,
@@ -1037,6 +1040,7 @@ async function settings(initialView = "profile") {
       : "";
     if (profile.username === "wndudehsim") setupAdminToggle();
   }
+  mountRecoverySettings($("accountSettings"));
   document.querySelectorAll("[data-settings-view]").forEach(
     (button) =>
       (button.onclick = () => {
@@ -1672,7 +1676,7 @@ function setAuthMode(mode) {
   authMode = mode;
   const signup = mode === "signup";
   $("authDescription").textContent = signup
-    ? "아이디와 비밀번호만 정하면 가입됩니다."
+    ? "가입 정보와 계정을 찾을 때 사용할 복구 퀴즈를 등록하세요."
     : "아이디와 비밀번호로 로그인하세요.";
   $("authSubmit").textContent = signup ? "회원가입" : "로그인";
   $("authModeBtn").textContent = signup
@@ -1683,14 +1687,16 @@ function setAuthMode(mode) {
     : "current-password";
   document.querySelectorAll(".signup-only").forEach((label) => {
     label.hidden = !signup;
-    label.querySelector("input").required = signup;
+    label.querySelector("input,select").required = signup;
   });
+  document.querySelector(".recovery-links").hidden = signup;
 }
 async function start() {
   const {
     data: { session },
   } = await supabase.auth.getSession();
   if (!session) throw Error("로그인 세션을 만들지 못했습니다.");
+  if (await enforcePasswordChange(() => setAuthMode("login"))) return false;
   const username = session.user.user_metadata?.username || "사용자";
   const profile = await currentProfile().catch(() => null);
   me = profile || { id: session.user.id, name: username, status: "ACTIVE" };
@@ -1704,8 +1710,12 @@ async function start() {
   $("appView").hidden = false;
   $("userName").textContent = `${me.name || username}님`;
   nav();
-  show("home");
+  await show("home");
+  $("loginPassword").value = "";
+  return true;
 }
+installRecoveryUi();
+setAuthMode("login");
 $("authModeBtn").onclick = () =>
   setAuthMode(authMode === "login" ? "signup" : "login");
 $("loginForm").onsubmit = async (e) => {
@@ -1719,7 +1729,9 @@ $("loginForm").onsubmit = async (e) => {
   submit.textContent = authMode === "signup" ? "가입 중..." : "로그인 중...";
   setRememberLogin($("rememberLogin").checked);
   try {
+    let quizWarning = null;
     if (authMode === "signup") {
+      const quiz = signupQuiz();
       try {
         const result = await signUp({
           username,
@@ -1733,8 +1745,13 @@ $("loginForm").onsubmit = async (e) => {
           await signIn({ username, password });
         else throw err;
       }
+      quizWarning = await saveSignupQuiz(quiz, password);
     } else await signIn({ username, password });
-    await start();
+    const started = await start();
+    if (started && quizWarning) {
+      await settings("account");
+      $("quizState").textContent = quizWarning;
+    }
   } catch (err) {
     errorBox.textContent = friendlyError(err, "로그인하지 못했습니다. 잠시 후 다시 시도해 주세요.");
   } finally {
