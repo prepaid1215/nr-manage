@@ -92,7 +92,7 @@ export async function customTreePage(root, me) {
       const turnOn = box.checked;
       box.disabled = true;
       const result = turnOn
-        ? await supabase.from(TABLE).upsert({ owner_id: me.id, member_no: id }, { onConflict: "owner_id,member_no" })
+        ? await supabase.from(TABLE).upsert({ owner_id: me.id, member_no: id }, { onConflict: "owner_id,member_no", ignoreDuplicates: true })
         : await supabase.from(TABLE).delete().eq("owner_id", me.id).eq("member_no", id);
       box.disabled = false;
       if (result.error) {
