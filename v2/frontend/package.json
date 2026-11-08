@@ -3,6 +3,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node tests/date.test.mjs && node tests/performance-calculator.test.mjs && node tests/line-metrics.test.mjs"
+    "test": "node tests/date.test.mjs && node tests/performance-calculator.test.mjs && node tests/line-metrics.test.mjs && node tests/custom-tree.test.mjs"
   }
 }

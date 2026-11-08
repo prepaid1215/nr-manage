@@ -5,6 +5,8 @@ import {
   buildPerformanceModel,
   planSixtyKSplit,
 } from "./performance-calculator.js?v=20261031-4";
+import { loadExclusions } from "./custom-tree.js?v=20261108-1";
+import { activeExclusions, visibleChildrenMap } from "./custom-tree-logic.js?v=20261108-1";
 
 // 직접계산: 추천은 하지 않는다. NRC 계보도처럼 박스 그림을 그리고, 박스에 매출(원)을 직접 넣으면
 // 그 금액이 위쪽 박스의 서브·대실적·소실적에 어떻게 반영되는지 바로 보여준다.
@@ -21,7 +23,7 @@ const safe = (value) =>
 const wonOfNv = (nv) => (nv > 0 ? Math.ceil(nv / NV_PER_THOUSAND) * 1000 : 0); // 그 NV를 채우는 데 드는 매출(원), 1,000원 단위 올림
 
 export async function manualClosePage(root, me) {
-  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>마감 계산</h2><p class="help">박스에 넣을 매출(NV)을 적으면 위쪽 박스의 서브 실적이 바로 바뀝니다. 바뀐 숫자는 <b>이전 → 이후</b>로 보입니다. 실회선은 수집된 회원 정보를 표시합니다.</p></div></div><div id="mcSource" class="help">불러오는 중...</div><div id="mcError" class="error"></div></section><div id="mcBody"></div>`;
+  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>마감 계산</h2><p class="help">박스에 넣을 매출(NV)을 적으면 위쪽 박스의 서브 실적이 바로 바뀝니다. 바뀐 숫자는 <b>이전 → 이후</b>로 보입니다. 실회선은 수집된 회원 정보를 표시합니다. 「내 계보도」에서 제외한 회원은 박스와 추천에서 빠집니다.</p></div></div><div id="mcSource" class="help">불러오는 중...</div><div id="mcError" class="error"></div></section><div id="mcBody"></div>`;
   const $ = (id) => document.getElementById(id);
 
   // ── 수집 자료 고르기 (계정별 가장 최근 것) ─────────────────────────────
@@ -56,6 +58,7 @@ export async function manualClosePage(root, me) {
   let unit = "nv"; // 박스 칸에 적는 단위: "nv" | "won"
   let zoom = 1; // 계보도 확대·축소 (저장하지 않는다)
   let collectedAt = "";
+  let excluded = new Set(); // "내 계보도"에서 제외한 회원: 화면·추천에서만 빠지고 계산에는 그대로 포함
 
   const storeKey = () => `manual-close-nv:${me.id}:${snapshotId}`;
   const loadState = () => {
@@ -135,6 +138,7 @@ export async function manualClosePage(root, me) {
       }
     } catch {}
     collectedAt = data.collected_at;
+    excluded = activeExclusions(model, (await loadExclusions(me)).ids);
     loadState();
     rootIds = rootIds.filter((id) => model.byId.has(id));
     if (!rootIds.length) {
@@ -186,12 +190,13 @@ export async function manualClosePage(root, me) {
     return `<div class="box-node" data-mc-card="${safe(id)}" style="min-width:150px"><b>${safe(row.userName || "이름 없음")}</b><small>*${safe(id)}</small><small>${safe(row.rankName || "회원")}/${safe(row.rankMaxName || "회원")}</small><em>본인 ${fmt(row.ordPv)} NV</em><div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 6px;margin-top:4px;text-align:center"><span>서브1</span><span>서브2</span>${val(id, "l0")}${val(id, "l1")}</div><div style="margin-top:4px">실회선 <b>${realLines == null ? "미수집" : `${fmt(realLines)}회선`}</b></div><div style="margin-top:6px"><input type="number" inputmode="numeric" min="0" step="1" placeholder="${unit === "won" ? "매출(원)" : "매출(NV)"}" data-mc-sale="${safe(id)}" value="${safe(shown(id))}" style="width:96px;height:26px;padding:2px 6px;font-size:12px"><small data-mc-won="${safe(id)}" style="display:block"></small></div></div>`;
   };
   const treeHtml = (rid) => {
+    const shownKids = visibleChildrenMap(model, excluded, rid);
     const node = (row, level, path) => {
       const id = String(row.userId);
       if (path.has(id)) return "";
       const next = new Set(path).add(id);
-      const children = level < depth ? kids(id) : [];
-      const more = level >= depth && kids(id).length ? `<div class="box-more">아래 더 있음</div>` : "";
+      const children = level < depth ? shownKids.get(id) || [] : [];
+      const more = level >= depth && (shownKids.get(id) || []).length ? `<div class="box-more">아래 더 있음</div>` : "";
       return `<li>${cardHtml(row)}${more}${children.length ? `<ul>${children.map((child) => node(child, level + 1, next)).join("")}</ul>` : ""}</li>`;
     };
     const top = model.byId.get(rid);
@@ -341,7 +346,7 @@ export async function manualClosePage(root, me) {
         blocks.push(`<div>${title} → <span style="color:#047857"><b>✅ 채웠음</b></span></div>`);
         return;
       }
-      const plan = planSixtyKSplit(model, String(lineRoot.userId), deficit);
+      const plan = planSixtyKSplit(model, String(lineRoot.userId), deficit, [], excluded);
       if (!plan) {
         blocks.push(`<div>${title} → 부족 <b>${fmt(deficit)} NV</b> (추천 계산 불가)</div>`);
         return;

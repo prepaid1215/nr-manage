@@ -981,11 +981,13 @@ function minorNvByMember(model, rootId, salesNvById = new Map()) {
   return result;
 }
 
-export function planSixtyKSplit(model, lineRootId, deficitNv, defaultPlacements = []) {
+export function planSixtyKSplit(model, lineRootId, deficitNv, defaultPlacements = [], excludedIds = new Set()) {
   const topUp = salesTopUpForDeficit(deficitNv);
   if (topUp.salesWon <= 0) return null;
   const ids = subtreeMemberIds(model, lineRootId);
   if (!ids.length) return null;
+  // 제외한 회원에게는 매출을 넣지 않는다(실적 계산에는 그대로 포함).
+  const placeIds = ids.filter((id) => !excludedIds.has(id));
   const eligible = ids.filter((id) => isSixtyKEligible(model.byId.get(id)));
   const base = minorNvByMember(model, lineRootId);
   const nvOf = (won) => Math.floor(won / 1000) * 810;
@@ -1033,14 +1035,14 @@ export function planSixtyKSplit(model, lineRootId, deficitNv, defaultPlacements 
       best = { placements, qualified, direct };
     }
   };
-  ids.forEach((id) => consider([{ memberId: id, salesWon: total }]));
+  placeIds.forEach((id) => consider([{ memberId: id, salesWon: total }]));
   if (total >= MIN_PIECE * 2) {
-    for (let i = 0; i < ids.length; i += 1) {
-      for (let j = i + 1; j < ids.length; j += 1) {
+    for (let i = 0; i < placeIds.length; i += 1) {
+      for (let j = i + 1; j < placeIds.length; j += 1) {
         for (let first = MIN_PIECE; first <= total - MIN_PIECE; first += step) {
           consider([
-            { memberId: ids[i], salesWon: first },
-            { memberId: ids[j], salesWon: total - first },
+            { memberId: placeIds[i], salesWon: first },
+            { memberId: placeIds[j], salesWon: total - first },
           ]);
         }
       }
@@ -1051,7 +1053,7 @@ export function planSixtyKSplit(model, lineRootId, deficitNv, defaultPlacements 
   const bestKey = [...best.qualified].sort().join(",");
   const alternatives =
     best.placements.length === 1 && best.qualified.length > 0
-      ? ids.filter(
+      ? placeIds.filter(
           (id) => [...qualifiedFor([{ memberId: id, salesWon: total }])].sort().join(",") === bestKey,
         )
       : [];
