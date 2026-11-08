@@ -1082,6 +1082,7 @@ export function planBalancedSplit(model, lineRootId, deficitNv, excludedIds = ne
   const MIN_UNITS = 10;
   const totalUnits = topUp.salesWon / 1000;
   const placed = new Map(); // 회원번호 → 넣은 단위(1,000원)
+  const redirected = new Map(); // 회원번호 → 제외한 회원 몫으로 대신 받은 단위(1,000원)
   const kidsOf = (id) => model.children.get(String(id)) || [];
   const nvOf = (won) => Math.floor(won / 1000) * UNIT_NV;
 
@@ -1100,6 +1101,7 @@ export function planBalancedSplit(model, lineRootId, deficitNv, excludedIds = ne
     while (target && excludedIds.has(target)) target = String(model.byId.get(target)?.ppId ?? "");
     if (!idSet.has(target)) return false;
     placed.set(target, numeric(placed.get(target)) + units);
+    if (target !== String(id)) redirected.set(target, numeric(redirected.get(target)) + units);
     return true;
   };
 
@@ -1141,7 +1143,8 @@ export function planBalancedSplit(model, lineRootId, deficitNv, excludedIds = ne
   if (leftover > 0) {
     const fallback = ids.find((id) => !excludedIds.has(id));
     if (fallback === undefined) return null;
-    place(fallback, leftover);
+    placed.set(fallback, numeric(placed.get(fallback)) + leftover);
+    redirected.set(fallback, numeric(redirected.get(fallback)) + leftover);
   }
 
   const placements = [...placed.entries()]
@@ -1161,5 +1164,7 @@ export function planBalancedSplit(model, lineRootId, deficitNv, excludedIds = ne
     qualified,
     baselineQualified: [],
     improves: qualified.length > 0,
+    // 제외한 회원 몫을 대신 받은 박스 (회원번호 → 원). 화면에 이유를 보여주는 데 쓴다.
+    redirected: Object.fromEntries([...redirected.entries()].filter(([, u]) => u > 0).map(([id, u]) => [id, u * 1000])),
   };
 }

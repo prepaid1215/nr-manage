@@ -4,7 +4,7 @@ import {
   attachPerformanceSubtree,
   buildPerformanceModel,
   planBalancedSplit,
-} from "./performance-calculator.js?v=20261108-1";
+} from "./performance-calculator.js?v=20261108-2";
 import { loadExclusions } from "./custom-tree.js?v=20261108-3";
 import { activeExclusions, visibleChildrenMap } from "./custom-tree-logic.js?v=20261108-1";
 
@@ -353,7 +353,7 @@ export async function manualClosePage(root, me) {
       }
       plan.placements.forEach((p) => list.push({ id: String(p.memberId), nv: p.addedNv }));
       const placed = plan.placements
-        .map((p) => `<div style="margin-left:14px">↳ ${name(String(p.memberId))} · <b>${fmt(p.addedNv)} NV</b> (${fmt(p.salesWon)}원)</div>`)
+        .map((p) => `<div style="margin-left:14px">↳ ${name(String(p.memberId))} · <b>${fmt(p.addedNv)} NV</b> (${fmt(p.salesWon)}원)${plan.redirected?.[String(p.memberId)] ? ` <small style="color:#b45309">※ 아래 제외한 회원 몫 ${fmt(plan.redirected[String(p.memberId)])}원이 여기에 합쳐졌습니다</small>` : ""}</div>`)
         .join("");
       const sixty = plan.qualified.length
         ? `<div style="margin-left:14px;color:#047857">소실적 6만 NV를 새로 넘는 박스: ${plan.qualified.map((id) => name(String(id))).join(", ")}</div>`

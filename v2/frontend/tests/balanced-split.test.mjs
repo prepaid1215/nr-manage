@@ -35,3 +35,9 @@ assert.equal(planBalancedSplit(model, 'L', 0), null);
 const small = planBalancedSplit(model, 'L', 9000);
 assert.ok(small.placements.length >= 1 && small.placements.every((p) => p.salesWon >= 10000));
 console.log('Balanced split tests passed: weaker line first, even split downward, exclusions, min piece.');
+
+// 제외 때문에 윗사람에게 합쳐지면 그 사실이 결과에 남는다
+const merged = planBalancedSplit(model, 'L', 300000, new Set(['X1', 'X2', 'Y1', 'Y2']));
+assert.ok(merged.redirected && Object.keys(merged.redirected).length > 0, JSON.stringify(merged.redirected));
+assert.deepEqual(planBalancedSplit(model, 'L', 300000).redirected, {});
+console.log('Balanced split redirect info passed.');
