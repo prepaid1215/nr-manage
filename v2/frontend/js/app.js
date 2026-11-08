@@ -16,7 +16,7 @@ import {
 } from "./checklist.js?v=20260906-31";
 import { closingPage, commissionPage } from "./finance.js?v=20260916-2";
 import { performancePage } from "./performance.js?v=20261101-1";
-import { manualClosePage } from "./manual-close.js?v=20261108-5";
+import { manualClosePage } from "./manual-close.js?v=20261108-6";
 import { customTreePage } from "./custom-tree.js?v=20261108-3";
 import { teamPage } from "./team.js?v=20261101-10";
 import { localDate, monthRange } from "./date.js?v=20260829-25";

@@ -1,6 +1,6 @@
 import { supabase } from "./supabase.js?v=20260829-34";
 import { boxTreeHtml } from "./box-tree.js?v=20260831-60";
-import { buildPerformanceModel } from "./performance-calculator.js?v=20261108-2";
+import { buildPerformanceModel } from "./performance-calculator.js?v=20261108-3";
 import { visibleChildrenMap, activeExclusions } from "./custom-tree-logic.js?v=20261108-1";
 
 const TABLE = "nrc_custom_tree_exclusions";

@@ -4,7 +4,7 @@ import {
   attachPerformanceSubtree,
   buildPerformanceModel,
   planBalancedSplit,
-} from "./performance-calculator.js?v=20261108-2";
+} from "./performance-calculator.js?v=20261108-3";
 import { loadExclusions } from "./custom-tree.js?v=20261108-3";
 import { activeExclusions, visibleChildrenMap } from "./custom-tree-logic.js?v=20261108-1";
 

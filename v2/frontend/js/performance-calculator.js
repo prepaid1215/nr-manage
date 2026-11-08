@@ -1096,21 +1096,24 @@ export function planBalancedSplit(model, lineRootId, deficitNv, excludedIds = ne
     return sum;
   };
   const lineTotal = (row) => branchBreakdown(row).total + subSalesNv(memberId(row));
-  const place = (id, units) => {
-    let target = String(id);
-    while (target && excludedIds.has(target)) target = String(model.byId.get(target)?.ppId ?? "");
-    if (!idSet.has(target)) return false;
-    placed.set(target, numeric(placed.get(target)) + units);
-    if (target !== String(id)) redirected.set(target, numeric(redirected.get(target)) + units);
-    return true;
+  const canTake = (id) => !excludedIds.has(String(id));
+  const addPlaced = (id, units, bounced = false) => {
+    placed.set(id, numeric(placed.get(id)) + units);
+    if (bounced) redirected.set(id, numeric(redirected.get(id)) + units);
   };
 
+  // 제외한 회원에게는 넣지 않는다. 받을 수 없는 몫은 위로 돌려보내고, 위에서 같은 라인의 다른 쪽
+  // (제외하지 않은 회원)에게 다시 나눠 준다. 끝까지 받을 곳이 없을 때만 가장 가까운 윗사람이 받는다.
+  // 반환값: 이 아래에서 넣지 못하고 남은 단위.
   const distribute = (id, units, depth = 0) => {
-    if (units <= 0) return;
+    if (units <= 0) return 0;
     const kids = kidsOf(id);
     if (!kids.length || depth > 60) {
-      if (!place(id, units)) leftover += units;
-      return;
+      if (canTake(id)) {
+        addPlaced(id, units);
+        return 0;
+      }
+      return units;
     }
     const row = model.byId.get(id);
     const lines = [kids[0] ? lineTotal(kids[0]) : 0, kids[1] ? lineTotal(kids[1]) : 0];
@@ -1131,23 +1134,47 @@ export function planBalancedSplit(model, lineRootId, deficitNv, excludedIds = ne
         amounts[side] = 0;
       }
     });
+    let unplaced = 0;
     [0, 1].forEach((side) => {
       if (amounts[side] <= 0) return;
-      if (kids[side]) distribute(memberId(kids[side]), amounts[side], depth + 1);
-      else if (!place(id, amounts[side])) leftover += amounts[side];
+      if (kids[side]) {
+        let left = distribute(memberId(kids[side]), amounts[side], depth + 1);
+        // 이쪽 아래에 받을 곳이 없으면 같은 라인의 다른 쪽에서 이어서 받는다
+        if (left > 0 && kids[1 - side]) left = distribute(memberId(kids[1 - side]), left, depth + 1);
+        unplaced += left;
+      } else if (canTake(id)) {
+        addPlaced(id, amounts[side]);
+      } else if (kids[1 - side]) {
+        unplaced += distribute(memberId(kids[1 - side]), amounts[side], depth + 1);
+      } else {
+        unplaced += amounts[side];
+      }
     });
+    if (unplaced > 0 && canTake(id)) {
+      addPlaced(id, unplaced, true);
+      return 0;
+    }
+    return unplaced;
   };
 
-  let leftover = 0;
-  distribute(String(lineRootId), totalUnits);
+  let leftover = distribute(String(lineRootId), totalUnits);
   if (leftover > 0) {
-    const fallback = ids.find((id) => !excludedIds.has(id));
+    const fallback = ids.find((id) => canTake(id));
     if (fallback === undefined) return null;
-    placed.set(fallback, numeric(placed.get(fallback)) + leftover);
-    redirected.set(fallback, numeric(redirected.get(fallback)) + leftover);
+    addPlaced(fallback, leftover, true);
   }
 
-  const placements = [...placed.entries()]
+  const entries = [...placed.entries()].filter(([, units]) => units > 0);
+  if (entries.length > 1) {
+    const largest = entries.reduce((best, entry) => (entry[1] > best[1] ? entry : best));
+    entries.forEach((entry) => {
+      if (entry !== largest && entry[1] < MIN_UNITS) {
+        largest[1] += entry[1];
+        entry[1] = 0;
+      }
+    });
+  }
+  const placements = entries
     .filter(([, units]) => units > 0)
     .map(([memberIdValue, units]) => ({ memberId: memberIdValue, salesWon: units * 1000 }));
   const eligible = ids.filter((id) => isSixtyKEligible(model.byId.get(id)));

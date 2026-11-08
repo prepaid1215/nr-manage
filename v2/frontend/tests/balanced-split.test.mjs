@@ -41,3 +41,11 @@ const merged = planBalancedSplit(model, 'L', 300000, new Set(['X1', 'X2', 'Y1', 
 assert.ok(merged.redirected && Object.keys(merged.redirected).length > 0, JSON.stringify(merged.redirected));
 assert.deepEqual(planBalancedSplit(model, 'L', 300000).redirected, {});
 console.log('Balanced split redirect info passed.');
+
+// 한쪽 라인이 전부 제외돼도 그만큼을 합치지 않고, 같은 라인의 제외하지 않은 다른 회원들에게 계속 나눠 준다
+const sideOut = planBalancedSplit(model, 'L', 300000, new Set(['X1', 'X2', 'Y1']));
+assert.equal(sum(sideOut), sideOut.totalWon);
+assert.ok(sideOut.placements.every((p) => !['X1', 'X2', 'Y1'].includes(p.memberId)), JSON.stringify(sideOut.placements));
+assert.ok(sideOut.placements.some((p) => p.memberId === 'Y2'), JSON.stringify(sideOut.placements));
+assert.ok(sideOut.placements.length >= 2, JSON.stringify(sideOut.placements));
+console.log('Balanced split continues among non-excluded members.');
