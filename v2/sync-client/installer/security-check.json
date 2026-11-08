@@ -11,5 +11,10 @@
   "pythonTestsPassed": 33,
   "cloudTestsPassed": 25,
   "databaseIntegration": "passed with rollback",
-  "scope": "Local scan at the recorded time; not a guarantee of all security products or future verdicts"
+  "scope": "Local scan at the recorded time; not a guarantee of all security products or future verdicts",
+  "windowsReplacementTest": "passed",
+  "settingsPreservationTest": "passed",
+  "installedFileSha256": "7748b4919f0794016e7dad0c886202bbdd4f075f35f9aa3955e590891acdc67d",
+  "installedFileScanCompletedAt": "2026-11-08T17:48:51+09:00",
+  "installedFileScanDetections": 0
 }
