@@ -19,6 +19,7 @@ import { performancePage } from "./performance.js?v=20261101-1";
 import { manualClosePage } from "./manual-close.js?v=20261101-17";
 import { teamPage } from "./team.js?v=20261101-10";
 import { localDate, monthRange } from "./date.js?v=20260829-25";
+import { memberLineMetrics } from "./line-metrics.js?v=20261108-2";
 import { friendlyError } from "./errors.js?v=20260830-1";
 import { adminPage, isAppAdmin } from "./admin.js?v=20261108-1";
 import {
@@ -722,18 +723,17 @@ async function organizationDashboard(targetOwner) {
             return suffix.length >= 4 && userId.endsWith(suffix);
           })?.[1] ||
           null,
-        detailTotal = item.lineMetricsFound
-          ? Number(item.consumerTotalLines || 0)
-          : consumer?.["총회선"],
-        detailKt = consumer?.["KT망"],
-        detailLg = consumer?.["LG망"],
+        metrics = memberLineMetrics(item, consumer),
+        detailTotal = metrics.total,
+        detailKt = metrics.kt,
+        detailLg = metrics.lg,
         lineSource = consumer
           ? "로그인 계정 회선 목록"
           : item.lineMetricsFound
             ? "회원 상세 응답"
             : "해당 회원 계정 수집 필요";
       $("memberDetailInline").innerHTML =
-        `<table class="detail-table inline"><tbody><tr><th>성명</th><td>${safe(item.userName || "—")}</td><th>회원번호</th><td>${safe(item.userId || "—")}</td></tr><tr><th>현재직급</th><td>${safe(item.rankName || "회원")}</td><th>인증직급</th><td>${safe(item.rankMaxName || "회원")}</td></tr><tr><th>본인매출 NV</th><td>${number(item.ordPv)}</td><th>정산 적용 NV</th><td>${number(item.ordPv)}</td></tr><tr><th>대실적(실시간)</th><td>${number(item.maxPv)}</td><th>소실적(실시간)</th><td>${number(item.minPv)}</td></tr><tr><th>소비자 총회선</th><td>${detailTotal == null ? "해당 계정 수집 필요" : `${number(detailTotal)}회선`}</td><th>실회선</th><td>${item.lineMetricsFound ? `${number(item.realLines)}회선` : "—"}</td></tr><tr><th>본인 매출 회선</th><td>${item.lineMetricsFound ? `${number(item.ownSalesLines)}회선` : "—"}</td><th>정기배송 회선</th><td>${item.lineMetricsFound ? `${number(item.regularDeliveryLines)}회선` : "—"}</td></tr><tr><th>KT / LG 회선</th><td>${detailKt == null ? "해당 계정 수집 필요" : `${number(detailKt)} / ${number(detailLg)}`}</td><th>계보 단계</th><td>${Number(item.lv) || 0}단계</td></tr><tr><th>상위회원</th><td>${parent ? safe(parent.userName) : "—"}</td><th>활동 상태</th><td>${item.dormant ? "휴면" : String(item.status) === "1" ? "활동" : "비활동"}</td></tr><tr><th>가입일</th><td>${safe(item.regDate || "—")}</td><th>수집 기준</th><td>${lineSource}</td></tr></tbody></table><p class="detail-note">※ 소비자회선 목록은 NRC에서 현재 로그인한 계정 소유 데이터만 제공합니다. 하위회원 회선은 해당 회원 계정으로 수집하거나 팀 공유가 필요합니다.</p>${item.userId !== String(me.member_no || "") ? `<div class="detail-actions"><button class="secondary compact" data-view-customers="${safe(item.userId)}" data-view-name="${safe(item.userName || "")}" type="button">이 사업자 고객 보기</button><button class="secondary compact" data-view-tree="${safe(item.userId)}" data-view-name="${safe(item.userName || "")}" type="button">이 사업자 계보 보기</button></div>` : ""}`;
+        `<table class="detail-table inline"><tbody><tr><th>성명</th><td>${safe(item.userName || "—")}</td><th>회원번호</th><td>${safe(item.userId || "—")}</td></tr><tr><th>현재직급</th><td>${safe(item.rankName || "회원")}</td><th>인증직급</th><td>${safe(item.rankMaxName || "회원")}</td></tr><tr><th>본인매출 NV</th><td>${number(item.ordPv)}</td><th>정산 적용 NV</th><td>${number(item.ordPv)}</td></tr><tr><th>대실적(실시간)</th><td>${number(item.maxPv)}</td><th>소실적(실시간)</th><td>${number(item.minPv)}</td></tr><tr><th>소비자 총회선</th><td>${detailTotal == null ? "해당 계정 수집 필요" : `${number(detailTotal)}회선`}</td><th>실회선</th><td>${metrics.real == null ? "미수집" : `${number(metrics.real)}회선`}</td></tr><tr><th>본인 매출 회선</th><td>${metrics.own == null ? "미수집" : `${number(metrics.own)}회선`}</td><th>정기배송 회선</th><td>${metrics.delivery == null ? "미수집" : `${number(metrics.delivery)}회선`}</td></tr><tr><th>KT / LG 회선</th><td>${detailKt == null || detailLg == null ? "회선 목록 미수집" : `${number(detailKt)} / ${number(detailLg)}`}</td><th>계보 단계</th><td>${Number(item.lv) || 0}단계</td></tr><tr><th>상위회원</th><td>${parent ? safe(parent.userName) : "—"}</td><th>활동 상태</th><td>${item.dormant ? "휴면" : String(item.status) === "1" ? "활동" : "비활동"}</td></tr><tr><th>가입일</th><td>${safe(item.regDate || "—")}</td><th>수집 기준</th><td>${lineSource}</td></tr></tbody></table><p class="detail-note">※ 총회선·실회선·본인 매출·정기배송은 회원 상세 조회 값입니다. KT/LG 구분은 수집한 회선 목록에 있는 회원만 표시합니다.</p>${metrics.needsCollectorUpdate ? `<p class="detail-note">회선 정보 갱신: <a href="${SYNC_DOWNLOAD}" target="_blank" rel="noopener">NRC Sync 최신 버전</a>을 다시 실행한 뒤 매출받기를 눌러 주세요. 이전 자료의 확인되지 않은 0은 미수집으로 표시합니다.</p>` : ""}${item.userId !== String(me.member_no || "") ? `<div class="detail-actions"><button class="secondary compact" data-view-customers="${safe(item.userId)}" data-view-name="${safe(item.userName || "")}" type="button">이 사업자 고객 보기</button><button class="secondary compact" data-view-tree="${safe(item.userId)}" data-view-name="${safe(item.userName || "")}" type="button">이 사업자 계보 보기</button></div>` : ""}`;
       const resolveMemberProfile = async (memberNo) => {
         const { data: target } = await supabase
           .from("profiles")

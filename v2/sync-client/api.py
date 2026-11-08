@@ -26,6 +26,11 @@ from datetime import datetime
 from pathlib import Path
 from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
+if getattr(sys, "frozen", False):
+    # One-file extraction directories change on every run. Keep managed browsers outside that directory.
+    os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(
+        Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "ms-playwright"
+    )
 import keyring
 import scraper as scraper_module
 import queue_worker
@@ -54,6 +59,11 @@ CORS(
     allow_private_network=True,
 )
 SYNC_TOKEN = os.getenv("NRC_SYNC_TOKEN", "")
+
+
+@app.get("/health")
+def health():
+    return jsonify(ok=True, collectorVersion=scraper_module.COLLECTOR_VERSION)
 
 
 @app.before_request
@@ -854,7 +864,10 @@ def install_persistently():
 def ensure_chromium_installed():
     """처음 실행될 때 Playwright 브라우저를 한 번 자동 설치한다."""
     marker = DATA_DIR / ".chromium_installed"
-    if marker.exists():
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as playwright:
+        browser_installed = Path(playwright.chromium.executable_path).is_file()
+    if marker.exists() and browser_installed:
         return
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     print("🧩 처음 실행 중입니다. NRC 수집용 브라우저를 설치합니다 (1~2분 소요)...")
