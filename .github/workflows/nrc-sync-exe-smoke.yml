@@ -8,6 +8,9 @@ on:
       - "v2/sync-client/tests/test_legacy_port.py"
       - "v2/sync-client/legacy_port.py"
       - "v2/sync-client/api.py"
+      - "v2/sync-client/sync_version.py"
+      - "v2/sync-client/build_release.py"
+      - "v2/sync-client/requirements-build.txt"
       - "v2/sync-client/installer/NRCSync.exe"
       - "v2/sync-client/installer/version.json"
   workflow_dispatch:
@@ -35,3 +38,22 @@ jobs:
         shell: pwsh
         run: |
           & ./v2/sync-client/tests/windows-exe-http-smoke.ps1 -ExePath "./v2/sync-client/installer/NRCSync.exe" -ManifestPath "./v2/sync-client/installer/version.json"
+
+      - name: Build candidate EXE in isolated Windows Python environment
+        shell: pwsh
+        run: |
+          python -m pip install -r v2/sync-client/requirements-build.txt
+          python v2/sync-client/build_release.py
+      - name: Smoke test newly built candidate EXE
+        shell: pwsh
+        run: |
+          & ./v2/sync-client/tests/windows-exe-http-smoke.ps1 -ExePath "./v2/sync-client/build/candidate/NRCSync.exe" -ManifestPath "./v2/sync-client/build/candidate/version.json"
+      - name: Retain candidate for manual Defender review (NOT published)
+        uses: actions/upload-artifact@v4
+        with:
+          name: nrc-sync-legacy-handoff-candidate
+          path: |
+            v2/sync-client/build/candidate/NRCSync.exe
+            v2/sync-client/build/candidate/version.json
+            v2/sync-client/build/candidate/build-packages.txt
+          retention-days: 7
