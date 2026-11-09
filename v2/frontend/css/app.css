@@ -435,3 +435,6 @@ button:active{transform:translateY(1px)}button:disabled{cursor:not-allowed;opaci
 #balanceDialog form>p{padding:0 20px;margin:0 0 16px}
 #balanceDialog .customer-actions{display:grid;grid-template-columns:1fr 2fr;gap:8px;padding:0 20px 20px}
 #balanceDialog .customer-actions button{margin:0}
+
+.box-node.lit{background:#FAC775;border-color:#BA7517;border-width:2px}.box-node.lit b,.box-node.lit small,.box-node.lit em{color:#412402}
+.box-node .box-codes{display:block;font-size:11px;color:#6b7280}.box-node.lit .box-codes{color:#633806}

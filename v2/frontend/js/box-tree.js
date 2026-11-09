@@ -73,7 +73,7 @@ export function boxCardHtml(row, options = {}) {
       ? `<span class="box-income on" data-toggle-income="${safe(id)}" role="button" tabindex="0" title="수익계좌로 보는 중 · 대·소 각각 채워야 함 (누르면 끄기)">💰수익계좌</span>`
       : `<span class="box-income" data-toggle-income="${safe(id)}" role="button" tabindex="0" title="지금은 합계만 넘으면 통과 · 누르면 수익계좌(대·소 각각)로 전환">☆수익계좌로</span>`
     : "";
-  return `<${tag} class="box-node ${boxRankTone(row)}${options.selected ? " selected" : ""}${options.marked ? " marked" : ""}${options.sale ? " sale" : ""}${options.hidden ? " box-hidden-card" : ""}${options.priority ? " box-priority-card" : ""}"${attrs}><b>${safe(row?.userName || "이름 없음")}</b><small>*${safe(id)}</small><small>${safe(row?.rankName || "회원")}/${safe(row?.rankMaxName || "회원")}</small>${options.hideDate ? "" : `<small>${safe(row?.regDate || "-")}</small>`}<em>본인 ${number(row?.ordPv)} NV</em><span class="box-line-total">라인 전체 ${number(lineOnly)}</span><span class="box-line-total box-grand-total">총(본인+전체) ${number(grandTotal)}</span>${note}${badge}${sale}${hideBtn}${priorityBtn}${incomeBtn}</${tag}>`;
+  return `<${tag} class="box-node ${boxRankTone(row)}${options.selected ? " selected" : ""}${options.lit ? " lit" : ""}${options.marked ? " marked" : ""}${options.sale ? " sale" : ""}${options.hidden ? " box-hidden-card" : ""}${options.priority ? " box-priority-card" : ""}"${attrs}><b>${safe(row?.userName || "이름 없음")}</b><small>*${safe(id)}</small><small>${safe(row?.rankName || "회원")}/${safe(row?.rankMaxName || "회원")}</small>${options.hideDate ? "" : `<small>${safe(row?.regDate || "-")}</small>`}<em>본인 ${number(row?.ordPv)} NV</em><span class="box-line-total">라인 전체 ${number(lineOnly)}</span><span class="box-line-total box-grand-total">총(본인+전체) ${number(grandTotal)}</span>${note}${badge}${sale}${hideBtn}${priorityBtn}${incomeBtn}</${tag}>`;
 }
 
 // ctx: { byId: Map, children: Map } — buildPerformanceModel 결과나 동일 구조
@@ -134,6 +134,7 @@ export function boxTreeHtml(ctx, rootId, options = {}) {
       clickable,
       hideDate: options.hideDate,
       selected: id === selectedId,
+      lit: Boolean(options.litIds?.has(id)),
       marked: Boolean(badges[id]),
       hideable,
       hidden: hiddenIds.has(id),

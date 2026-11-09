@@ -5,8 +5,8 @@ import {
   buildPerformanceModel,
   planBalancedSplit,
 } from "./performance-calculator.js?v=20261108-3";
-import { loadExclusions } from "./custom-tree.js?v=20261108-3";
-import { activeExclusions, visibleChildrenMap } from "./custom-tree-logic.js?v=20261108-1";
+import { loadExclusions, loadPicks } from "./custom-tree.js?v=20261109-1";
+import { activeExclusions, visibleChildrenMap, buildPersons, codesOutsidePicks } from "./custom-tree-logic.js?v=20261109-1";
 
 // 직접계산: 추천은 하지 않는다. NRC 계보도처럼 박스 그림을 그리고, 박스에 매출(원)을 직접 넣으면
 // 그 금액이 위쪽 박스의 서브·대실적·소실적에 어떻게 반영되는지 바로 보여준다.
@@ -23,7 +23,7 @@ const safe = (value) =>
 const wonOfNv = (nv) => (nv > 0 ? Math.ceil(nv / NV_PER_THOUSAND) * 1000 : 0); // 그 NV를 채우는 데 드는 매출(원), 1,000원 단위 올림
 
 export async function manualClosePage(root, me) {
-  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>마감 계산</h2><p class="help">박스에 넣을 매출(NV)을 적으면 위쪽 박스의 서브 실적이 바로 바뀝니다. 바뀐 숫자는 <b>이전 → 이후</b>로 보입니다. 실회선은 수집된 회원 정보를 표시합니다. 「내 계보도」에서 제외한 회원은 박스와 추천에서 빠집니다.</p></div></div><div id="mcSource" class="help">불러오는 중...</div><div id="mcError" class="error"></div></section><div id="mcBody"></div>`;
+  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>마감 계산</h2><p class="help">박스에 넣을 매출(NV)을 적으면 위쪽 박스의 서브 실적이 바로 바뀝니다. 바뀐 숫자는 <b>이전 → 이후</b>로 보입니다. 실회선은 수집된 회원 정보를 표시합니다. 「내 계보도」에서 불을 켠 사람이 있으면 그 사람들만 박스와 추천에 나옵니다.</p></div></div><div id="mcSource" class="help">불러오는 중...</div><div id="mcError" class="error"></div></section><div id="mcBody"></div>`;
   const $ = (id) => document.getElementById(id);
 
   // ── 수집 자료 고르기 (계정별 가장 최근 것) ─────────────────────────────
@@ -138,7 +138,13 @@ export async function manualClosePage(root, me) {
       }
     } catch {}
     collectedAt = data.collected_at;
-    excluded = activeExclusions(model, (await loadExclusions(me)).ids);
+    // 「내 계보도」에서 불을 켠 사람이 있으면 그 사람들만(켜지 않은 사람의 코드 3개씩 전부 제외), 없으면 예전 제외 목록
+    const picked = (await loadPicks(me)).ids;
+    const persons = buildPersons(model);
+    const pickedHere = [...picked].filter((key) => persons.byId.has(key));
+    excluded = pickedHere.length
+      ? codesOutsidePicks(persons, new Set(pickedHere))
+      : activeExclusions(model, (await loadExclusions(me)).ids);
     loadState();
     rootIds = rootIds.filter((id) => model.byId.has(id));
     if (!rootIds.length) {
