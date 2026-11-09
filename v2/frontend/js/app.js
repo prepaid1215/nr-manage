@@ -1301,12 +1301,20 @@ async function deleteCloudCredential(sourceAccountId) {
   }
 }
 async function loadSyncDevices() {
-  const { data, error } = await supabase
+  const columns = "id,device_name,source_account_id,status,last_seen_at,last_error,revoked_at,collector_version";
+  // 삭제(숨김)한 PC는 목록에서 뺀다. hidden_at 칸이 아직 없는 DB에서는 칸 없이 다시 조회한다.
+  let { data, error } = await supabase
     .from("nrc_sync_devices")
-    .select("id,device_name,source_account_id,status,last_seen_at,last_error,revoked_at,collector_version")
+    .select(`${columns},hidden_at`)
     .order("last_seen_at", { ascending: false });
+  if (error) {
+    ({ data, error } = await supabase
+      .from("nrc_sync_devices")
+      .select(columns)
+      .order("last_seen_at", { ascending: false }));
+  }
   if (error) throw error;
-  return data || [];
+  return (data || []).filter((device) => !device.hidden_at);
 }
 function isDeviceOnline(device) {
   if (device.revoked_at || !device.collector_version) return false;
@@ -1494,12 +1502,15 @@ async function loadLocalStatus() {
         ? devices
             .map(
               (device) =>
-                `<article class="schedule-item"><div><b>${safe(device.device_name)}</b><small>${device.revoked_at ? "등록 해제됨 · 수집 차단" : !device.collector_version ? "업데이트 필요 · 수집 대기" : isDeviceOnline(device) ? "온라인 · 수집 가능" : "오프라인"}</small><small>최근 확인: ${safe(new Date(device.last_seen_at).toLocaleString("ko-KR"))}</small><small>${device.collector_version ? `버전: ${safe(device.collector_version)}` : "구버전 · NRC Sync 업데이트 필요"}</small></div><button class="secondary compact" data-device-registration="${safe(device.id)}" data-device-name="${safe(device.device_name)}" data-enable="${Boolean(device.revoked_at)}" type="button">${device.revoked_at ? "다시 등록" : "등록 해제"}</button></article>`,
+                `<article class="schedule-item"><div><b>${safe(device.device_name)}</b><small>${device.revoked_at ? "등록 해제됨 · 수집 차단" : !device.collector_version ? "업데이트 필요 · 수집 대기" : isDeviceOnline(device) ? "온라인 · 수집 가능" : "오프라인"}</small><small>최근 확인: ${safe(new Date(device.last_seen_at).toLocaleString("ko-KR"))}</small><small>${device.collector_version ? `버전: ${safe(device.collector_version)}` : "구버전 · NRC Sync 업데이트 필요"}</small></div><button class="secondary compact" data-device-registration="${safe(device.id)}" data-device-name="${safe(device.device_name)}" data-enable="${Boolean(device.revoked_at)}" type="button">${device.revoked_at ? "다시 등록" : "등록 해제"}</button>${isDeviceOnline(device) ? "" : `<button class="secondary compact" data-device-delete="${safe(device.id)}" data-device-name="${safe(device.device_name)}" type="button">삭제</button>`}</article>`,
             )
             .join("")
         : '<p class="help">관리할 수 있는 본인 PC가 없습니다. 관리자는 전체 PC를 관리할 수 있습니다.</p>';
     list?.querySelectorAll("[data-device-registration]").forEach((button) => {
       button.onclick = () => setDeviceRegistration(button);
+    });
+    list?.querySelectorAll("[data-device-delete]").forEach((button) => {
+      button.onclick = () => deleteDevice(button);
     });
     nrcErrorBox.classList.add("error");
     nrcErrorBox.textContent = lastSharedDevicesError
@@ -1510,6 +1521,22 @@ async function loadLocalStatus() {
     $("nrcError").textContent = /nrc_sync_devices|schema cache/i.test(err.message)
       ? "Supabase에서 RUN_013_MULTI_PC_SYNC_QUEUE.sql을 먼저 실행해 주세요."
       : friendlyError(err);
+  }
+}
+async function deleteDevice(button) {
+  const name = button.dataset.deviceName || "이 PC";
+  if (!confirm(`${name}를 목록에서 삭제할까요? 수집이 차단된 상태로 기록만 남고 목록에서 사라집니다. 기존 수집 자료는 유지됩니다. 다시 쓰려면 그 PC에서 '이 PC 자동 등록'을 눌러야 합니다.`)) return;
+  button.disabled = true;
+  try {
+    await cloudApi(`/devices/${encodeURIComponent(button.dataset.deviceDelete)}`, { method: "DELETE" });
+    const status = $("autoRegisterStatus");
+    status.hidden = false;
+    status.classList.remove("error");
+    status.textContent = `${name} 삭제 완료`;
+    await loadLocalStatus();
+  } catch (err) {
+    $("nrcError").textContent = friendlyError(err);
+    button.disabled = false;
   }
 }
 async function setDeviceRegistration(button) {

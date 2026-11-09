@@ -221,9 +221,13 @@ def devices():
         return "", 204
     try:
         user = user_from_request()
-        rows = admin_request(
-            "nrc_sync_devices?select=id,owner_id,device_name,status,last_seen_at,revoked_at,collector_version&order=last_seen_at.desc"
-        ) or []
+        base = "id,owner_id,device_name,status,last_seen_at,revoked_at,collector_version"
+        try:
+            rows = admin_request(f"nrc_sync_devices?select={base},hidden_at&order=last_seen_at.desc") or []
+        except RuntimeError:
+            # RUN_049(hidden_at)를 아직 적용하지 않은 DB에서도 목록은 보이게 한다.
+            rows = admin_request(f"nrc_sync_devices?select={base}&order=last_seen_at.desc") or []
+        rows = [row for row in rows if not row.get("hidden_at")]
         admin = is_app_admin(user["id"])
         visible = rows if admin else [row for row in rows if row["owner_id"] == user["id"]]
         online = sum(1 for row in rows if _is_online(row))
@@ -244,6 +248,46 @@ def owned_device(user_id, device_id, active=True):
     return rows[0]
 
 
+def _unhide_device(device_id):
+    try:
+        admin_request(f"nrc_sync_devices?id=eq.{device_id}", "PATCH", {"hidden_at": None})
+    except RuntimeError:
+        pass  # RUN_049 적용 전에는 숨김 칸이 없다
+
+
+@app.route("/devices/<uuid:device_id>", methods=["DELETE", "OPTIONS"])
+def delete_device(device_id):
+    """목록에서 삭제. 행은 남기고 등록을 해제한 채 숨긴다(구버전이 다시 등록하지 못하게)."""
+    if request.method == "OPTIONS":
+        return "", 204
+    try:
+        user = user_from_request()
+        rows = admin_request(
+            f"nrc_sync_devices?id=eq.{device_id}&select=id,owner_id,status,last_seen_at,revoked_at,collector_version") or []
+        if not rows:
+            return jsonify(ok=False, message="PC를 찾을 수 없습니다."), 404
+        row = rows[0]
+        if row["owner_id"] != user["id"] and not is_app_admin(user["id"]):
+            return jsonify(ok=False, message="본인 PC 또는 관리자 권한이 필요합니다."), 403
+        if _is_online(row):
+            return jsonify(ok=False, message="지금 온라인인 PC는 삭제할 수 없습니다. 먼저 등록 해제한 뒤 삭제해 주세요."), 409
+        if not row.get("revoked_at"):
+            admin_request("rpc/set_pc_registration", "POST", {
+                "p_actor":user["id"], "p_device":str(device_id), "p_enabled":False})
+        admin_request(f"nrc_sync_devices?id=eq.{device_id}", "PATCH",
+                      {"hidden_at": datetime.now(timezone.utc).isoformat()})
+        return jsonify(ok=True)
+    except PermissionError as exc:
+        return jsonify(ok=False, message=str(exc)), 401
+    except RuntimeError as exc:
+        text = str(exc)
+        if "hidden_at" in text:
+            return jsonify(ok=False, message="Supabase에서 RUN_049_PC_HIDE.sql을 먼저 실행해 주세요."), 500
+        return jsonify(ok=False, message=text), 500
+    except Exception as exc:
+        return jsonify(ok=False, message=str(exc)), 500
+
+
 @app.route("/devices/<uuid:device_id>/registration", methods=["POST", "DELETE", "OPTIONS"])
 def device_registration(device_id):
     if request.method == "OPTIONS":
@@ -257,6 +301,8 @@ def device_registration(device_id):
             return jsonify(ok=False, message="본인 PC 또는 관리자 권한이 필요합니다."), 403
         admin_request("rpc/set_pc_registration", "POST", {
             "p_actor":user["id"], "p_device":str(device_id), "p_enabled":request.method == "POST"})
+        if request.method == "POST":
+            _unhide_device(str(device_id))
         return jsonify(ok=True)
     except PermissionError as exc:
         return jsonify(ok=False, message=str(exc)), 401
@@ -283,6 +329,7 @@ def register_pc():
                         status="ONLINE", last_seen_at=datetime.now(timezone.utc).isoformat())
         if rows:
             admin_request(f"nrc_sync_devices?id=eq.{device_id}", "PATCH", metadata)
+            _unhide_device(device_id)
         else:
             admin_request("nrc_sync_devices", "POST", {"id":device_id, **metadata})
         return jsonify(ok=True)

@@ -40,6 +40,54 @@ class DeviceControlTests(unittest.TestCase):
         self.assertEqual(len(data['devices']),2)
         self.assertEqual(data['summary'],dict(total=1,online=1))
 
+    def test_hidden_devices_are_not_listed(self):
+        self.db.return_value = [self.device,dict(self.device,id=JOB,device_name='Old PC',hidden_at='now')]
+        data = self.client.get('/devices').json
+        self.assertEqual([d['device_name'] for d in data['devices']],['My PC'])
+
+    def test_list_works_before_hidden_column_exists(self):
+        self.db.side_effect = [RuntimeError('column hidden_at does not exist'),[self.device]]
+        response = self.client.get('/devices')
+        self.assertEqual(response.status_code,200)
+        self.assertEqual(len(response.json['devices']),1)
+
+    def test_delete_revoked_offline_pc_only_hides_row(self):
+        self.device.update(revoked_at='now',status='OFFLINE')
+        self.db.return_value = [self.device]
+        response = self.client.delete(f'/devices/{DEVICE}')
+        self.assertEqual(response.status_code,200)
+        calls = [c.args for c in self.db.call_args_list]
+        self.assertFalse(any(c[0].startswith('rpc/') for c in calls))
+        self.assertFalse(any(c[1:2] == ('DELETE',) for c in calls))  # 행은 물리 삭제하지 않는다
+        patch_call = [c for c in calls if len(c) > 1 and c[1] == 'PATCH'][-1]
+        self.assertIn('hidden_at',patch_call[2])
+
+    def test_delete_offline_active_pc_revokes_then_hides(self):
+        self.device.update(status='OFFLINE',last_seen_at='2026-01-01T00:00:00+00:00')
+        self.db.return_value = [self.device]
+        self.assertEqual(self.client.delete(f'/devices/{DEVICE}').status_code,200)
+        calls = [c.args for c in self.db.call_args_list]
+        self.assertIn(('rpc/set_pc_registration','POST',dict(p_actor=OWNER,p_device=DEVICE,p_enabled=False)),calls)
+        self.assertTrue(any(len(c) > 2 and isinstance(c[2],dict) and 'hidden_at' in c[2] for c in calls))
+
+    def test_online_pc_cannot_be_deleted(self):
+        self.db.return_value = [self.device]
+        response = self.client.delete(f'/devices/{DEVICE}')
+        self.assertEqual(response.status_code,409)
+        self.assertEqual(self.db.call_count,1)
+
+    def test_other_member_cannot_delete(self):
+        self.device.update(status='OFFLINE',owner_id=OTHER)
+        self.db.return_value = [self.device]
+        self.assertEqual(self.client.delete(f'/devices/{DEVICE}').status_code,403)
+        self.assertEqual(self.db.call_count,1)
+
+    def test_restore_clears_hidden_flag(self):
+        self.db.return_value = [self.device]
+        self.assertEqual(self.client.post(f'/devices/{DEVICE}/registration').status_code,200)
+        calls = [c.args for c in self.db.call_args_list]
+        self.assertTrue(any(len(c) > 2 and c[2] == {'hidden_at':None} for c in calls))
+
     def test_owner_can_revoke(self):
         self.db.return_value = [self.device]
         response = self.client.delete(f'/devices/{DEVICE}/registration')
@@ -62,7 +110,9 @@ class DeviceControlTests(unittest.TestCase):
     def test_restore_is_an_explicit_post(self):
         self.db.return_value = [dict(self.device,revoked_at='now')]
         self.assertEqual(self.client.post(f'/devices/{DEVICE}/registration').status_code,200)
-        self.assertTrue(self.db.call_args.args[2]['p_enabled'])
+        rpc = [c.args for c in self.db.call_args_list if c.args[0] == 'rpc/set_pc_registration']
+        self.assertEqual(len(rpc),1)
+        self.assertTrue(rpc[0][2]['p_enabled'])
 
     def test_heartbeat_never_restores_revoked_pc(self):
         self.db.return_value = [dict(self.device,revoked_at='now')]
