@@ -5,6 +5,9 @@ on:
     paths:
       - ".github/workflows/nrc-sync-exe-smoke.yml"
       - "v2/sync-client/tests/windows-exe-http-smoke.ps1"
+      - "v2/sync-client/tests/test_legacy_port.py"
+      - "v2/sync-client/legacy_port.py"
+      - "v2/sync-client/api.py"
       - "v2/sync-client/installer/NRCSync.exe"
       - "v2/sync-client/installer/version.json"
   workflow_dispatch:
@@ -25,6 +28,9 @@ jobs:
         run: |
           python -m pip install playwright==1.60.0
           python -m playwright install chromium
+      - name: Verify legacy-port takeover without harming unrelated Python processes
+        shell: pwsh
+        run: python -m unittest discover -s v2/sync-client/tests -p test_legacy_port.py -v
       - name: Run the published EXE and probe HTTP routes
         shell: pwsh
         run: |
