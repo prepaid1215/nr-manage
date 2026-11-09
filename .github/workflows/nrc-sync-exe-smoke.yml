@@ -1,0 +1,31 @@
+name: NRC Sync published EXE Windows HTTP smoke
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/nrc-sync-exe-smoke.yml"
+      - "v2/sync-client/tests/windows-exe-http-smoke.ps1"
+      - "v2/sync-client/installer/NRCSync.exe"
+      - "v2/sync-client/installer/version.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Preinstall Playwright Chromium used by NRC Sync
+        run: |
+          python -m pip install playwright==1.60.0
+          python -m playwright install chromium
+      - name: Run the published EXE and probe HTTP routes
+        shell: pwsh
+        run: |
+          & ./v2/sync-client/tests/windows-exe-http-smoke.ps1 -ExePath "./v2/sync-client/installer/NRCSync.exe" -ManifestPath "./v2/sync-client/installer/version.json"
