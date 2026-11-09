@@ -12,10 +12,12 @@ const safe = (value) =>
   String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
 const LABEL = ["본", "서브1", "서브2"];
 
-let removeDragGuard = null;
+const dragGuards = new WeakMap();
 
-export async function closingLabPage(root, me) {
-  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>추천·제외</h2><p class="help">먼저 전체로 균형 추천을 계산합니다. 매출을 넣고 싶지 않은 곳은 <b>이곳 제외</b>나 박스 누르기로 빼면, 그곳만 빼고 나머지로 다시 균형 계산합니다. 박스를 눌러 <b>불을 켜면</b> 그 코드에만 넣습니다.</p></div></div><div id="clSource" class="help">불러오는 중...</div><div id="clError" class="error"></div></section><div id="clBody"></div>`;
+// options.mode === "sum": 목표를 대/소 따로가 아니라 서브1 + 서브2 합(목표합)으로 입력한다. 예) 80 마감 → 37 / 43
+export async function closingLabPage(root, me, options = {}) {
+  const sumMode = options.mode === "sum";
+  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>${sumMode ? "목표합 추천" : "추천·제외"}</h2><p class="help">${sumMode ? "목표를 <b>서브1 + 서브2 합</b>으로 입력합니다. 예를 들어 80 마감이면 두 라인의 합이 80이 되게 작은 쪽부터 채워서 <b>37 / 43</b>처럼 나눕니다. " : "먼저 전체로 균형 추천을 계산합니다. "}매출을 넣고 싶지 않은 곳은 <b>이곳 제외</b>나 박스 누르기로 빼면, 그곳만 빼고 나머지로 다시 균형 계산합니다. 박스를 눌러 <b>불을 켜면</b> 그 코드에만 넣습니다.</p></div></div><div id="clSource" class="help">불러오는 중...</div><div id="clError" class="error"></div></section><div id="clBody"></div>`;
   const $ = (id) => root.querySelector(`#${id}`);
 
   const { rows: sources, error: listError } = await listSources(me);
@@ -35,7 +37,7 @@ export async function closingLabPage(root, me) {
   let sales = {};
   let lit = new Set();
   let excl = new Set();
-  let target = { major: 150, minor: 150 };
+  let target = { major: 150, minor: 150, total: 300 };
   let personOnly = false;
   let clickMode = "exclude";
   let preview = new Map(); // 코드 → 추천 원(아직 넣지 않은 값)
@@ -43,7 +45,7 @@ export async function closingLabPage(root, me) {
   let recText = "";
   let notice = "";
 
-  const storeKey = () => `closing-lab:${me.id}:${snapshotId}`;
+  const storeKey = () => `${sumMode ? "closing-lab-sum" : "closing-lab"}:${me.id}:${snapshotId}`;
   const load = () => {
     sales = {};
     lit = new Set();
@@ -56,7 +58,7 @@ export async function closingLabPage(root, me) {
         excl = new Set((saved.excl || []).map(String));
         if (saved.rid) rid = String(saved.rid);
         depth = Number(saved.depth) || 5;
-        target = { major: Number(saved.target?.major ?? 150), minor: Number(saved.target?.minor ?? 150) };
+        target = { major: Number(saved.target?.major ?? 150), minor: Number(saved.target?.minor ?? 150), total: Number(saved.target?.total ?? 300) };
         personOnly = Boolean(saved.personOnly);
         clickMode = saved.clickMode === "lit" ? "lit" : "exclude";
       }
@@ -156,6 +158,40 @@ export async function closingLabPage(root, me) {
       })
       .join("");
 
+  const man = (nv) => String(Math.round((nv / 10000) * 10) / 10);
+  // 목표합(서브1 + 서브2) 추천: 부족분 = 목표합 − (현재 서브1 + 현재 서브2)를 이 박스에서부터 균형으로 나눈다.
+  const buildSumRecommendation = (state) => {
+    const totalTarget = Number(target.total || 0) * 10000;
+    const current = state.sums[0] + state.sums[1];
+    const head = `${nameOf(rid)} · 목표합(서브1 + 서브2) ${fmt(totalTarget)} / 현재 ${fmt(current)} (서브1 ${fmt(state.sums[0])} / 서브2 ${fmt(state.sums[1])})`;
+    const deficit = totalTarget - current;
+    if (deficit <= 0) {
+      recText = `<div>${head} → <span style="color:var(--success)"><b>✅ 채웠음</b></span></div>`;
+      return;
+    }
+    const plan = planSelectiveSplit(model, persons, { lineRootId: rid, deficitNv: deficit, salesNv: sales, takeable, personOnly });
+    if (!plan) {
+      recText = `<div>${head} → 부족 <b>${fmt(deficit)} NV</b> (제외하지 않은 코드가 이 박스 아래에 없습니다)</div>`;
+      return;
+    }
+    const after = { ...sales };
+    const list = [];
+    plan.placed.forEach((units, code) => {
+      after[code] = Number(after[code] || 0) + units * UNIT_NV;
+      list.push({ id: code, nv: units * UNIT_NV });
+      preview.set(code, (preview.get(code) || 0) + units * 1000);
+    });
+    const next = calc(rid, after);
+    applyList = list;
+    const chips = excl.size
+      ? `<div style="margin-top:6px">제외한 코드: ${[...excl].map((code) => `<span class="cl-chip">${nameOf(code)} <a href="#" data-cl-undo="${safe(code)}">되돌리기</a></span>`).join("")}</div>`
+      : "";
+    const items = [...plan.placed.entries()]
+      .sort((a, b) => Number(a[0]) - Number(b[0]))
+      .map(([code, units]) => `<div style="margin-left:14px">↳ ${nameOf(code)} · <b>${fmt(units * UNIT_NV)} NV</b> (${fmt(units * 1000)}원) <button class="secondary compact cl-xbtn" data-cl-ex="${safe(code)}" type="button">이곳 제외</button></div>`)
+      .join("");
+    recText = `<div>${head} → 부족 <b>${fmt(deficit)} NV</b> → 필요 <b>${fmt(plan.totalWon)}원</b></div>${items}<details style="margin-left:14px"><summary style="cursor:pointer;color:var(--muted)">내려간 과정 보기</summary>${traceHtml(plan)}</details><div style="margin-top:6px">넣은 뒤 예상: 서브1 <b>${fmt(next.sums[0])}</b> / 서브2 <b>${fmt(next.sums[1])}</b> → 합 <b>${fmt(next.sums[0] + next.sums[1])}</b> (<b>${man(next.sums[0])} / ${man(next.sums[1])}</b>만) · 대 ${man(next.major)} / 소 ${man(next.minor)}</div>${chips}<button class="primary compact" id="clApply" style="margin-top:6px" type="button">이 추천 넣기</button><div class="help">추천 기준: 목표합에서 현재 서브1 + 서브2를 뺀 부족분을 1,000원 단위(최소 1만원)로 올려, ${personOnly ? "사람 단위로만 균형(서브 코드 밑 두 사람은 반반)" : "각 박스에서 작은 쪽 라인부터 채워 두 라인이 같아지면 양쪽에 나눠"} 내려갑니다. 한 라인이 이미 절반보다 크면 그 라인은 그대로 두고 작은 라인만 올라갑니다.</div>`;
+  };
   const buildRecommendation = () => {
     preview = new Map();
     applyList = null;
@@ -165,6 +201,10 @@ export async function closingLabPage(root, me) {
       return;
     }
     const state = calc(rid, sales);
+    if (sumMode) {
+      buildSumRecommendation(state);
+      return;
+    }
     const wants = [];
     wants[state.minorLine] = { label: "소실적", target: Number(target.minor || 0) * 10000 };
     wants[1 - state.minorLine] = { label: "대실적", target: Number(target.major || 0) * 10000 };
@@ -237,7 +277,7 @@ export async function closingLabPage(root, me) {
       .sort((a, b) => Number(a.userId) - Number(b.userId))
       .map((row) => `<option value="${safe(row.userId)}"${String(row.userId) === rid ? " selected" : ""}>${safe(row.userName)} ${labelOf(String(row.userId))} *${safe(row.userId)}</option>`)
       .join("");
-    $("clBody").innerHTML = `<section class="card"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><label>단계 <select id="clDepth">${depthOptions}</select></label><label style="display:flex;flex-direction:row;gap:6px;align-items:center"><input type="checkbox" id="clPerson" style="width:18px;height:18px;min-height:0;margin:0"${personOnly ? " checked" : ""}> 사람 단위로만 균형</label><label>박스를 누르면 <select id="clMode"><option value="exclude"${clickMode === "exclude" ? " selected" : ""}>제외하기(추천에서 빼기)</option><option value="lit"${clickMode === "lit" ? " selected" : ""}>불 켜기(그 코드에만 넣기)</option></select></label><button class="secondary compact" id="clExOff" type="button">제외·불 모두 풀기</button><button class="secondary compact" id="clReset" type="button">입력 초기화</button></div><div style="margin-top:8px"><label>맨 위 박스 <select id="clRoot" style="max-width:280px">${rootOptions}</select></label> <span id="clState" class="help"></span></div><div class="cl-sec"><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b id="clRootName" style="font-size:15px"></b> <small id="clRootRank" class="help"></small><span style="margin-left:auto"></span>마감 목표 대 <input type="number" id="clMaj" min="0" step="any" value="${target.major}" style="width:84px"> 만 / 소 <input type="number" id="clMin" min="0" step="any" value="${target.minor}" style="width:84px"> 만 <button class="secondary compact" id="clRecBtn" type="button">추천 보기</button><span class="box-zoom"><button class="secondary compact" data-cl-zoom="out" type="button" aria-label="축소">−</button><button class="secondary compact" data-cl-zoom="reset" id="clZoom" type="button">100%</button><button class="secondary compact" data-cl-zoom="in" type="button" aria-label="확대">＋</button></span></div><div id="clRec" style="margin-top:6px;line-height:1.75;font-size:13px"></div><div class="box-tree pannable-tree" style="margin-top:8px"><div class="tree-stage" id="clStage"></div></div><div id="clTotal" class="help" style="margin-top:6px"></div></div></section>`;
+    $("clBody").innerHTML = `<section class="card"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><label>단계 <select id="clDepth">${depthOptions}</select></label><label style="display:flex;flex-direction:row;gap:6px;align-items:center"><input type="checkbox" id="clPerson" style="width:18px;height:18px;min-height:0;margin:0"${personOnly ? " checked" : ""}> 사람 단위로만 균형</label><label>박스를 누르면 <select id="clMode"><option value="exclude"${clickMode === "exclude" ? " selected" : ""}>제외하기(추천에서 빼기)</option><option value="lit"${clickMode === "lit" ? " selected" : ""}>불 켜기(그 코드에만 넣기)</option></select></label><button class="secondary compact" id="clExOff" type="button">제외·불 모두 풀기</button><button class="secondary compact" id="clReset" type="button">입력 초기화</button></div><div style="margin-top:8px"><label>맨 위 박스 <select id="clRoot" style="max-width:280px">${rootOptions}</select></label> <span id="clState" class="help"></span></div><div class="cl-sec"><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b id="clRootName" style="font-size:15px"></b> <small id="clRootRank" class="help"></small><span style="margin-left:auto"></span>${sumMode ? `목표합(서브1 + 서브2) <input type="number" id="clTot" min="0" step="any" value="${target.total}" style="width:90px"> 만` : `마감 목표 대 <input type="number" id="clMaj" min="0" step="any" value="${target.major}" style="width:84px"> 만 / 소 <input type="number" id="clMin" min="0" step="any" value="${target.minor}" style="width:84px"> 만`} <button class="secondary compact" id="clRecBtn" type="button">추천 보기</button><span class="box-zoom"><button class="secondary compact" data-cl-zoom="out" type="button" aria-label="축소">−</button><button class="secondary compact" data-cl-zoom="reset" id="clZoom" type="button">100%</button><button class="secondary compact" data-cl-zoom="in" type="button" aria-label="확대">＋</button></span></div><div id="clRec" style="margin-top:6px;line-height:1.75;font-size:13px"></div><div class="box-tree pannable-tree" style="margin-top:8px"><div class="tree-stage" id="clStage"></div></div><div id="clTotal" class="help" style="margin-top:6px"></div></div></section>`;
     draw();
   };
 
@@ -290,7 +330,12 @@ export async function closingLabPage(root, me) {
   };
   root.oninput = (event) => {
     if (event.target.id === "clMaj" || event.target.id === "clMin") {
-      target = { major: Number($("clMaj").value || 0), minor: Number($("clMin").value || 0) };
+      target = { ...target, major: Number($("clMaj").value || 0), minor: Number($("clMin").value || 0) };
+      save();
+      return;
+    }
+    if (event.target.id === "clTot") {
+      target = { ...target, total: Number($("clTot").value || 0) };
       save();
       return;
     }
@@ -401,14 +446,14 @@ export async function closingLabPage(root, me) {
   };
   root.onpointerup = stopPan;
   root.onpointercancel = stopPan;
-  if (removeDragGuard) removeDragGuard();
+  dragGuards.get(root)?.();
   const dragGuard = (event) => {
     if (!pan?.moved) return;
     event.preventDefault();
     event.stopPropagation();
   };
   root.addEventListener("click", dragGuard, true);
-  removeDragGuard = () => root.removeEventListener("click", dragGuard, true);
+  dragGuards.set(root, () => root.removeEventListener("click", dragGuard, true));
 
   try {
     await loadSnapshot();
