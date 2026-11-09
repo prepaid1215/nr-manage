@@ -12,6 +12,8 @@ const safe = (value) =>
   String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
 const LABEL = ["본", "서브1", "서브2"];
 
+let removeDragGuard = null;
+
 export async function closingLabPage(root, me) {
   root.innerHTML = `<section class="card"><div class="section-head"><div><h2>추천·제외</h2><p class="help">먼저 전체로 균형 추천을 계산합니다. 매출을 넣고 싶지 않은 곳은 <b>이곳 제외</b>나 박스 누르기로 빼면, 그곳만 빼고 나머지로 다시 균형 계산합니다. 박스를 눌러 <b>불을 켜면</b> 그 코드에만 넣습니다.</p></div></div><div id="clSource" class="help">불러오는 중...</div><div id="clError" class="error"></div></section><div id="clBody"></div>`;
   const $ = (id) => root.querySelector(`#${id}`);
@@ -114,10 +116,16 @@ export async function closingLabPage(root, me) {
     model.rows.forEach((row) => {
       base[String(row.userId)] = calc(String(row.userId), {});
     });
+    const edgeHtml = (id) => {
+      const before = lineTotal(id, {});
+      const now = lineTotal(id, sales);
+      const value = before === now ? fmt(now) : `<span class="cl-old">${fmt(before)}</span> → <span class="cl-new">${fmt(now)}</span>`;
+      return `<span class="cl-edge" title="이 박스 아래 전체 실적 합계">하위 총 ${value}</span>`;
+    };
     const node = (id, level) => {
       const children = level < depth ? kids(id) : [];
       const more = level >= depth && kids(id).length ? '<div class="box-more">아래 더 있음</div>' : "";
-      return `<li>${cardHtml(id, base)}${more}${children.length ? `<ul>${children.map((kid) => node(kid, level + 1)).join("")}</ul>` : ""}</li>`;
+      return `<li>${level > 1 ? edgeHtml(id) : ""}${cardHtml(id, base)}${more}${children.length ? `<ul>${children.map((kid) => node(kid, level + 1)).join("")}</ul>` : ""}</li>`;
     };
     return `<ul>${node(rid, 1)}</ul>`;
   };
@@ -341,6 +349,45 @@ export async function closingLabPage(root, me) {
     else set.add(id);
     refreshRec();
   };
+
+  // 빈 곳을 끌면 화면이 움직인다(손바닥). 끌었을 때는 박스가 눌리지 않게 한다.
+  let pan = null;
+  root.onpointerdown = (event) => {
+    const canvas = event.target.closest(".pannable-tree");
+    if (!canvas || event.button !== 0 || event.target.closest("input,button,select,textarea,label,a")) return;
+    pan = { canvas, x: event.clientX, y: event.clientY, left: canvas.scrollLeft, top: canvas.scrollTop, moved: false };
+  };
+  root.onpointermove = (event) => {
+    if (!pan) return;
+    const dx = event.clientX - pan.x;
+    const dy = event.clientY - pan.y;
+    if (!pan.moved && Math.abs(dx) + Math.abs(dy) > 6) {
+      pan.moved = true;
+      pan.canvas.classList.add("dragging");
+      pan.canvas.setPointerCapture(event.pointerId);
+    }
+    if (!pan.moved) return;
+    pan.canvas.scrollLeft = pan.left - dx;
+    pan.canvas.scrollTop = pan.top - dy;
+  };
+  const stopPan = (event) => {
+    if (!pan) return;
+    pan.canvas.classList.remove("dragging");
+    if (pan.moved && pan.canvas.hasPointerCapture(event.pointerId)) pan.canvas.releasePointerCapture(event.pointerId);
+    setTimeout(() => {
+      pan = null;
+    }, 0);
+  };
+  root.onpointerup = stopPan;
+  root.onpointercancel = stopPan;
+  if (removeDragGuard) removeDragGuard();
+  const dragGuard = (event) => {
+    if (!pan?.moved) return;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  root.addEventListener("click", dragGuard, true);
+  removeDragGuard = () => root.removeEventListener("click", dragGuard, true);
 
   try {
     await loadSnapshot();
