@@ -41,6 +41,7 @@ export async function closingLabPage(root, me) {
   let preview = new Map(); // 코드 → 추천 원(아직 넣지 않은 값)
   let applyList = null;
   let recText = "";
+  let notice = "";
 
   const storeKey = () => `closing-lab:${me.id}:${snapshotId}`;
   const load = () => {
@@ -78,6 +79,16 @@ export async function closingLabPage(root, me) {
     return list && list.length === 3 ? LABEL[list.indexOf(id)] : "단독";
   };
   const nameOf = (id) => `${safe(rowOf(id)?.userName || "-")} *${safe(id)} ${labelOf(id)}`;
+  // 제외하면 그 코드에 넣어 둔 매출도 뺀다(빠진 몫은 다시 계산해서 다른 곳으로 나뉜다).
+  const excludeCode = (id) => {
+    excl.add(id);
+    const removed = Number(sales[id] || 0);
+    if (removed > 0) {
+      delete sales[id];
+      notice = `${nameOf(id)}를 제외하면서 넣어 둔 매출 ${fmt(removed)} NV(약 ${fmt(Math.ceil(removed / UNIT_NV) * 1000)}원)를 뺐습니다.`;
+    }
+    return removed;
+  };
   const takeable = (id) => (lit.size === 0 || lit.has(id)) && !excl.has(id);
 
   const salesBelow = (id, store) => {
@@ -203,7 +214,7 @@ export async function closingLabPage(root, me) {
     $("clTotal").textContent = total
       ? `넣은 매출 합계 ${fmt(total)} NV (약 ${fmt(Math.ceil(total / UNIT_NV) * 1000)}원, 실제로는 박스별 1,000원 단위로 올려 넣습니다)`
       : "박스의 매출(NV) 칸에 숫자를 넣으면 위쪽 서브1·서브2가 바로 바뀝니다.";
-    $("clRec").innerHTML = recText;
+    $("clRec").innerHTML = (notice ? `<div class="cl-notice">${notice}</div>` : "") + recText;
   };
   const recommend = () => {
     buildRecommendation();
@@ -285,6 +296,7 @@ export async function closingLabPage(root, me) {
     }
     const input = event.target.closest("[data-cl-sale]");
     if (!input) return;
+    notice = "";
     const id = input.dataset.clSale;
     const value = Math.max(0, Math.floor(Number(input.value || 0)));
     if (value > 0) sales[id] = value;
@@ -307,8 +319,12 @@ export async function closingLabPage(root, me) {
       draw();
       return;
     }
-    if (event.target.closest("#clRecBtn")) return recommend();
+    if (event.target.closest("#clRecBtn")) {
+      notice = "";
+      return recommend();
+    }
     if (event.target.closest("#clReset")) {
+      notice = "";
       sales = {};
       preview = new Map();
       recText = "";
@@ -322,6 +338,7 @@ export async function closingLabPage(root, me) {
       return refreshRec();
     }
     if (event.target.closest("#clApply")) {
+      notice = "";
       (applyList || []).forEach(({ id, nv }) => {
         sales[id] = Number(sales[id] || 0) + nv;
       });
@@ -331,7 +348,8 @@ export async function closingLabPage(root, me) {
     }
     const exBtn = event.target.closest("[data-cl-ex]");
     if (exBtn) {
-      excl.add(exBtn.dataset.clEx);
+      notice = "";
+      excludeCode(exBtn.dataset.clEx);
       return recommend();
     }
     const undo = event.target.closest("[data-cl-undo]");
@@ -344,9 +362,12 @@ export async function closingLabPage(root, me) {
     const card = event.target.closest("[data-cl-card]");
     if (!card) return;
     const id = card.dataset.clCard;
-    const set = clickMode === "lit" ? lit : excl;
-    if (set.has(id)) set.delete(id);
-    else set.add(id);
+    notice = "";
+    if (clickMode === "lit") {
+      if (lit.has(id)) lit.delete(id);
+      else lit.add(id);
+    } else if (excl.has(id)) excl.delete(id);
+    else excludeCode(id);
     refreshRec();
   };
 
