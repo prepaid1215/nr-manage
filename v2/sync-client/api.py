@@ -30,6 +30,7 @@ if __name__ == "__main__" and "--apply-update" in sys.argv:
     sys.exit(helper_main(sys.argv[position + 1]) if position + 1 < len(sys.argv) else 2)
 
 from auto_update import UpdateManager, take_instance_lock
+from legacy_port import ensure_local_port_ready
 from sync_version import APP_RELEASE
 from work_guard import ACTIVITY
 
@@ -1013,6 +1014,9 @@ def run_with_tray():
 
 
 if __name__ == "__main__":
+    if "--playwright-install" not in sys.argv and not ensure_local_port_ready():
+        sys.exit(1)
+
     if "--playwright-install" in sys.argv:
         from playwright.__main__ import main as playwright_main
 
