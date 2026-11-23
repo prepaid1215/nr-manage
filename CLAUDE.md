@@ -26,7 +26,7 @@
 ## 개발·배포 주의사항
 
 - 먼저 `git status`와 최근 커밋을 확인하고 사용자 변경을 보존한다.
-- 운영 DB에는 RUN_046, RUN_047 변경이 적용돼 있다. 전체 SQL 재실행이나 DB 초기화를 하지 않는다.
+- 운영 DB에는 RUN_046~RUN_050 변경이 적용돼 있다. 전체 SQL 재실행이나 DB 초기화를 하지 않는다.
 - 프런트엔드 변경 시 실제 수정 모듈의 import `?v=`와 `index.html`의 앱 버전을 함께 갱신한다.
 - Windows EXE는 `requirements-build.txt`로 만든 별도 환경에서 `build_release.py`로 빌드한다. 후보 파일의 Defender 검사와 해시 검증 후 동일한 파일만 게시한다.
 - 이전 EXE에 실제 Defender 탐지가 있었다. 격리 복원·백신 예외 추가·보호 해제는 하지 않는다.
