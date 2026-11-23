@@ -2,9 +2,10 @@
 
 작업을 시작할 때 다음 문서를 먼저 읽는다.
 
-1. [최신 인계 문서 — 2026-11-08](v2/docs/CLAUDE_CODE_HANDOFF_2026-11-08.md)
-2. [기존 작업 기록](v2/docs/HANDOFF.md)
-3. 기능에 따라 `v2/docs/account-recovery.md`, `v2/docs/line-metrics.md`, `v2/docs/closing-calculator.md`
+1. [최신 인계 문서 — 2026-11-09 (추가분)](v2/docs/CLAUDE_CODE_HANDOFF_2026-11-09.md)
+2. [기준 인계 문서 — 2026-11-08](v2/docs/CLAUDE_CODE_HANDOFF_2026-11-08.md)
+3. [기존 작업 기록](v2/docs/HANDOFF.md)
+4. 기능에 따라 `v2/docs/account-recovery.md`, `v2/docs/line-metrics.md`, `v2/docs/closing-calculator.md`
 
 ## 현재 구조
 
