@@ -1,7 +1,7 @@
 import { supabase } from "./supabase.js?v=20260829-34";
 import { boxTreeHtml } from "./box-tree.js?v=20261109-1";
 import { buildPerformanceModel } from "./performance-calculator.js?v=20261108-3";
-import { buildPersons, litPersonTree } from "./custom-tree-logic.js?v=20261109-1";
+import { buildPersons, litPersonTree, buildCodeView, litCodesOf, codeNotes } from "./custom-tree-logic.js?v=20261123-1";
 
 const EXCLUDE_TABLE = "nrc_custom_tree_exclusions";
 const PICK_TABLE = "nrc_custom_tree_picks";
@@ -57,8 +57,10 @@ export async function customTreePage(root, me) {
 
   const myKey = persons.personOf.get(String(me.member_no));
   let rootKey = myKey || persons.tops[0] || String(model.rows[0].userId);
-  let depth = 7;
+  // 본코드·서브1·서브2가 각각 박스라 사람 단위보다 단계가 한두 칸 더 깊어진다.
+  let depth = 10;
   let zoom = 1;
+  const codeView = buildCodeView(model);
 
   $("ctInfo").textContent = `수집 ${new Date(data.collected_at).toLocaleString("ko-KR")} · NRC ${data.source_account_id || "-"} · 전체 ${number(persons.byId.size)}명(코드 ${number(model.rows.length)}개)`;
 
@@ -67,24 +69,21 @@ export async function customTreePage(root, me) {
       .sort((a, b) => Number(a.userId) - Number(b.userId))
       .map((row) => `<option value="${safe(row.userId)}"${String(row.userId) === rootKey ? " selected" : ""}>${safe(row.userId)} ${safe(row.userName)}</option>`)
       .join("");
-  const notes = {};
-  persons.codes.forEach((list, key) => {
-    notes[key] = list.length === 3 ? "본코드+서브1·2 한 몸" : "코드 1개";
-  });
+  const notes = codeNotes(persons);
 
   const pickerHtml = () =>
-    boxTreeHtml({ byId: persons.byId, children: persons.children }, rootKey, {
+    boxTreeHtml({ byId: model.byId, children: model.children }, rootKey, {
       depth,
       notes,
-      litIds: picks,
+      litIds: litCodesOf(persons, picks),
       hideDate: true,
     });
   const composedHtml = () => {
     if (!picks.size) return '<p class="help">아직 켠 사람이 없습니다. 위 계보도에서 사람을 눌러 불을 켜 보세요.</p>';
-    const lit = litPersonTree(persons, picks);
-    const ctx = { byId: persons.byId, children: lit.children };
+    const lit = litPersonTree(codeView, litCodesOf(persons, picks));
+    const ctx = { byId: model.byId, children: lit.children };
     return lit.tops
-      .map((top) => `<div class="box-tree pannable-tree" style="margin-top:8px"><div class="tree-stage" style="zoom:${zoom}">${boxTreeHtml(ctx, top, { depth: 12, notes, litIds: lit.keep, hideDate: true, clickable: false })}</div></div>`)
+      .map((top) => `<div class="box-tree pannable-tree" style="margin-top:8px"><div class="tree-stage" style="zoom:${zoom}">${boxTreeHtml(ctx, top, { depth: 16, notes, litIds: lit.keep, hideDate: true, clickable: false })}</div></div>`)
       .join("");
   };
   const summary = () =>
@@ -92,7 +91,7 @@ export async function customTreePage(root, me) {
       ? `불 켜진 사람 ${number(picks.size)}명 — 마감 계산에는 이 사람들만 나옵니다.`
       : "켠 사람이 없으면 마감 계산은 전체 계보를 그대로 씁니다.";
 
-  $("ctBody").innerHTML = `<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><label>기준 회원 <select id="ctRoot">${rootOptions()}</select></label><label>단계 <select id="ctDepth">${[3, 4, 5, 6, 7, 8, 9, 10].map((n) => `<option value="${n}"${n === depth ? " selected" : ""}>${n}단계</option>`).join("")}</select></label><span class="box-zoom"><button type="button" class="secondary compact" data-ct-zoom="out" aria-label="축소">−</button><button type="button" class="secondary compact" data-ct-zoom="reset" id="ctZoomLabel">100%</button><button type="button" class="secondary compact" data-ct-zoom="in" aria-label="확대">＋</button></span><button type="button" class="secondary compact" id="ctLitAll">보이는 사람 모두 켜기</button><button type="button" class="secondary compact" id="ctLitNone">모두 끄기</button></div><p class="help" style="margin-top:8px">사람(박스)을 누르면 불이 켜지고, 다시 누르면 꺼집니다. 한 사람의 본코드·서브1·서브2는 한 몸이라 같이 켜지고 같이 꺼집니다. <b id="ctSummary">${summary()}</b></p><div class="box-tree pannable-tree"><div class="tree-stage" id="ctStage" style="zoom:${zoom}">${pickerHtml()}</div></div><h3 style="margin:18px 0 0">내가 구성한 계보도</h3><p class="help">불 켜진 사람만 모았습니다. 켜지 않은 사람은 빠지고, 그 아래 켜진 사람은 윗사람 밑에 붙습니다.</p><div id="ctComposed">${composedHtml()}</div>`;
+  $("ctBody").innerHTML = `<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><label>기준 회원 <select id="ctRoot">${rootOptions()}</select></label><label>단계 <select id="ctDepth">${[3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16].map((n) => `<option value="${n}"${n === depth ? " selected" : ""}>${n}단계</option>`).join("")}</select></label><span class="box-zoom"><button type="button" class="secondary compact" data-ct-zoom="out" aria-label="축소">−</button><button type="button" class="secondary compact" data-ct-zoom="reset" id="ctZoomLabel">100%</button><button type="button" class="secondary compact" data-ct-zoom="in" aria-label="확대">＋</button></span><button type="button" class="secondary compact" id="ctLitAll">보이는 사람 모두 켜기</button><button type="button" class="secondary compact" id="ctLitNone">모두 끄기</button></div><p class="help" style="margin-top:8px">본코드·서브1·서브2는 각각 별도 박스로 보입니다. 박스를 누르면 불이 켜지고, 다시 누르면 꺼집니다. 한 사람의 세 코드는 저장과 마감 계산에서 한 사람으로 취급되어 같이 켜지고 같이 꺼집니다. <b id="ctSummary">${summary()}</b></p><div class="box-tree pannable-tree"><div class="tree-stage" id="ctStage" style="zoom:${zoom}">${pickerHtml()}</div></div><h3 style="margin:18px 0 0">내가 구성한 계보도</h3><p class="help">불 켜진 사람만 모았습니다. 켜지 않은 사람은 빠지고, 그 아래 켜진 사람은 윗사람 밑에 붙습니다.</p><div id="ctComposed">${composedHtml()}</div>`;
 
   const redraw = () => {
     $("ctStage").innerHTML = pickerHtml();
@@ -105,12 +104,14 @@ export async function customTreePage(root, me) {
   };
   const visibleKeys = () => {
     const seen = new Set();
-    const walk = (key, level) => {
-      if (seen.has(key) || level > depth) return;
-      seen.add(key);
-      (persons.children.get(key) || []).forEach((kid) => walk(String(kid.userId), level + 1));
+    const codesSeen = new Set();
+    const walk = (code, level) => {
+      if (codesSeen.has(code) || level > depth) return;
+      codesSeen.add(code);
+      (model.children.get(code) || []).forEach((kid) => walk(String(kid.userId), level + 1));
     };
     walk(rootKey, 1);
+    codesSeen.forEach((code) => seen.add(persons.personOf.get(code) || code));
     return [...seen];
   };
 
@@ -181,7 +182,7 @@ export async function customTreePage(root, me) {
       return;
     }
     const node = event.target.closest("#ctStage [data-member]");
-    if (node) toggle(node.dataset.member);
+    if (node) toggle(persons.personOf.get(node.dataset.member) || node.dataset.member);
   };
 
   // 빈 곳을 끌어 화면 이동 (끌었을 때는 박스가 눌리지 않게 한다)

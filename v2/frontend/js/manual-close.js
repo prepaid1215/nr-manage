@@ -5,8 +5,8 @@ import {
   buildPerformanceModel,
   planBalancedSplit,
 } from "./performance-calculator.js?v=20261108-3";
-import { loadExclusions, loadPicks } from "./custom-tree.js?v=20261109-1";
-import { activeExclusions, visibleChildrenMap, buildPersons, codesOutsidePicks } from "./custom-tree-logic.js?v=20261109-1";
+import { loadExclusions, loadPicks } from "./custom-tree.js?v=20261123-1";
+import { activeExclusions, visibleChildrenMap, buildPersons, codesOutsidePicks } from "./custom-tree-logic.js?v=20261123-1";
 
 // 직접계산: 추천은 하지 않는다. NRC 계보도처럼 박스 그림을 그리고, 박스에 매출(원)을 직접 넣으면
 // 그 금액이 위쪽 박스의 서브·대실적·소실적에 어떻게 반영되는지 바로 보여준다.

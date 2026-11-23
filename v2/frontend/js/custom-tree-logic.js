@@ -79,6 +79,36 @@ export function buildPersons(model) {
   return { personOf, codes, byId, children, tops };
 }
 
+// ── 코드 단위 표시 ──────────────────────────────────────────────────────────
+// 화면에는 본코드·서브1·서브2를 각각 별도 박스로 보여 준다. 선택·저장·마감 계산은 그대로 사람 단위다.
+/** 코드 하나가 한 단위인 계보 구조(litPersonTree에 그대로 넣을 수 있다). */
+export function buildCodeView(model) {
+  const personOf = new Map();
+  const codes = new Map();
+  for (const id of model.byId.keys()) {
+    personOf.set(String(id), String(id));
+    codes.set(String(id), [String(id)]);
+  }
+  return { personOf, codes, byId: model.byId, children: model.children };
+}
+
+/** 선택한 사람들의 코드 전부(본코드·서브1·서브2). */
+export function litCodesOf(persons, picks) {
+  const out = new Set();
+  for (const key of picks) (persons.codes.get(String(key)) || []).forEach((code) => out.add(code));
+  return out;
+}
+
+/** 박스에 붙일 코드 이름표: 본코드 / 서브1 / 서브2 (3코드 사람이 아니면 코드 1개). */
+export function codeNotes(persons) {
+  const notes = {};
+  persons.codes.forEach((list) => {
+    if (list.length === 3) list.forEach((code, index) => (notes[code] = ["본코드", "서브1", "서브2"][index]));
+    else notes[list[0]] = "코드 1개";
+  });
+  return notes;
+}
+
 /** 켜진(선택한) 사람만 남긴 사람 단위 계보. 켜지지 않은 사람은 건너뛰고 그 하위는 윗사람 밑에 붙는다. */
 export function litPersonTree(persons, lit) {
   const keep = new Set([...lit].map(String).filter((key) => persons.byId.has(key)));

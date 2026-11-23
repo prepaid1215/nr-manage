@@ -37,7 +37,7 @@ assert.equal(none, null);
 console.log('Custom tree tests passed: exclusion re-parenting, root kept, model untouched, planner skips excluded.');
 
 // ── 사람 단위 선택 ──
-import { buildPersons, litPersonTree, codesOutsidePicks } from '../js/custom-tree-logic.js';
+import { buildPersons, litPersonTree, codesOutsidePicks, buildCodeView, litCodesOf, codeNotes } from '../js/custom-tree-logic.js';
 const pr = (userId, ppId, userName, abPos) => ({ userId, ppId, abPos, userName, ordPv: 0, maxPv: 0, minPv: 0 });
 // 사람 A(100·101·102), 그 서브1 밑에 사람 B(200·201·202), 서브2 밑에 단독 코드 C(300), B 서브1 밑에 사람 D(400·401·402)
 const pm = buildPerformanceModel({ members: [], rstLst: [
@@ -68,3 +68,15 @@ assert.deepEqual([...out].sort(), ['200','201','202','300']);
 // 그 집합으로 기존 표시 로직(visibleChildrenMap)을 쓰면 D의 코드가 A의 서브 코드 밑에 붙는다
 assert.deepEqual(visibleChildrenMap(pm, out, '100').get('101').map((r) => r.userId), ['400']);
 console.log('Person selection tests passed: 3-code bodies, lit-only tree, promotion, outside codes.');
+
+// 코드 단위 표시: 본코드·서브1·서브2가 각각 별도 박스, 선택은 사람 단위 그대로
+const view = buildCodeView(pm);
+assert.deepEqual(view.children.get('100').map((r) => r.userId), ['101','102']);
+assert.deepEqual(codeNotes(persons)['100'], '본코드');
+assert.deepEqual([codeNotes(persons)['101'], codeNotes(persons)['102'], codeNotes(persons)['300']], ['서브1','서브2','코드 1개']);
+const litCodes = litCodesOf(persons, new Set(['100','400']));
+assert.deepEqual([...litCodes].sort(), ['100','101','102','400','401','402']);
+const codeLit = litPersonTree(view, litCodes);
+assert.deepEqual(codeLit.tops, ['100']);
+assert.deepEqual(codeLit.children.get('101').map((r) => r.userId), ['400']);
+console.log('Code-level view tests passed: separate boxes, notes, lit codes.');
