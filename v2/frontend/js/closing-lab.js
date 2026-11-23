@@ -43,6 +43,7 @@ export async function closingLabPage(root, me, options = {}) {
   let targetsBy = {}; // 맨 위 박스 → { major, minor, total } 목표(만 단위)
   let recBy = {}; // 맨 위 박스 → { html, apply } 추천 결과
   let previewBy = {}; // 맨 위 박스 → Map(코드 → 추천 원, 아직 넣지 않은 값)
+  let undoBy = {}; // 맨 위 박스 → '이 추천 넣기'로 넣은 목록들(쌓아 두었다가 추천 빼기로 하나씩 되돌린다)
   let notice = "";
   const previewOf = (id) => Object.values(previewBy).reduce((sum, map) => sum + (map.get(id) || 0), 0);
 
@@ -52,6 +53,7 @@ export async function closingLabPage(root, me, options = {}) {
     lit = new Set();
     excl = new Set();
     targetsBy = {};
+    undoBy = {};
     try {
       const saved = JSON.parse(localStorage.getItem(storeKey()) || "null");
       if (saved) {
@@ -60,6 +62,7 @@ export async function closingLabPage(root, me, options = {}) {
         excl = new Set((saved.excl || []).map(String));
         rids = (saved.rids || (saved.rid ? [saved.rid] : [])).map(String);
         targetsBy = { ...(saved.targetsBy || {}) };
+        undoBy = { ...(saved.undoBy || {}) };
         depth = Number(saved.depth) || 5;
         target = { major: Number(saved.target?.major ?? 150), minor: Number(saved.target?.minor ?? 150), total: Number(saved.target?.total ?? 300) };
         personOnly = Boolean(saved.personOnly);
@@ -71,7 +74,7 @@ export async function closingLabPage(root, me, options = {}) {
     try {
       localStorage.setItem(
         storeKey(),
-        JSON.stringify({ sales, lit: [...lit], excl: [...excl], rids, targetsBy, depth, target, personOnly, clickMode }),
+        JSON.stringify({ sales, lit: [...lit], excl: [...excl], rids, targetsBy, undoBy, depth, target, personOnly, clickMode }),
       );
     } catch {}
   };
@@ -164,7 +167,7 @@ export async function closingLabPage(root, me, options = {}) {
   const man = (nv) => String(Math.round((nv / 10000) * 10) / 10);
   // 목표합(서브1 + 서브2) 추천: 부족분 = 목표합 − (현재 서브1 + 현재 서브2)를 이 박스에서부터 균형으로 나눈다.
   const buildSumRecommendation = (state, rid, ctx) => {
-    const totalTarget = Number(target.total || 0) * 10000;
+    const totalTarget = Number(targetOf(rid).total || 0) * 10000;
     const current = state.sums[0] + state.sums[1];
     const head = `${nameOf(rid)} · 목표합(서브1 + 서브2) ${fmt(totalTarget)} / 현재 ${fmt(current)} (서브1 ${fmt(state.sums[0])} / 서브2 ${fmt(state.sums[1])})`;
     const deficit = totalTarget - current;
@@ -207,8 +210,8 @@ export async function closingLabPage(root, me, options = {}) {
       return;
     }
     const wants = [];
-    wants[state.minorLine] = { label: "소실적", target: Number(target.minor || 0) * 10000 };
-    wants[1 - state.minorLine] = { label: "대실적", target: Number(target.major || 0) * 10000 };
+    wants[state.minorLine] = { label: "소실적", target: Number(targetOf(rid).minor || 0) * 10000 };
+    wants[1 - state.minorLine] = { label: "대실적", target: Number(targetOf(rid).major || 0) * 10000 };
     let html = "";
     const list = [];
     [0, 1].forEach((i) => {
@@ -257,7 +260,7 @@ export async function closingLabPage(root, me, options = {}) {
     const inputs = sumMode
       ? `목표합(서브1 + 서브2) <input type="number" data-cl-ttot="${safe(id)}" min="0" step="any" value="${t.total}" style="width:90px"> 만`
       : `마감 목표 대 <input type="number" data-cl-tmaj="${safe(id)}" min="0" step="any" value="${t.major}" style="width:84px"> 만 / 소 <input type="number" data-cl-tmin="${safe(id)}" min="0" step="any" value="${t.minor}" style="width:84px"> 만`;
-    return `<section class="cl-sec" data-cl-sec="${safe(id)}"><div class="cl-print-head">${safe(row.userName)} *${safe(id)} ${labelOf(id)} — 수집 ${safe(new Date(collectedAt).toLocaleString("ko-KR"))}</div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b style="font-size:15px">${safe(row.userName)} *${safe(id)}</b> <small class="help">${safe(row.rankName || "")}/${safe(row.rankMaxName || "")} · ${labelOf(id)}</small><span style="margin-left:auto"></span>${inputs} <button class="secondary compact" data-cl-rec-btn="${safe(id)}" type="button">추천 보기</button><span class="box-zoom"><button class="secondary compact" data-cl-zoom="out" type="button" aria-label="축소">−</button><button class="secondary compact" data-cl-zoom="reset" data-cl-zoomlabel type="button">100%</button><button class="secondary compact" data-cl-zoom="in" type="button" aria-label="확대">＋</button></span><button class="secondary compact" data-cl-print type="button">인쇄</button><button class="secondary compact" data-cl-close="${safe(id)}" type="button" aria-label="닫기">×</button></div><div data-cl-rec="${safe(id)}" style="margin-top:6px;line-height:1.75;font-size:13px"></div><div class="box-tree pannable-tree" style="margin-top:8px"><div class="tree-stage" data-cl-stage="${safe(id)}"></div></div></section>`;
+    return `<section class="cl-sec" data-cl-sec="${safe(id)}"><div class="cl-print-head">${safe(row.userName)} *${safe(id)} ${labelOf(id)} — 수집 ${safe(new Date(collectedAt).toLocaleString("ko-KR"))}</div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b style="font-size:15px">${safe(row.userName)} *${safe(id)}</b> <small class="help">${safe(row.rankName || "")}/${safe(row.rankMaxName || "")} · ${labelOf(id)}</small><span style="margin-left:auto"></span>${inputs} <button class="secondary compact" data-cl-rec-btn="${safe(id)}" type="button">추천 보기</button> <button class="secondary compact" data-cl-unrec="${safe(id)}" type="button" title="가장 최근에 넣은 추천을 빼서 추천 넣기 전으로 돌립니다 (직접 입력한 매출은 그대로)">추천 빼기</button><span class="box-zoom"><button class="secondary compact" data-cl-zoom="out" type="button" aria-label="축소">−</button><button class="secondary compact" data-cl-zoom="reset" data-cl-zoomlabel type="button">100%</button><button class="secondary compact" data-cl-zoom="in" type="button" aria-label="확대">＋</button></span><button class="secondary compact" data-cl-print type="button">인쇄</button><button class="secondary compact" data-cl-close="${safe(id)}" type="button" aria-label="닫기">×</button></div><div data-cl-rec="${safe(id)}" style="margin-top:6px;line-height:1.75;font-size:13px"></div><div class="box-tree pannable-tree" style="margin-top:8px"><div class="tree-stage" data-cl-stage="${safe(id)}"></div></div></section>`;
   };
   const drawSections = () => {
     $("clTrees").innerHTML = rids.length ? rootsSorted().map(sectionHtml).join("") : '<p class="help">위 목록에서 맨 위 박스를 체크하면 아래에 그 박스 기준 계보도가 나옵니다.</p>';
@@ -435,6 +438,30 @@ export async function closingLabPage(root, me, options = {}) {
       }, 500);
       return;
     }
+    const unrecBtn = event.target.closest("[data-cl-unrec]");
+    if (unrecBtn) {
+      // 가장 최근에 "이 추천 넣기"로 넣은 것만 빼서 넣기 전 상태로 돌린다(직접 입력한 매출은 그대로).
+      const id = unrecBtn.dataset.clUnrec;
+      const last = (undoBy[id] || []).pop();
+      if (!last) {
+        notice = "";
+        delete recBy[id];
+        delete previewBy[id];
+        draw();
+        save();
+        return;
+      }
+      let removed = 0;
+      last.forEach(({ id: code, nv }) => {
+        const before = Number(sales[code] || 0);
+        const after = Math.max(0, before - nv);
+        removed += before - after;
+        if (after > 0) sales[code] = after;
+        else delete sales[code];
+      });
+      notice = `${nameOf(id)}에 넣었던 추천 ${fmt(removed)} NV(약 ${fmt(Math.ceil(removed / UNIT_NV) * 1000)}원)를 빼서 넣기 전으로 돌렸습니다.`;
+      return rebuildRecs(id);
+    }
     const recBtn = event.target.closest("[data-cl-rec-btn]");
     if (recBtn) {
       notice = "";
@@ -443,6 +470,7 @@ export async function closingLabPage(root, me, options = {}) {
     if (event.target.closest("#clReset")) {
       notice = "";
       sales = {};
+      undoBy = {};
       clearRecs();
       draw();
       save();
@@ -457,9 +485,11 @@ export async function closingLabPage(root, me, options = {}) {
     if (applyBtn) {
       notice = "";
       const id = applyBtn.dataset.clApply;
-      (recBy[id]?.apply || []).forEach(({ id: code, nv }) => {
+      const applied = recBy[id]?.apply || [];
+      applied.forEach(({ id: code, nv }) => {
         sales[code] = Number(sales[code] || 0) + nv;
       });
+      if (applied.length) (undoBy[id] ||= []).push(applied.map(({ id: code, nv }) => ({ id: code, nv })));
       delete previewBy[id];
       return rebuildRecs(id);
     }
