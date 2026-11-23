@@ -103,6 +103,23 @@
   body.printing-tree .family-tree{overflow:visible;max-height:none;padding:8px}
   body.printing-tree .tree-stage{zoom:.72!important}
 }
+/* 내 계보도 출력 */
+.ct-print-head{display:none}
+@media print{
+  body.printing-ctree{background:#fff}
+  body.printing-ctree header,body.printing-ctree nav,body.printing-ctree .section-head,body.printing-ctree #ctError,body.printing-ctree .ct-toolbar,body.printing-ctree .ct-help{display:none!important}
+  body.printing-ctree .app,body.printing-ctree main{max-width:none;padding:0}
+  body.printing-ctree #content>section{border:0;margin:0;padding:0;box-shadow:none}
+  body.printing-ctree .ct-print-head{display:block;margin:0 0 10px}
+  body.printing-ctree .ct-print-head h2{margin:0 0 2px;font-size:16px}
+  body.printing-ctree .ct-print-head p{margin:0;font-size:11px;color:#555}
+  body.printing-ctree.printing-ctree-composed .ct-picker-wrap{display:none!important}
+  body.printing-ctree:not(.printing-ctree-composed) .ct-composed-wrap{display:none!important}
+  body.printing-ctree.printing-ctree-composed .ct-composed-wrap h3{display:none}
+  body.printing-ctree .box-tree{overflow:visible!important;max-height:none!important;border:0;background:#fff;padding:4px}
+  body.printing-ctree .tree-stage{zoom:.55!important}
+  body.printing-ctree .box-node{-webkit-print-color-adjust:exact;print-color-adjust:exact;box-shadow:none}
+}
 /* Daily closing report */
 .closing-tabs{margin-bottom:12px}
 .daily-close-form{display:grid;grid-template-columns:minmax(160px,1fr) minmax(220px,1fr) auto;gap:10px;align-items:end}

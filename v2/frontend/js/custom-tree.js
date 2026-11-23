@@ -91,7 +91,24 @@ export async function customTreePage(root, me) {
       ? `불 켜진 사람 ${number(picks.size)}명 — 마감 계산에는 이 사람들만 나옵니다.`
       : "켠 사람이 없으면 마감 계산은 전체 계보를 그대로 씁니다.";
 
-  $("ctBody").innerHTML = `<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><label>기준 회원 <select id="ctRoot">${rootOptions()}</select></label><label>단계 <select id="ctDepth">${[3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16].map((n) => `<option value="${n}"${n === depth ? " selected" : ""}>${n}단계</option>`).join("")}</select></label><span class="box-zoom"><button type="button" class="secondary compact" data-ct-zoom="out" aria-label="축소">−</button><button type="button" class="secondary compact" data-ct-zoom="reset" id="ctZoomLabel">100%</button><button type="button" class="secondary compact" data-ct-zoom="in" aria-label="확대">＋</button></span><button type="button" class="secondary compact" id="ctLitAll">보이는 사람 모두 켜기</button><button type="button" class="secondary compact" id="ctLitNone">모두 끄기</button></div><p class="help" style="margin-top:8px">본코드·서브1·서브2는 각각 별도 박스로 보입니다. 박스를 누르면 불이 켜지고, 다시 누르면 꺼집니다. 한 사람의 세 코드는 저장과 마감 계산에서 한 사람으로 취급되어 같이 켜지고 같이 꺼집니다. <b id="ctSummary">${summary()}</b></p><div class="box-tree pannable-tree"><div class="tree-stage" id="ctStage" style="zoom:${zoom}">${pickerHtml()}</div></div><h3 style="margin:18px 0 0">내가 구성한 계보도</h3><p class="help">불 켜진 사람만 모았습니다. 켜지 않은 사람은 빠지고, 그 아래 켜진 사람은 윗사람 밑에 붙습니다.</p><div id="ctComposed">${composedHtml()}</div>`;
+  $("ctBody").innerHTML = `<div class="ct-print-head" id="ctPrintHead"></div><div class="ct-toolbar" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><label>기준 회원 <select id="ctRoot">${rootOptions()}</select></label><label>단계 <select id="ctDepth">${[3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16].map((n) => `<option value="${n}"${n === depth ? " selected" : ""}>${n}단계</option>`).join("")}</select></label><span class="box-zoom"><button type="button" class="secondary compact" data-ct-zoom="out" aria-label="축소">−</button><button type="button" class="secondary compact" data-ct-zoom="reset" id="ctZoomLabel">100%</button><button type="button" class="secondary compact" data-ct-zoom="in" aria-label="확대">＋</button></span><button type="button" class="secondary compact" id="ctLitAll">보이는 사람 모두 켜기</button><button type="button" class="secondary compact" id="ctLitNone">모두 끄기</button><button type="button" class="compact" id="ctPrint">출력하기</button></div><p class="help ct-help" style="margin-top:8px">본코드·서브1·서브2는 각각 별도 박스로 보입니다. 박스를 누르면 불이 켜지고, 다시 누르면 꺼집니다. 한 사람의 세 코드는 저장과 마감 계산에서 한 사람으로 취급되어 같이 켜지고 같이 꺼집니다. <b id="ctSummary">${summary()}</b></p><div class="ct-picker-wrap"><div class="box-tree pannable-tree"><div class="tree-stage" id="ctStage" style="zoom:${zoom}">${pickerHtml()}</div></div></div><div class="ct-composed-wrap"><h3 style="margin:18px 0 0">내가 구성한 계보도</h3><p class="help ct-help">불 켜진 사람만 모았습니다. 켜지 않은 사람은 빠지고, 그 아래 켜진 사람은 윗사람 밑에 붙습니다.</p><div id="ctComposed">${composedHtml()}</div></div>`;
+
+  // 출력: 켠 사람이 있으면 "내가 구성한 계보도"를, 없으면 위의 계보도를 인쇄한다.
+  const printTree = () => {
+    const rootRow = persons.byId.get(rootKey);
+    const when = new Date(data.collected_at).toLocaleString("ko-KR");
+    $("ctPrintHead").innerHTML = picks.size
+      ? `<h2>내가 구성한 계보도</h2><p>불 켠 사람 ${number(picks.size)}명 · 수집 ${safe(when)}</p>`
+      : `<h2>내 계보도</h2><p>기준 ${safe(rootRow?.userName || "")} (${safe(rootKey)}) · ${depth}단계 · 수집 ${safe(when)}</p>`;
+    document.body.classList.add("printing-ctree");
+    document.body.classList.toggle("printing-ctree-composed", picks.size > 0);
+    const done = () => {
+      document.body.classList.remove("printing-ctree", "printing-ctree-composed");
+      window.removeEventListener("afterprint", done);
+    };
+    window.addEventListener("afterprint", done);
+    window.print();
+  };
 
   const redraw = () => {
     $("ctStage").innerHTML = pickerHtml();
@@ -151,6 +168,10 @@ export async function customTreePage(root, me) {
         stage.style.zoom = zoom;
       });
       $("ctZoomLabel").textContent = `${Math.round(zoom * 100)}%`;
+      return;
+    }
+    if (event.target.closest("#ctPrint")) {
+      printTree();
       return;
     }
     if (event.target.closest("#ctLitAll")) {
