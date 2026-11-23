@@ -43,6 +43,7 @@ export async function closingLabPage(root, me, options = {}) {
   let targetsBy = {}; // 맨 위 박스 → { major, minor, total } 목표(만 단위)
   let recBy = {}; // 맨 위 박스 → { html, apply } 추천 결과
   let previewBy = {}; // 맨 위 박스 → Map(코드 → 추천 원, 아직 넣지 않은 값)
+  let appliedBy = {}; // 맨 위 박스 → '이 추천 넣기'로 넣은 매출(코드별 NV). 제외·되돌리기로 계산 조건이 바뀌면 이 몫만 빼고 다시 계산한다.
   let notice = "";
   const previewOf = (id) => Object.values(previewBy).reduce((sum, map) => sum + (map.get(id) || 0), 0);
 
@@ -52,6 +53,7 @@ export async function closingLabPage(root, me, options = {}) {
     lit = new Set();
     excl = new Set();
     targetsBy = {};
+    appliedBy = {};
     try {
       const saved = JSON.parse(localStorage.getItem(storeKey()) || "null");
       if (saved) {
@@ -60,6 +62,7 @@ export async function closingLabPage(root, me, options = {}) {
         excl = new Set((saved.excl || []).map(String));
         rids = (saved.rids || (saved.rid ? [saved.rid] : [])).map(String);
         targetsBy = { ...(saved.targetsBy || {}) };
+        appliedBy = { ...(saved.appliedBy || {}) };
         depth = Number(saved.depth) || 5;
         target = { major: Number(saved.target?.major ?? 150), minor: Number(saved.target?.minor ?? 150), total: Number(saved.target?.total ?? 300) };
         personOnly = Boolean(saved.personOnly);
@@ -71,7 +74,7 @@ export async function closingLabPage(root, me, options = {}) {
     try {
       localStorage.setItem(
         storeKey(),
-        JSON.stringify({ sales, lit: [...lit], excl: [...excl], rids, targetsBy, depth, target, personOnly, clickMode }),
+        JSON.stringify({ sales, lit: [...lit], excl: [...excl], rids, targetsBy, appliedBy, depth, target, personOnly, clickMode }),
       );
     } catch {}
   };
@@ -289,10 +292,45 @@ export async function closingLabPage(root, me, options = {}) {
   // 이미 추천을 본 맨 위 박스들(과 extra)을 지금 상태로 다시 계산한다.
   const rebuildRecs = (extra) => {
     const ids = new Set(Object.keys(recBy).filter((id) => rids.includes(id)));
-    if (extra && rids.includes(extra)) ids.add(extra);
+    [].concat(extra || []).forEach((id) => {
+      if (rids.includes(id)) ids.add(id);
+    });
     ids.forEach((id) => buildRecommendation(id));
     draw();
     save();
+  };
+  const covers = (rootId, code) => {
+    const seen = new Set();
+    const walk = (c) => {
+      if (c === code) return true;
+      if (seen.has(c)) return false;
+      seen.add(c);
+      return kids(c).some(walk);
+    };
+    return walk(rootId);
+  };
+  // 제외·되돌리기·불 켜기처럼 계산 조건이 바뀌면, 그동안 "이 추천 넣기"로 넣은 매출만 빼고(직접 입력한 매출은 그대로)
+  // 처음부터 다시 계산해서 보여 준다. code가 있으면 그 코드가 들어 있는 맨 위 박스만, 없으면 전부 해당한다.
+  const replan = (code, extra) => {
+    let removed = 0;
+    const touched = [];
+    rids.forEach((id) => {
+      if (!appliedBy[id] || (code && !covers(id, code))) return;
+      appliedBy[id].forEach(({ id: c, nv }) => {
+        const before = Number(sales[c] || 0);
+        const after = Math.max(0, before - nv);
+        removed += before - after;
+        if (after > 0) sales[c] = after;
+        else delete sales[c];
+      });
+      delete appliedBy[id];
+      touched.push(id);
+    });
+    if (removed > 0) {
+      const msg = `추천으로 넣었던 매출 ${fmt(removed)} NV(약 ${fmt(Math.ceil(removed / UNIT_NV) * 1000)}원)를 빼고 다시 계산했습니다. 마음에 들면 "이 추천 넣기"를 다시 누르세요.`;
+      notice = [notice, msg].filter(Boolean).join("<br>");
+    }
+    rebuildRecs([...touched, ...[].concat(extra || [])]);
   };
   const clearRecs = () => {
     recBy = {};
@@ -364,7 +402,7 @@ export async function closingLabPage(root, me, options = {}) {
       save();
     } else if (event.target.id === "clPerson") {
       personOnly = event.target.checked;
-      rebuildRecs();
+      replan(null);
     } else if (event.target.id === "clMode") {
       clickMode = event.target.value === "lit" ? "lit" : "exclude";
       save();
@@ -443,6 +481,7 @@ export async function closingLabPage(root, me, options = {}) {
     if (event.target.closest("#clReset")) {
       notice = "";
       sales = {};
+      appliedBy = {};
       clearRecs();
       draw();
       save();
@@ -451,15 +490,17 @@ export async function closingLabPage(root, me, options = {}) {
     if (event.target.closest("#clExOff")) {
       excl.clear();
       lit.clear();
-      return rebuildRecs();
+      return replan(null);
     }
     const applyBtn = event.target.closest("[data-cl-apply]");
     if (applyBtn) {
       notice = "";
       const id = applyBtn.dataset.clApply;
-      (recBy[id]?.apply || []).forEach(({ id: code, nv }) => {
+      const applied = recBy[id]?.apply || [];
+      applied.forEach(({ id: code, nv }) => {
         sales[code] = Number(sales[code] || 0) + nv;
       });
+      if (applied.length) appliedBy[id] = [...(appliedBy[id] || []), ...applied.map(({ id: code, nv }) => ({ id: code, nv }))];
       delete previewBy[id];
       return rebuildRecs(id);
     }
@@ -468,13 +509,13 @@ export async function closingLabPage(root, me, options = {}) {
     if (exBtn) {
       notice = "";
       excludeCode(exBtn.dataset.clEx);
-      return rebuildRecs(sectionOf());
+      return replan(exBtn.dataset.clEx, sectionOf());
     }
     const undo = event.target.closest("[data-cl-undo]");
     if (undo) {
       event.preventDefault();
       excl.delete(undo.dataset.clUndo);
-      return rebuildRecs(sectionOf());
+      return replan(undo.dataset.clUndo, sectionOf());
     }
     if (event.target.closest("input,label")) return;
     const card = event.target.closest("[data-cl-card]");
@@ -486,7 +527,7 @@ export async function closingLabPage(root, me, options = {}) {
       else lit.add(id);
     } else if (excl.has(id)) excl.delete(id);
     else excludeCode(id);
-    rebuildRecs();
+    replan(clickMode === "lit" ? null : id);
   };
 
   // 빈 곳을 끌면 화면이 움직인다(손바닥). 끌었을 때는 박스가 눌리지 않게 한다.
