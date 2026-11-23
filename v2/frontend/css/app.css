@@ -113,12 +113,21 @@
 .cl-pickrow .cl-pt,.ct-pickrow .ct-pt{margin-left:auto}
 .cl-print-head,.ct-print-head{display:none}
 .ct-sec{margin-top:14px;padding-top:10px;border-top:2px solid #c3cede}
+.cl-body{display:flex;flex-direction:column}
+.cl-recbox{order:-1;margin-top:6px;line-height:1.75;font-size:13px}
+.cl-recbox:empty{display:none}
+/* 넓은 화면: 추천 결과를 계보도 오른쪽에 띄워 두고 스크롤을 따라 내려오게 한다 */
+@media(min-width:1000px){
+  .cl-sec.has-rec .cl-body{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:12px;align-items:start}
+  .cl-sec.has-rec .cl-recbox{order:0;position:sticky;top:10px;max-height:calc(100vh - 20px);overflow:auto;margin-top:8px;padding:10px 12px;border:1px solid #c3cede;border-radius:10px;background:#fff;box-shadow:0 4px 14px #0000001a}
+}
 /* 계보도 하나만 인쇄 */
 @media print{
   body.cl-printing *,body.ct-printing *{visibility:hidden}
   body.cl-printing #clTrees,body.cl-printing #clTrees *,body.ct-printing #ctTrees,body.ct-printing #ctTrees *{visibility:visible}
   body.cl-printing #clTrees,body.ct-printing #ctTrees{position:absolute;left:0;top:0;width:100%}
   body.cl-printing #clTrees .cl-sec:not(.cl-print-this),body.ct-printing #ctTrees .ct-sec:not(.ct-print-this){display:none!important}
+  body.cl-printing #clTrees .cl-body{display:block!important}
   body.cl-printing #clTrees .box-tree,body.ct-printing #ctTrees .box-tree{overflow:visible!important;max-height:none!important;border:0;background:#fff}
   body.cl-printing #clTrees .tree-stage,body.ct-printing #ctTrees .tree-stage{zoom:.55!important}
   body.cl-printing #clTrees button,body.cl-printing #clTrees [data-cl-rec],body.ct-printing #ctTrees button{display:none!important}
