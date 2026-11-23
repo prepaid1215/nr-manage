@@ -275,10 +275,14 @@ export async function closingLabPage(root, me, options = {}) {
       el.textContent = `${Math.round(zoom * 100)}%`;
     });
     root.querySelectorAll("[data-cl-rec]").forEach((el) => {
-      const html = recBy[el.dataset.clRec]?.html || "";
-      el.innerHTML = html;
-      el.closest("[data-cl-sec]")?.classList.toggle("has-rec", Boolean(html));
+      el.innerHTML = recBy[el.dataset.clRec]?.html || "";
     });
+    // 넓은 화면에서는 추천 결과를 화면 오른쪽에 고정해 어디까지 내려가도 보이게 한다(계보도 안의 사본은 숨김).
+    const floatItems = rootsSorted().filter((id) => recBy[id]?.html);
+    $("clFloatBody").innerHTML = floatItems
+      .map((id) => `<div class="cl-float-item" data-cl-sec="${safe(id)}"><div class="cl-float-title">${nameOf(id)}</div>${recBy[id].html}</div>`)
+      .join("");
+    $("clFloat").classList.toggle("on", floatItems.length > 0);
     $("clNotice").innerHTML = notice ? `<div class="cl-notice">${notice}</div>` : "";
     $("clState").textContent = `${excl.size ? `제외 ${excl.size}개 코드 · ` : ""}${lit.size ? `불 켠 코드 ${lit.size}개` : "불 켠 코드 없음"}`;
     const total = Object.values(sales).reduce((sum, nv) => sum + Number(nv || 0), 0);
@@ -353,7 +357,7 @@ export async function closingLabPage(root, me, options = {}) {
           `<label data-cl-pickrow="${safe(row.userId)}" class="cl-pickrow"><input type="checkbox" data-cl-root="${safe(row.userId)}"${rids.includes(String(row.userId)) ? " checked" : ""}><span class="cl-pn">${safe(row.userId)}</span><b>${safe(row.userName)}</b><small>${safe(row.rankName || "")}/${safe(row.rankMaxName || "")}</small><small class="cl-pt">${labelOf(String(row.userId))}</small></label>`,
       )
       .join("");
-    $("clBody").innerHTML = `<section class="card"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><label>단계 <select id="clDepth">${depthOptions}</select></label><label style="display:flex;flex-direction:row;gap:6px;align-items:center"><input type="checkbox" id="clPerson" style="width:18px;height:18px;min-height:0;margin:0"${personOnly ? " checked" : ""}> 사람 단위로만 균형</label><label>박스를 누르면 <select id="clMode"><option value="exclude"${clickMode === "exclude" ? " selected" : ""}>제외하기(추천에서 빼기)</option><option value="lit"${clickMode === "lit" ? " selected" : ""}>불 켜기(그 코드에만 넣기)</option></select></label><button class="secondary compact" id="clExOff" type="button">제외·불 모두 풀기</button><button class="secondary compact" id="clReset" type="button">입력 초기화</button></div><div class="help" style="margin-top:4px">계보도의 빈 곳을 끌면 화면이 움직입니다. 칸·버튼 위에서는 움직이지 않습니다.</div><details open class="cl-hide-print" style="margin-top:8px"><summary><b>맨 위 박스 고르기</b> (여러 개 체크하면 아래로 차례로 나옵니다)</summary><input id="clSearch" type="search" placeholder="이름 또는 회원번호 검색" style="width:100%;margin:6px 0"><div class="cl-picklist">${pickList}</div></details><div style="margin-top:6px"><span id="clState" class="help"></span></div><div id="clNotice"></div><div id="clTotal" class="help" style="margin-top:4px"></div><div id="clTrees"></div></section>`;
+    $("clBody").innerHTML = `<section class="card"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><label>단계 <select id="clDepth">${depthOptions}</select></label><label style="display:flex;flex-direction:row;gap:6px;align-items:center"><input type="checkbox" id="clPerson" style="width:18px;height:18px;min-height:0;margin:0"${personOnly ? " checked" : ""}> 사람 단위로만 균형</label><label>박스를 누르면 <select id="clMode"><option value="exclude"${clickMode === "exclude" ? " selected" : ""}>제외하기(추천에서 빼기)</option><option value="lit"${clickMode === "lit" ? " selected" : ""}>불 켜기(그 코드에만 넣기)</option></select></label><button class="secondary compact" id="clExOff" type="button">제외·불 모두 풀기</button><button class="secondary compact" id="clReset" type="button">입력 초기화</button></div><div class="help" style="margin-top:4px">계보도의 빈 곳을 끌면 화면이 움직입니다. 칸·버튼 위에서는 움직이지 않습니다.</div><details open class="cl-hide-print" style="margin-top:8px"><summary><b>맨 위 박스 고르기</b> (여러 개 체크하면 아래로 차례로 나옵니다)</summary><input id="clSearch" type="search" placeholder="이름 또는 회원번호 검색" style="width:100%;margin:6px 0"><div class="cl-picklist">${pickList}</div></details><div style="margin-top:6px"><span id="clState" class="help"></span></div><div id="clNotice"></div><div id="clTotal" class="help" style="margin-top:4px"></div><div id="clTrees"></div><div id="clFloat" class="cl-float"><div class="cl-float-head"><b>추천 결과</b><button type="button" class="secondary compact" data-cl-float-toggle>접기</button></div><div class="cl-float-body" id="clFloatBody"></div></div></section>`;
     drawSections();
   };
 
@@ -448,6 +452,13 @@ export async function closingLabPage(root, me, options = {}) {
       const kind = zoomBtn.dataset.clZoom;
       zoom = Math.min(1.6, Math.max(0.3, Number((kind === "out" ? zoom - 0.1 : kind === "in" ? zoom + 0.1 : 1).toFixed(2))));
       draw();
+      return;
+    }
+    const floatBtn = event.target.closest("[data-cl-float-toggle]");
+    if (floatBtn) {
+      const box = $("clFloat");
+      box.classList.toggle("min");
+      floatBtn.textContent = box.classList.contains("min") ? "펼치기" : "접기";
       return;
     }
     const closeBtn = event.target.closest("[data-cl-close]");
