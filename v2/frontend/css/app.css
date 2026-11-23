@@ -103,22 +103,28 @@
   body.printing-tree .family-tree{overflow:visible;max-height:none;padding:8px}
   body.printing-tree .tree-stage{zoom:.72!important}
 }
-/* 내 계보도 출력 */
-.ct-print-head{display:none}
+/* 맨 위 박스 고르기 목록(추천·제외 / 내 계보도) */
+.cl-picklist,.ct-picklist{max-height:220px;overflow:auto;border:1px solid #e5e7eb;border-radius:8px;padding:4px}
+.cl-pickrow,.ct-pickrow{display:flex;flex-direction:row;flex-wrap:nowrap;gap:8px;align-items:center;justify-content:flex-start;text-align:left;padding:3px 6px;margin:0;width:auto;cursor:pointer}
+.cl-pickrow input,.ct-pickrow input{flex:none;width:18px;height:18px;min-height:0;margin:0;padding:0}
+.cl-pickrow .cl-pn,.ct-pickrow .ct-pn{flex:none;width:68px;font-size:13px}
+.cl-pickrow b,.ct-pickrow b{flex:none;min-width:56px}
+.cl-pickrow small,.ct-pickrow small{flex:none;color:#6b7280}
+.cl-pickrow .cl-pt,.ct-pickrow .ct-pt{margin-left:auto}
+.cl-print-head,.ct-print-head{display:none}
+.ct-sec{margin-top:14px;padding-top:10px;border-top:2px solid #c3cede}
+/* 계보도 하나만 인쇄 */
 @media print{
-  body.printing-ctree{background:#fff}
-  body.printing-ctree header,body.printing-ctree nav,body.printing-ctree .section-head,body.printing-ctree #ctError,body.printing-ctree .ct-toolbar,body.printing-ctree .ct-help{display:none!important}
-  body.printing-ctree .app,body.printing-ctree main{max-width:none;padding:0}
-  body.printing-ctree #content>section{border:0;margin:0;padding:0;box-shadow:none}
-  body.printing-ctree .ct-print-head{display:block;margin:0 0 10px}
-  body.printing-ctree .ct-print-head h2{margin:0 0 2px;font-size:16px}
-  body.printing-ctree .ct-print-head p{margin:0;font-size:11px;color:#555}
-  body.printing-ctree.printing-ctree-composed .ct-picker-wrap{display:none!important}
-  body.printing-ctree:not(.printing-ctree-composed) .ct-composed-wrap{display:none!important}
-  body.printing-ctree.printing-ctree-composed .ct-composed-wrap h3{display:none}
-  body.printing-ctree .box-tree{overflow:visible!important;max-height:none!important;border:0;background:#fff;padding:4px}
-  body.printing-ctree .tree-stage{zoom:.55!important}
-  body.printing-ctree .box-node{-webkit-print-color-adjust:exact;print-color-adjust:exact;box-shadow:none}
+  body.cl-printing *,body.ct-printing *{visibility:hidden}
+  body.cl-printing #clTrees,body.cl-printing #clTrees *,body.ct-printing #ctTrees,body.ct-printing #ctTrees *{visibility:visible}
+  body.cl-printing #clTrees,body.ct-printing #ctTrees{position:absolute;left:0;top:0;width:100%}
+  body.cl-printing #clTrees .cl-sec:not(.cl-print-this),body.ct-printing #ctTrees .ct-sec:not(.ct-print-this){display:none!important}
+  body.cl-printing #clTrees .box-tree,body.ct-printing #ctTrees .box-tree{overflow:visible!important;max-height:none!important;border:0;background:#fff}
+  body.cl-printing #clTrees .tree-stage,body.ct-printing #ctTrees .tree-stage{zoom:.55!important}
+  body.cl-printing #clTrees button,body.cl-printing #clTrees [data-cl-rec],body.ct-printing #ctTrees button{display:none!important}
+  body.cl-printing #clTrees .cl-sec input[type=number]{border:0;background:transparent}
+  body.cl-printing #clTrees .cl-print-head,body.ct-printing #ctTrees .ct-print-head{display:block;margin:0 0 8px;font-size:13px;font-weight:700}
+  body.cl-printing .box-node,body.ct-printing .box-node{-webkit-print-color-adjust:exact;print-color-adjust:exact;box-shadow:none}
 }
 /* Daily closing report */
 .closing-tabs{margin-bottom:12px}
