@@ -587,10 +587,12 @@ _last_metrics_day = None
 
 
 def capture_daily_metrics_once_per_day():
-    """한국시간 날짜가 바뀐 뒤 어제 대실적·소실적·회선수를 기록한다. DB 함수가 중복을 막는다."""
+    """한국시간 오전 9시 이후 하루 한 번 어제 대실적·소실적·회선수를 기록한다. DB 함수가 중복을 막는다."""
     global _last_metrics_day
-    today = datetime.now(timezone(timedelta(hours=9))).date()
-    if _last_metrics_day == today:
+    now_kst = datetime.now(timezone(timedelta(hours=9)))
+    today = now_kst.date()
+    # 자정~오전 9시에 수집된 값을 어제 마감 값으로 쓰기 위해 9시 이후에 기록한다.
+    if now_kst.hour < 9 or _last_metrics_day == today:
         return
     admin_request("rpc/capture_daily_nrc_metrics", "POST", {})
     _last_metrics_day = today

@@ -3,7 +3,8 @@
 -- 새 표 하나와 함수 하나만 추가하며 기존 표는 건드리지 않습니다. 여러 번 실행해도 안전합니다.
 --
 -- 저장 규칙
---  * metric_date = 그날(한국시간). 그날 24시 이전에 마지막으로 수집된 통합 스냅샷 값을 쓴다.
+--  * metric_date = 그날(한국시간). 그날 24시 직후부터 다음 날 오전 9시 전까지 마지막으로 수집된
+--    통합 스냅샷 값을 쓴다. 아침까지 수집이 없으면 그날 밤까지의 마지막 수집분을 쓴다.
 --  * 실회선·소비자총회선은 수집기 v2 이상에서 실제로 읽은 값만 저장하고, 못 읽었으면 NULL로 둔다.
 --    (실제 0과 미수집을 구분한다.)
 --  * 기록일 24시 기준 2일 넘게 수집되지 않은 계정의 스냅샷은 건너뛴다(그날 기록 없음).
@@ -38,7 +39,7 @@ create policy nrc_daily_metrics_owner_read on public.nrc_daily_metrics
   for select using (owner_id = auth.uid());
 grant select on public.nrc_daily_metrics to authenticated;
 
--- p_date를 생략하면 "어제(한국시간)"를 기록한다. 자정 직후 호출하면 방금 끝난 하루가 저장된다.
+-- p_date를 생략하면 "어제(한국시간)"를 기록한다. 오전 9시 이후에 호출한다.
 create or replace function public.capture_daily_nrc_metrics(p_date date default null)
 returns integer
 language plpgsql
@@ -65,7 +66,8 @@ begin
     from public.nrc_sync_snapshots s
     where s.snapshot_type = 'combined'
       and s.source_account_id is not null
-      and s.collected_at < v_cutoff
+      -- 그날 24시 이후 다음 날 오전 9시 전에 수집한 값도 그날 마감 값으로 본다.
+      and s.collected_at < v_cutoff + interval '9 hours'
       -- 며칠째 수집되지 않은 옛 계정의 오래된 값은 그날 기록으로 쓰지 않는다.
       and s.collected_at >= v_cutoff - interval '2 days'
       and jsonb_typeof(s.payload->'members') = 'array'
