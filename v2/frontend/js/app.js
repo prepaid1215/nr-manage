@@ -19,7 +19,7 @@ import { performancePage } from "./performance.js?v=20261124-1";
 import { manualClosePage } from "./manual-close.js?v=20261124-1";
 import { customTreePage } from "./custom-tree.js?v=20261124-2";
 import { closingLabPage } from "./closing-lab.js?v=20261124-1";
-import { recordsPage } from "./records.js?v=20261125-12";
+import { recordsPage } from "./records.js?v=20261125-13";
 import { teamPage } from "./team.js?v=20261101-10";
 import { localDate, monthRange } from "./date.js?v=20260829-25";
 import { memberLineMetrics } from "./line-metrics.js?v=20261108-2";
@@ -1223,9 +1223,10 @@ async function localApi(path, options = {}) {
   }
   return data;
 }
-// 이 PC의 NRC Sync가 이름으로 내 산하 회원을 NRC에서 찾는다(10단계 밖 포함). 앱 로그인 토큰으로 호출자를 확인한다.
+// 이 PC의 NRC Sync가 이름으로 내 산하 회원을 NRC에서 찾는다(10단계 밖 포함). 앱 로그인 토큰으로 호출자를 확인하고,
+// NRC 계정은 매출 수집과 같이 서버에 승인된 계정을 PC가 서버에서 직접 받아 쓴다(비밀번호는 이 화면을 거치지 않는다).
 // 주의: POST에 targetAddressSpace를 붙이면 Chrome이 요청을 보내지 않고 Failed to fetch가 되므로 붙이지 않는다.
-async function lookupMemberOnPc(name) {
+async function lookupMemberOnPc(name, sourceAccountId = "") {
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -1235,7 +1236,7 @@ async function lookupMemberOnPc(name) {
     response = await fetch(`${LOCAL_SYNC}/lookup/member`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ accessToken: session.access_token, name }),
+      body: JSON.stringify({ accessToken: session.access_token, name, sourceAccountId }),
     });
   } catch {
     throw Error("이 PC의 NRC Sync에 연결할 수 없습니다. NRC Sync가 실행 중인지 확인하고, Chrome의 로컬 네트워크 접근을 허용한 뒤 새로고침해 주세요.");

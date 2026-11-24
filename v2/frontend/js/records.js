@@ -1,5 +1,5 @@
 import { supabase } from "./supabase.js?v=20260829-34";
-import { closingRound, withDeltas, toPeopleCsv, labelCodes, groupPeople, personValue, GRID_METRICS, monthDates, nextDate, buildGrid, toGridCsv, matchPeople } from "./records-logic.js?v=20261125-12";
+import { closingRound, withDeltas, toPeopleCsv, labelCodes, groupPeople, personValue, GRID_METRICS, monthDates, nextDate, buildGrid, toGridCsv, matchPeople } from "./records-logic.js?v=20261125-13";
 
 // 기록 탭: 매일 저장된 코드별 대실적·소실적·실회선을 날짜별로 보고 엑셀(CSV)로 내려받는다.
 // 표는 nrc_daily_metrics(RUN_051)에서 읽는다. 내 계정 자료만 보인다(RLS).
@@ -347,7 +347,7 @@ export async function recordsPage(root, me, tools = {}) {
       $("rcError").textContent = "";
       $("rcLookupStatus").textContent = `NRC에서 "${name}"을(를) 찾는 중입니다. 로그인부터 하므로 30초~1분 걸립니다...`;
       try {
-        const result = await tools.lookupMember(name);
+        const result = await tools.lookupMember(name, state.account);
         lookups.unshift({ name: result.name || name, payDate: result.payDate, total: result.total || 0, members: result.members || [], at: Date.now() });
         renderLookups();
         $("rcAddPerson").value = "";
