@@ -616,15 +616,33 @@ def process_job(job):
 _last_metrics_day = None
 
 
+_last_metrics_attempt = 0.0
+
+
 def capture_daily_metrics_once_per_day():
-    """한국시간 오전 9시 이후 하루 한 번 어제 대실적·소실적·회선수를 기록한다. DB 함수가 중복을 막는다."""
-    global _last_metrics_day
+    """한국시간 오전 6시 30분 이후 하루 한 번 최근 3일의 일일 기록을 만든다. DB 함수가 날짜·종류별 중복을 막는다.
+
+    일반 기록은 그날 18~24시, 마감일의 최종마감 기록은 다음 날 0~6시의 마지막 수집을 쓴다(RUN_053).
+    새벽 수집 시간대(0~6시)가 끝난 뒤에 만들고, 서버가 잠들어 있어 놓친 날을 보정하려고 어제부터 3일 전까지 모두 부른다.
+    일부가 실패하면 나머지를 마저 시도한 뒤 오류를 올리고, 같은 날 10분 간격으로만 다시 시도한다.
+    """
+    global _last_metrics_day, _last_metrics_attempt
     now_kst = datetime.now(timezone(timedelta(hours=9)))
     today = now_kst.date()
-    # 자정~오전 9시에 수집된 값을 어제 마감 값으로 쓰기 위해 9시 이후에 기록한다.
-    if now_kst.hour < 9 or _last_metrics_day == today:
+    if (now_kst.hour, now_kst.minute) < (6, 30) or _last_metrics_day == today:
         return
-    admin_request("rpc/capture_daily_nrc_metrics", "POST", {})
+    if time.time() - _last_metrics_attempt < 600:
+        return
+    _last_metrics_attempt = time.time()
+    first_error = None
+    for days_ago in (3, 2, 1):
+        capture_date = today - timedelta(days=days_ago)
+        try:
+            admin_request("rpc/capture_daily_nrc_metrics", "POST", {"p_date": capture_date.isoformat()})
+        except Exception as exc:
+            first_error = first_error or exc
+    if first_error:
+        raise first_error
     _last_metrics_day = today
 
 

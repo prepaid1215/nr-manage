@@ -179,5 +179,54 @@ class DeviceControlTests(unittest.TestCase):
         self.assertEqual(self.db.call_count,1)
 
 
+class DailyCaptureScheduleTests(unittest.TestCase):
+    def setUp(self):
+        self.addCleanup(patch.stopall)
+        self.db = patch.object(service,'admin_request').start()
+        service._last_metrics_day = None
+        service._last_metrics_attempt = 0.0
+        self.clock = patch.object(service,'datetime').start()
+
+    def at(self,hour,minute,day=25):
+        kst = timezone(__import__('datetime').timedelta(hours=9))
+        self.clock.now.return_value = datetime(2026,11,day,hour,minute,tzinfo=kst)
+
+    def test_waits_until_the_early_morning_collection_window_has_ended(self):
+        self.at(6,29)
+        service.capture_daily_metrics_once_per_day()
+        self.db.assert_not_called()
+
+    def test_records_the_last_three_days_after_0630(self):
+        self.at(6,30)
+        service.capture_daily_metrics_once_per_day()
+        self.assertEqual([c.args[2]['p_date'] for c in self.db.call_args_list],['2026-11-22','2026-11-23','2026-11-24'])
+        self.assertTrue(all(c.args[0] == 'rpc/capture_daily_nrc_metrics' for c in self.db.call_args_list))
+
+    def test_runs_only_once_a_day(self):
+        self.at(7,0)
+        service.capture_daily_metrics_once_per_day()
+        service.capture_daily_metrics_once_per_day()
+        self.assertEqual(self.db.call_count,3)
+
+    def test_next_day_records_again(self):
+        self.at(7,0)
+        service.capture_daily_metrics_once_per_day()
+        service._last_metrics_attempt = 0.0
+        self.at(7,0,day=26)
+        service.capture_daily_metrics_once_per_day()
+        self.assertEqual(self.db.call_count,6)
+
+    def test_failure_tries_every_day_raises_and_waits_before_retrying(self):
+        self.at(8,0)
+        self.db.side_effect = [RuntimeError('not ready'),None,None]
+        with self.assertRaises(RuntimeError):
+            service.capture_daily_metrics_once_per_day()
+        self.assertEqual(self.db.call_count,3,'한 날짜가 실패해도 나머지는 시도한다')
+        self.assertIsNone(service._last_metrics_day,'실패하면 오늘 한 것으로 치지 않는다')
+        self.db.reset_mock(side_effect=True)
+        service.capture_daily_metrics_once_per_day()
+        self.db.assert_not_called()
+
+
 if __name__ == '__main__':
     unittest.main()
