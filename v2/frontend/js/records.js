@@ -1,5 +1,5 @@
 import { supabase } from "./supabase.js?v=20260829-34";
-import { closingRound, withDeltas, toPeopleCsv, labelCodes, groupPeople, personValue, GRID_METRICS, monthDates, nextDate, buildGrid, toGridCsv, matchPeople, trackedPeople, kstDate, snapshotRows, withProvisional, finalPreviewRows, FINAL_RULE_START, closingRound as closingRoundOf } from "./records-logic.js?v=20261125-17";
+import { closingRound, withDeltas, toPeopleCsv, labelCodes, groupPeople, personValue, GRID_METRICS, monthDates, nextDate, buildGrid, toGridCsv, matchPeople, trackedPeople, kstDate, snapshotRows, withProvisional, finalPreviewRows, FINAL_RULE_START, closingRound as closingRoundOf } from "./records-logic.js?v=20261125-18";
 
 // 기록 탭: 매일 저장된 코드별 대실적·소실적·실회선을 날짜별로 보고 엑셀(CSV)로 내려받는다.
 // 표는 nrc_daily_metrics(RUN_051)에서 읽는다. 내 계정 자료만 보인다(RLS).
@@ -342,6 +342,13 @@ export async function recordsPage(root, me, tools = {}) {
         const metricLabel = GRID_METRICS.find(([key]) => key === grid.metric)?.[1].split(" ")[0] || "";
         const unit = grid.metric === "real_lines" ? "회선" : "";
         const data = buildGrid(rows, people, dates, grid.metric, finalRows);
+        if (provisional.size) {
+          // 이전 방식의 최종마감 줄(다음 날 기록)에는 오늘 미리 보기 값을 섞지 않고 공식 기록만 쓴다.
+          const official = buildGrid(officialRows, people, dates, grid.metric, finalRows);
+          data.forEach((row, index) => {
+            if (row.final && !row.strict) row.cells = official[index].cells;
+          });
+        }
         grid.last = { data, people, metricLabel, everyone };
         // 마감일은 두 줄: 그날 줄 + 바로 아래 "최종마감N차"(마감일 다음날 0시 기록).
         const previewTip = "수집한 최신 값(진행 중)입니다. 공식 기록(다음 날 오전 6시 30분 이후)이 만들어지면 그 값으로 바뀝니다.";

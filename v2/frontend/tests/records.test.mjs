@@ -139,7 +139,7 @@ assert.deepEqual([...merged.provisional], ["2026-11-24|2893497"], "공식 기록
 // 최종마감 기록 규칙
 const pp = [{ code: "10", name: "홍길동", s1: "11", s2: "12" }];
 const dailyRows = [
-  { metric_date: "2026-11-23", user_id: "11", ord_pv: 0, max_pv: 100, min_pv: 1, real_lines: 1 },
+  { metric_date: "2026-11-16", user_id: "11", ord_pv: 0, max_pv: 100, min_pv: 1, real_lines: 1 },
   { metric_date: "2026-11-24", user_id: "11", ord_pv: 0, max_pv: 200, min_pv: 2, real_lines: 1 },
   { metric_date: "2026-11-30", user_id: "11", ord_pv: 0, max_pv: 300, min_pv: 3, real_lines: 1 },
   { metric_date: "2026-12-01", user_id: "11", ord_pv: 0, max_pv: 999, min_pv: 9, real_lines: 1 },
@@ -148,11 +148,12 @@ const finals = [{ metric_date: "2026-11-30", user_id: "11", ord_pv: 0, max_pv: 3
 const dates = monthDates("2026-11");
 const grid1 = buildGrid(dailyRows, pp, dates, "max_pv", finals);
 const finalOf = (grid, date) => grid.find((row) => row.final && row.date === date);
-assert.equal(FINAL_RULE_START, "2026-11-25");
-assert.equal(finalOf(grid1, "2026-11-23").cells[0], 200, "규칙 시작 전 마감일은 이전 규칙(다음 날 기록)을 그대로 보여 준다");
-assert.equal(finalOf(grid1, "2026-11-23").strict, false);
-assert.equal(finalOf(grid1, "2026-11-30").cells[0], 350, "규칙 시작 후 마감일은 최종마감 기록만 쓴다");
-assert.equal(finalOf(grid1, "2026-11-30").strict, true);
+assert.equal(FINAL_RULE_START, "2026-11-23");
+assert.equal(finalOf(grid1, "2026-11-15").cells[0], 100, "규칙 시작 전 마감일(11/15)은 이전 규칙(다음 날 기록)을 그대로 보여 준다");
+assert.equal(finalOf(grid1, "2026-11-15").strict, false);
+assert.equal(finalOf(grid1, "2026-11-23").strict, true, "3차(11/23)부터 새 규칙");
+assert.equal(finalOf(grid1, "2026-11-23").cells[0], null, "3차는 새벽 수집이 없으면 다음 날(11/24) 값으로 채우지 않고 비운다");
+assert.equal(finalOf(grid1, "2026-11-30").cells[0], 350, "새 규칙 마감일은 최종마감 기록만 쓴다");
 assert.equal(grid1.find((row) => !row.final && row.date === "2026-11-30").cells[0], 300, "마감일의 일반 줄은 일반 기록");
 const grid2 = buildGrid(dailyRows, pp, dates, "max_pv", []);
 assert.equal(finalOf(grid2, "2026-11-30").cells[0], null, "시간대에 수집이 없으면 다음 날 일반 기록으로 채우지 않고 비운다");

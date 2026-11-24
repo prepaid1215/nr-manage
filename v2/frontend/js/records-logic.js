@@ -123,9 +123,10 @@ export function nextDate(dateText) {
   return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
 }
 
-// 최종마감 기록 규칙(RUN_053)이 시작된 날짜. 이 날짜부터의 마감일은 "마감 다음날 0~6시 수집"으로 만든 최종마감 기록만 쓰고,
-// 그 전 마감일은 이전 규칙(다음 날 기록)을 그대로 보여 준다.
-export const FINAL_RULE_START = "2026-11-25";
+// 최종마감 기록 규칙(RUN_053)이 시작된 마감일. 이 마감일부터는 "마감 다음날 0~6시 수집"으로 만든 최종마감 기록만 쓰고
+// (그 시간대에 수집이 없으면 비운다), 그 전 마감일은 이전 규칙(다음 날 기록)을 그대로 보여 준다.
+// 2026-11-23(3차) 마감의 새벽 시간대는 규칙을 정하기 전에 지나갔으므로, 오늘 값이 3차 최종으로 보이지 않게 이 날부터 적용한다.
+export const FINAL_RULE_START = "2026-11-23";
 
 // 마감일 줄 바로 아래에 "최종마감N차" 줄(final: true)을 하나 더 둔다.
 // finalRows(최종마감 기록, record_kind='final')가 있으면 규칙 시작일 이후의 마감일은 그 기록만 쓰고 없으면 null.
