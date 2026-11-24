@@ -60,3 +60,10 @@
 시작 문장:
 
 > CLAUDE.md와 v2/docs/CLAUDE_CODE_HANDOFF_2026-11-09.md를 먼저 읽어줘. 11/08 문서도 함께 참고하고, git 상태를 확인한 다음 이어가자. 운영 DB 초기화나 등록 PC 임의 해제는 하지 마.
+
+## 7. 일별 실적·회선수 기록 (2026-11-24 추가, 운영 DB 미적용)
+
+- `v2/supabase/RUN_051_DAILY_METRICS.sql`: `nrc_daily_metrics` 표와 `capture_daily_nrc_metrics(p_date)` 함수. 적용 전까지 기록은 시작되지 않는다.
+- 클라우드 워커(`cloud_service.py`)가 한국시간 날짜가 바뀐 뒤 하루 한 번 이 함수를 호출해 어제 24시 이전 마지막 통합 스냅샷의 회원별 대실적·소실적·실회선·소비자총회선을 저장한다. 같은 날짜·계정은 덮어쓰지 않는다.
+- 실회선·소비자총회선은 수집기 v2가 실제로 읽은 값만 저장하고 못 읽었으면 NULL(실제 0과 구분).
+- 이 SQL은 로컬 Postgres가 없어 실행해 보지 못했다. 운영 적용 후 `select capture_daily_nrc_metrics(current_date - 1)` 결과로 확인한다.

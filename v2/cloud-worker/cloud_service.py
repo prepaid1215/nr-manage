@@ -10,7 +10,7 @@ import tempfile
 import threading
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import requests
@@ -583,6 +583,19 @@ def process_job(job):
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 
+_last_metrics_day = None
+
+
+def capture_daily_metrics_once_per_day():
+    """한국시간 날짜가 바뀐 뒤 어제 대실적·소실적·회선수를 기록한다. DB 함수가 중복을 막는다."""
+    global _last_metrics_day
+    today = datetime.now(timezone(timedelta(hours=9))).date()
+    if _last_metrics_day == today:
+        return
+    admin_request("rpc/capture_daily_nrc_metrics", "POST", {})
+    _last_metrics_day = today
+
+
 def worker_loop():
     while True:
         try:
@@ -590,6 +603,11 @@ def worker_loop():
                 time.sleep(10)
                 continue
             admin_request("rpc/enqueue_due_cloud_schedules", "POST", {})
+            try:
+                capture_daily_metrics_once_per_day()
+            except Exception as exc:
+                # 아직 SQL(RUN_051)이 적용되지 않았거나 일시 오류여도 수집 배정은 계속한다.
+                worker_state.update(error=f"일별 실적 기록 오류: {exc}")
             if RUN_BROWSER_WORKER:
                 job = claim_job()
                 if job:
