@@ -64,14 +64,14 @@ def save_json(filename, data):
     return path
 
 
-def login(page):
+def login(page, user_id=None, password=None):
     print("🔐 로그인 중...")
     open_page(page, "/myofficePlus/os/2/user/osLogin")
 
     page.wait_for_selector('input[type="text"]', state="attached", timeout=45000)
     page.wait_for_selector('input[type="password"]', state="attached", timeout=45000)
-    page.fill('input[type="text"]', USER_ID)
-    page.fill('input[type="password"]', USER_PW)
+    page.fill('input[type="text"]', user_id or USER_ID)
+    page.fill('input[type="password"]', password or USER_PW)
     page.click('a[href="javascript:go_loginProc();"]')
 
     try:
@@ -646,6 +646,133 @@ def member_from_search_view(view, row):
         'lineMetricsAvailable': view['lineMetricsAvailable'],
         'lineMetricsFound': view['lineMetricsFound'],
     }
+
+
+def label_member_roles(members):
+    """같은 이름으로 검색된 회원을 본코드·서브1·서브2로 구분한다.
+
+    본코드 번호 N의 N+1, N+2가 같은 검색 결과에 모두 있으면 N은 본, N+1은 서브1, N+2는 서브2다.
+    (기록 탭이 쓰는 묶음 규칙과 같다.) 어디에도 속하지 않으면 '단독'.
+    반환: {userId: (역할, 묶음 기준 번호)}
+    """
+    ids = {str(m.get('userId')) for m in members}
+    mains = {i for i in ids if i.isdigit() and str(int(i) + 1) in ids and str(int(i) + 2) in ids}
+    roles = {}
+    for user_id in ids:
+        number = int(user_id) if user_id.isdigit() else None
+        if user_id in mains:
+            roles[user_id] = ('본', user_id)
+        elif number is not None and str(number - 1) in mains:
+            roles[user_id] = ('서브1', str(number - 1))
+        elif number is not None and str(number - 2) in mains:
+            roles[user_id] = ('서브2', str(number - 2))
+        else:
+            roles[user_id] = ('단독', user_id)
+    return roles
+
+
+def search_members_by_name(page, name, pay_date=None, max_rows=20):
+    """회원검색 팝업이 쓰는 osPopupMemberList.json으로 내 산하 회원을 이름으로 찾는다.
+
+    10단계 계보에 보이지 않는 깊은 하위 회원도 찾을 수 있다. 내 회원번호·직급코드는
+    화면의 숨은 값(schUserId2, schRankCd2)에서 읽는다.
+    """
+    name = (name or '').strip()
+    if not name:
+        raise ValueError("검색할 이름을 입력하세요.")
+    open_page(page, "/myofficePlus/os/2/member/osFolderTree")
+    ctx = page.evaluate(
+        """() => {
+            const value = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
+            return { myUserId: value('schUserId2'), myRankCd: value('schRankCd2'), payDate: value('payDate') };
+        }"""
+    )
+    if not ctx.get('myUserId'):
+        raise RuntimeError("하위마감매출 현황 화면에서 내 회원번호를 읽지 못했습니다.")
+    pay_date = pay_date or ctx.get('payDate') or '-'
+    data = _post_json(page, "/myofficePlus/os/member/osPopupMemberList.json", {
+        "nowPage": "1",
+        "parmKind": "schUserId2:userId|schRankCd2:rankCd|schUserName:userName|schFlg:F",
+        "schGubun": "", "schFlg": "F",
+        "payDate": pay_date,
+        "schUserName": name,
+        "schUserId": ctx['myUserId'],
+        "selectRank": "",
+        "maxRow": str(int(max_rows)),
+    })
+    found = [
+        {
+            'userId': str(row.get('userId') or ''),
+            'userName': row.get('userName') or '',
+            'rankCd': str(row.get('rankCd') or ''),
+            'rankName': row.get('rankName') or '',
+            'sponsorName': row.get('ppName') or '',
+            'sponsorId': str(row.get('ppId') or ''),
+        }
+        for row in (data.get('rstLst') or []) if row.get('userId')
+    ]
+    return {**ctx, 'payDate': pay_date, 'members': found,
+            'total': int((data.get('rstTot') or {}).get('totCnt') or len(found))}
+
+
+def lookup_member_sales(page, name, pay_date=None, max_rows=20):
+    """이름으로 찾은 산하 회원들의 매출 데이터(대실적·소실적·본인NV·회선)를 가져온다."""
+    found = search_members_by_name(page, name, pay_date, max_rows)
+    roles = label_member_roles(found['members'])
+
+    def to_int(value):
+        try:
+            return int(str(value).replace(',', '') or '0')
+        except (ValueError, TypeError):
+            return 0
+
+    members = []
+    for member in found['members']:
+        role, group = roles.get(member['userId'], ('단독', member['userId']))
+        entry = {**member, 'role': role, 'group': group}
+        try:
+            data = _post_json(page, "/myofficePlus/os/member/osPersonallySales.json", {
+                "payDate": found['payDate'],
+                "schRankCd": member['rankCd'],
+                "schUserId": member['userId'],
+                "schGubun": "2",
+                "schRankCdTmp": "", "schUserIdTmp": "", "schPayDateTmp": "",
+                "selectEndCnt": found['payDate'],
+                "schUserName": member['userName'],
+                "schUserId2": found['myUserId'],
+                "schRankCd2": found['myRankCd'],
+            })
+            sales = data.get('rstSalesMap') or {}
+            if not sales:
+                raise ValueError("매출 응답이 비어 있습니다.")
+            entry.update({
+                'memberNo': sales.get('userId') or '',
+                'ordPv': to_int(sales.get('ordPv')),
+                'maxPv': to_int(sales.get('maxPv')),
+                'minPv': to_int(sales.get('minPv')),
+                'rankNewName': sales.get('rankNewName') or member['rankName'],
+                'rankMaxName': sales.get('rankMaxName') or '',
+                **extract_line_metrics(data),
+            })
+        except Exception as exc:  # 한 명이 실패해도 나머지는 보여 준다.
+            entry['error'] = str(exc)
+        members.append(entry)
+    order = {'본': 0, '서브1': 1, '서브2': 2, '단독': 3}
+    members.sort(key=lambda item: (item['group'], order.get(item['role'], 3)))
+    return {'name': (name or '').strip(), 'payDate': found['payDate'], 'total': found['total'], 'members': members}
+
+
+@collection_activity
+def run_member_lookup(name, login_id, password, pay_date=None):
+    """NRC에 로그인해 이름으로 산하 회원을 찾고 매출 데이터를 돌려준다. 저장·업로드는 하지 않는다."""
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        try:
+            login(page, login_id, password)
+            return lookup_member_sales(page, name, pay_date)
+        finally:
+            browser.close()
 
 
 def scrape_member_nv(page, rstLst, pay_date=None):

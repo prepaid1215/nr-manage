@@ -50,7 +50,7 @@ import queue_worker
 import naver_login
 import naver_stats
 import naver_exposure
-from scraper import run_daily, run_sales_now, run_closings, run_combined
+from scraper import run_daily, run_sales_now, run_closings, run_combined, run_member_lookup
 from queue_worker import configure_worker, configure_worker_from_session, worker_configuration, worker_loop
 
 NAVER_KEYRING_SERVICE = "NRC-Management-Naver"
@@ -693,6 +693,34 @@ def start_combined_collection(body):
 def sync_combined():
     ok, message = start_combined_collection(request.json or {})
     return jsonify({"ok": ok, "message": message}), 200 if ok else 400
+
+
+@app.route("/api/member-lookup", methods=["POST"])
+def member_lookup():
+    """이름으로 내 산하 회원(10단계 밖 포함)을 NRC에서 찾아 매출 데이터를 돌려준다. 저장하지 않는다."""
+    body = request.get_json(silent=True) or {}
+    name = str(body.get("name", "")).strip()
+    if not name or len(name) > 30:
+        return jsonify({"ok": False, "message": "찾을 이름을 1~30자로 입력하세요."}), 400
+    app_user_id = str(body.get("appUserId", ""))
+    login_id = str(body.get("loginId", "")).strip()
+    password = str(body.get("password", ""))
+    saved_text = keyring.get_password(MANUAL_KEYRING_SERVICE, app_user_id) if app_user_id else None
+    if (not login_id or not password) and saved_text:
+        saved = json.loads(saved_text)
+        login_id = login_id or saved.get("loginId", "")
+        password = password or saved.get("password", "")
+    if len(login_id) < 3 or len(password) < 4:
+        return jsonify({"ok": False, "code": "NO_CREDENTIALS",
+                        "message": "이 PC에 저장된 NRC 아이디·비밀번호가 없습니다. 설정에서 NRC 계정을 저장한 뒤 다시 시도하세요."}), 400
+    try:
+        result = run_member_lookup(name, login_id, password, str(body.get("payDate", "")).strip() or None)
+    except ValueError as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 400
+    except Exception as exc:
+        print(f"회원 검색 오류: {exc}")
+        return jsonify({"ok": False, "message": f"NRC에서 회원을 찾지 못했습니다: {exc}"}), 500
+    return jsonify({"ok": True, **result})
 
 
 @app.route("/collect/start", methods=["POST"])
