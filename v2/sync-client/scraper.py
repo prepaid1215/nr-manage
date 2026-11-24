@@ -535,6 +535,119 @@ def scrape_genealogy(page, depth=10):
     return rstLst
 
 
+SEARCH_VIEW_LABELS = {
+    '성명': 'userName', '회원번호': 'memberNo',
+    '현재직급': 'rankNewName', '인증직급': 'rankMaxName',
+    '정산적용NV': 'settleNv', '소실적적용NV': 'minApplyNv',
+    '소실적적용NV+소실적(실시간)': 'minApplyRealtimeNv',
+    '대실적(실시간)': 'maxPvRealtime', '소실적(실시간)': 'minPvRealtime',
+    '대실적': 'maxPv', '소실적': 'minPv',
+    '소비자총회선': 'consumerTotalLines', '실회선': 'realLines',
+    '본인매출회선': 'ownSalesLines', '정기배송회선': 'regularDeliveryLines',
+}
+SEARCH_VIEW_TEXT_FIELDS = {'userName', 'memberNo', 'rankNewName', 'rankMaxName'}
+SEARCH_VIEW_LINE_FIELDS = ('consumerTotalLines', 'realLines', 'ownSalesLines', 'regularDeliveryLines')
+
+
+def _search_view_number(text):
+    text = re.sub(r'[\s,]', '', str(text or ''))
+    return int(text) if re.fullmatch(r'-?\d+', text) else None
+
+
+def parse_member_search_view(html):
+    """'하위마감매출 현황'의 본인 매출 현황 표를 항목 이름 기준으로 읽는다.
+
+    화면에 없는 항목은 None, 화면에 표시된 0은 숫자 0으로 구분한다.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    found = {}
+    for tr in soup.find_all("tr"):
+        cells = tr.find_all(["th", "td"], recursive=False)
+        for index, cell in enumerate(cells[:-1]):
+            label = re.sub(r'\s+', '', cell.get_text())
+            value = cells[index + 1].get_text(" ", strip=True)
+            if label == '본인매출NV/DT그룹매출NV':
+                parts = [_search_view_number(part) for part in value.split('/')]
+                if len(parts) == 2:
+                    found['ordPv'], found['groupPv'] = parts
+                continue
+            closing = re.fullmatch(r'(\d+)마감(대실적|소실적)', label)
+            if closing:
+                found['closingRound'] = int(closing.group(1))
+                found['closingMaxPv' if closing.group(2) == '대실적' else 'closingMinPv'] = _search_view_number(value)
+                continue
+            field = SEARCH_VIEW_LABELS.get(label)
+            if field and field not in found:
+                found[field] = value if field in SEARCH_VIEW_TEXT_FIELDS else _search_view_number(value)
+    if not found.get('memberNo'):
+        return None
+    available = {field: found.get(field) is not None for field in SEARCH_VIEW_LINE_FIELDS}
+    return {
+        **{field: None for field in SEARCH_VIEW_LINE_FIELDS},
+        **found,
+        'lineMetricsVersion': 2,
+        'lineMetricsAvailable': available,
+        'lineMetricsFound': any(available.values()),
+    }
+
+
+def scrape_member_by_search(page, user_id, user_name="", rank_cd="25", pay_date=None,
+                            my_user_id=None, my_rank_cd=None, timeout=20000):
+    """osFolderTree 화면의 검색 버튼(goSearch)으로 한 회원을 조회해 표를 읽는다.
+
+    회원 검색 팝업이 채우는 값(schUserId2/schRankCd2/schUserName)을 직접 입력하므로
+    동명이인이 있어도 회원번호로 정확히 조회한다. 조회 뒤 화면의 회원번호가 요청한
+    회원과 같은지 확인하고, 다르면 None을 돌려준다.
+    """
+    suffix = re.sub(r'\D', '', str(user_id))
+    if not suffix:
+        return None
+    page.evaluate(
+        """({userId, rankCd, name, payDate}) => {
+            const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+            set('schUserId2', userId); set('schRankCd2', rankCd); set('schUserName', name);
+            const select = document.getElementById('selectEndCnt');
+            if (select && payDate) select.value = payDate;
+        }""",
+        {"userId": str(user_id), "rankCd": str(rank_cd), "name": user_name or "", "payDate": pay_date or ""},
+    )
+    page.evaluate("() => goSearch()")
+    try:
+        page.wait_for_load_state("domcontentloaded", timeout=timeout)
+    except Exception:
+        pass
+    page.wait_for_function(
+        """(suffix) => [...document.querySelectorAll('td, th')].some(
+            (el) => el.textContent.replace(/\\s+/g, '') === '회원번호'
+                && el.nextElementSibling
+                && el.nextElementSibling.textContent.replace(/\\D/g, '').endsWith(suffix))""",
+        arg=suffix, timeout=timeout,
+    )
+    result = parse_member_search_view(page.content())
+    if not result or not re.sub(r'\D', '', result.get('memberNo', '')).endswith(suffix):
+        return None
+    return result
+
+
+def member_from_search_view(view, row):
+    """검색 화면 결과를 scrape_member_nv의 회원 형식으로 바꾼다."""
+    rank_name = row.get('rankName', '회원')
+    return {
+        'userId': row['userId'],
+        'ordPv': view.get('ordPv') or 0,
+        'maxPv': view.get('maxPv') or 0,
+        'minPv': view.get('minPv') or 0,
+        'rankNewName': view.get('rankNewName') or rank_name,
+        'rankMaxName': view.get('rankMaxName') or row.get('rankMaxName', rank_name),
+        'dormant': row.get('status') == '2',
+        'status': row.get('status', '1'),
+        **{key: view.get(key) for key in SEARCH_VIEW_LINE_FIELDS},
+        'lineMetricsVersion': view['lineMetricsVersion'],
+        'lineMetricsAvailable': view['lineMetricsAvailable'],
+        'lineMetricsFound': view['lineMetricsFound'],
+    }
+
+
 def scrape_member_nv(page, rstLst, pay_date=None):
     """
     각 회원의 osPersonallySales.json 호출 → members NV 데이터 수집
@@ -596,7 +709,16 @@ def scrape_member_nv(page, rstLst, pay_date=None):
                 **line_metrics,
             })
         except Exception as e:
-            print(f"    ⚠ {user_id} NV 조회 실패: {e}")
+            print(f"    ⚠ {user_id} NV 조회 실패: {e} → 검색 버튼 방식으로 재시도")
+            try:
+                view = scrape_member_by_search(
+                    page, user_id, row.get('userName', ''), rank_cd, pay_date, my_user_id, my_rank_cd)
+            except Exception as search_error:
+                print(f"    ⚠ {user_id} 검색 방식도 실패: {search_error}")
+                view = None
+            if view:
+                members.append(member_from_search_view(view, row))
+                continue
             members.append({
                 'userId': user_id, 'ordPv': 0, 'maxPv': 0, 'minPv': 0,
                 'rankNewName': rank_name,
