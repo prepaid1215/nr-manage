@@ -715,45 +715,110 @@ def search_members_by_name(page, name, pay_date=None, max_rows=20):
             'total': int((data.get('rstTot') or {}).get('totCnt') or len(found))}
 
 
+def _to_int(value):
+    try:
+        return int(str(value).replace(',', '') or '0')
+    except (ValueError, TypeError):
+        return 0
+
+
+def fetch_member_sales(page, ctx, user_id, rank_cd, user_name=''):
+    """회원번호로 osPersonallySales.json을 불러 대실적·소실적·본인NV·회선 값을 읽는다.
+
+    ctx: {'myUserId','myRankCd','payDate'} (하위마감매출 현황 화면의 숨은 값). 실패하면 예외.
+    """
+    data = _post_json(page, "/myofficePlus/os/member/osPersonallySales.json", {
+        "payDate": ctx['payDate'],
+        "schRankCd": str(rank_cd or ''),
+        "schUserId": str(user_id),
+        "schGubun": "2",
+        "schRankCdTmp": "", "schUserIdTmp": "", "schPayDateTmp": "",
+        "selectEndCnt": ctx['payDate'],
+        "schUserName": user_name or '',
+        "schUserId2": ctx['myUserId'],
+        "schRankCd2": ctx['myRankCd'],
+    })
+    sales = data.get('rstSalesMap') or {}
+    if not sales:
+        raise ValueError("매출 응답이 비어 있습니다.")
+    return {
+        'memberNo': sales.get('userId') or '',
+        'userName': sales.get('userName') or user_name or '',
+        'ordPv': _to_int(sales.get('ordPv')),
+        'maxPv': _to_int(sales.get('maxPv')),
+        'minPv': _to_int(sales.get('minPv')),
+        'rankNewName': sales.get('rankNewName') or '',
+        'rankMaxName': sales.get('rankMaxName') or '',
+        **extract_line_metrics(data),
+    }
+
+
+def read_search_context(page):
+    """하위마감매출 현황 화면의 숨은 값(내 회원번호·직급코드·정산기준일)을 읽는다. 화면이 아니면 빈 값."""
+    return page.evaluate(
+        """() => {
+            const value = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
+            return { myUserId: value('schUserId2'), myRankCd: value('schRankCd2'), payDate: value('payDate') };
+        }"""
+    )
+
+
+# 수집 작업이 전달하는 '표에 등록한 하위 회원'. 통합 수집이 함께 조회한다(없으면 빈 목록).
+TRACKED_MEMBERS = []
+
+
+def scrape_tracked_members(page, tracked, skip_ids=(), limit=150):
+    """표에 등록한 10단계 밖 하위 회원을 회원번호로 직접 조회한다.
+
+    한 명이 실패해도 건너뛰고, 어떤 오류도 기존 수집을 막지 않는다. 이미 계보에 있는 번호는 중복 조회하지 않는다.
+    반환: 통합 JSON의 trackedMembers 항목 목록(userId·userName·rankName과 값).
+    """
+    skip = {str(i) for i in skip_ids}
+    todo = [t for t in (tracked or []) if str(t.get('userId', '')).isdigit() and str(t.get('userId')) not in skip][:limit]
+    if not todo:
+        return []
+    print(f"🔎 등록한 하위 회원 {len(todo)}개 조회 중...")
+    ctx = read_search_context(page)
+    if not ctx.get('myUserId'):
+        # 앞 단계 뒤에 화면이 바뀌었으면 하위마감매출 현황을 다시 연다.
+        open_page(page, "/myofficePlus/os/2/member/osFolderTree")
+        ctx = read_search_context(page)
+    if not ctx.get('myUserId'):
+        print("  ⚠ 하위마감매출 현황에서 내 회원번호를 읽지 못해 등록 회원 조회를 건너뜁니다.")
+        return []
+    ctx['payDate'] = ctx.get('payDate') or datetime.now().strftime("%Y%m%d")
+    results = []
+    for item in todo:
+        user_id = str(item['userId'])
+        try:
+            sales = fetch_member_sales(page, ctx, user_id, item.get('rankCd'), item.get('userName', ''))
+            results.append({
+                'userId': user_id,
+                'userName': item.get('userName') or sales['userName'],
+                'rankName': item.get('rankName') or sales['rankNewName'],
+                'dormant': False, 'status': '1',
+                **{k: v for k, v in sales.items() if k not in ('userName', 'memberNo')},
+            })
+        except Exception as exc:
+            print(f"    ⚠ 등록 회원 {user_id} 조회 실패: {exc}")
+    print(f"  → 등록 회원 {len(results)}/{len(todo)}개 조회 완료")
+    return results
+
+
 def lookup_member_sales(page, name, pay_date=None, max_rows=20):
     """이름으로 찾은 산하 회원들의 매출 데이터(대실적·소실적·본인NV·회선)를 가져온다."""
     found = search_members_by_name(page, name, pay_date, max_rows)
     roles = label_member_roles(found['members'])
-
-    def to_int(value):
-        try:
-            return int(str(value).replace(',', '') or '0')
-        except (ValueError, TypeError):
-            return 0
 
     members = []
     for member in found['members']:
         role, group = roles.get(member['userId'], ('단독', member['userId']))
         entry = {**member, 'role': role, 'group': group}
         try:
-            data = _post_json(page, "/myofficePlus/os/member/osPersonallySales.json", {
-                "payDate": found['payDate'],
-                "schRankCd": member['rankCd'],
-                "schUserId": member['userId'],
-                "schGubun": "2",
-                "schRankCdTmp": "", "schUserIdTmp": "", "schPayDateTmp": "",
-                "selectEndCnt": found['payDate'],
-                "schUserName": member['userName'],
-                "schUserId2": found['myUserId'],
-                "schRankCd2": found['myRankCd'],
-            })
-            sales = data.get('rstSalesMap') or {}
-            if not sales:
-                raise ValueError("매출 응답이 비어 있습니다.")
-            entry.update({
-                'memberNo': sales.get('userId') or '',
-                'ordPv': to_int(sales.get('ordPv')),
-                'maxPv': to_int(sales.get('maxPv')),
-                'minPv': to_int(sales.get('minPv')),
-                'rankNewName': sales.get('rankNewName') or member['rankName'],
-                'rankMaxName': sales.get('rankMaxName') or '',
-                **extract_line_metrics(data),
-            })
+            sales = fetch_member_sales(page, found, member['userId'], member['rankCd'], member['userName'])
+            sales.pop('userName', None)
+            sales['rankNewName'] = sales['rankNewName'] or member['rankName']
+            entry.update(sales)
         except Exception as exc:  # 한 명이 실패해도 나머지는 보여 준다.
             entry['error'] = str(exc)
         members.append(entry)
@@ -936,6 +1001,13 @@ def scrape_combined_json(page):
 
     members = scrape_member_nv(page, rstLst)
 
+    # 표에 등록한 10단계 밖 하위 회원도 함께 조회한다. 실패해도 기존 수집은 계속한다.
+    tracked_members = []
+    try:
+        tracked_members = scrape_tracked_members(page, TRACKED_MEMBERS, {str(r.get('userId') or '') for r in rstLst})
+    except Exception as exc:
+        print(f"⚠️ 등록 회원 조회를 건너뜁니다: {exc}")
+
     # 같은 로그인 세션에서 메인 소비자회선 총계와 KT/LG 목록도 함께 갱신한다.
     # 상세 회선은 PC에만 저장하고 Supabase 통합 JSON에는 집계값만 넣는다.
     main_stats = {}
@@ -979,6 +1051,8 @@ def scrape_combined_json(page):
         'sourceAccountId': USER_ID,
         'rstLst': rstLst,
         'members': members,
+        # 계보에 없는 등록 회원. 조직도가 쓰는 members/rstLst와 분리해 두고 일일 기록만 읽는다.
+        'trackedMembers': tracked_members,
         'mainStats': main_stats,
         'consumerSummary': {
             '총회선': main_stats.get('총회선', len(consumer_lines.get('KT망', [])) + len(consumer_lines.get('LG망', []))),

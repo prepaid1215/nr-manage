@@ -261,6 +261,24 @@ def _load_combined():
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def tracked_members_from_job(job):
+    """서버가 작업과 함께 준 '표에 등록한 하위 회원' 목록을 걸러서 쓴다(숫자 회원번호만, 최대 150개)."""
+    items = []
+    for row in (job.get("trackedMembers") or [])[:150]:
+        if not isinstance(row, dict):
+            continue
+        user_id = str(row.get("userId") or "")
+        if not user_id.isdigit():
+            continue
+        items.append({
+            "userId": user_id,
+            "userName": str(row.get("userName") or "")[:30],
+            "rankCd": str(row.get("rankCd") or "")[:4],
+            "rankName": str(row.get("rankName") or "")[:20],
+        })
+    return items
+
+
 def process_job(job):
     device = _load_device()
     credentials = job.get("credentials") or {}
@@ -275,7 +293,11 @@ def process_job(job):
         (DATA_DIR / "combined_latest.json").unlink(missing_ok=True)
         scraper_module.USER_ID = login_id
         scraper_module.USER_PW = credentials["password"]
-        run_combined()
+        scraper_module.TRACKED_MEMBERS = tracked_members_from_job(job)
+        try:
+            run_combined()
+        finally:
+            scraper_module.TRACKED_MEMBERS = []
         data = _load_combined()
         collected_account = str(data.get("sourceAccountId") or login_id).strip()
         if collected_account != login_id:
