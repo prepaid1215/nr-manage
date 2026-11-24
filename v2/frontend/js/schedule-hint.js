@@ -20,3 +20,30 @@ export function scheduleTimeNote(frequency, time) {
     warn: true,
   };
 }
+
+// 기록용 기본 예약: 일일 22:00(저녁 구간) + 마감일 00:10(마감 다음날 새벽 구간).
+// 이미 같은 용도의 예약(같은 계정, 같은 시간대 안)이 있으면 만들지 않는다.
+export const RECORD_SCHEDULE_DEFAULTS = [
+  { kind: "daily", label: "일일 기록 22시", run_time: "22:00", frequency: "daily", weekday: null, month_days: [] },
+  { kind: "closing", label: "마감일 00:10", run_time: "00:10", frequency: "monthly", weekday: null, month_days: [1, 9, 16, 24] },
+];
+
+function sameClosingDays(days) {
+  const set = [...new Set(days || [])].sort((a, b) => a - b);
+  return set.length === 4 && [1, 9, 16, 24].every((day, i) => set[i] === day);
+}
+
+function hasRecordSchedule(existing, accountId, spec) {
+  const rule = SCHEDULE_WINDOWS[spec.kind];
+  return (existing || []).some((item) => {
+    if (item.enabled === false || item.source_account_id !== accountId) return false;
+    const time = String(item.run_time || "").slice(0, 5);
+    if (time < rule.from || time > rule.to) return false;
+    if (spec.kind === "daily") return item.frequency === "daily";
+    return item.frequency === "monthly" && sameClosingDays(item.month_days);
+  });
+}
+
+export function missingRecordSchedules(existing, accountId) {
+  return RECORD_SCHEDULE_DEFAULTS.filter((spec) => !hasRecordSchedule(existing, accountId, spec));
+}

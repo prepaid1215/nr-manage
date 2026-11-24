@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { scheduleTimeNote } from "../js/schedule-hint.js";
+import { scheduleTimeNote, missingRecordSchedules } from "../js/schedule-hint.js";
 
 // 일일 예약: 저녁 6시~자정만 기록에 쓰인다
 for (const time of ["18:00", "20:30", "23:59"]) {
@@ -20,4 +20,13 @@ assert.match(scheduleTimeNote("closing", "00:10").text, /최종마감/);
 assert.equal(scheduleTimeNote("weekly", "10:00").warn, false);
 assert.match(scheduleTimeNote("monthly", "10:00").text, /기록으로 쓰입니다/);
 assert.deepEqual(scheduleTimeNote("daily", ""), { text: "", warn: false });
+// 기본 예약: 비어 있으면 2개, 있으면 건너뛴다
+assert.deepEqual(missingRecordSchedules([], "a").map((x) => x.kind), ["daily", "closing"]);
+const daily = { source_account_id: "a", run_time: "23:30:00", enabled: true, frequency: "daily", month_days: [] };
+const closing = { source_account_id: "a", run_time: "00:10:00", enabled: true, frequency: "monthly", month_days: [24, 1, 16, 9] };
+assert.deepEqual(missingRecordSchedules([daily], "a").map((x) => x.kind), ["closing"]);
+assert.deepEqual(missingRecordSchedules([daily, closing], "a"), []);
+assert.equal(missingRecordSchedules([daily, closing], "b").length, 2, "다른 계정은 따로 센다");
+assert.equal(missingRecordSchedules([{ ...daily, run_time: "09:00:00" }], "a").length, 2, "저녁 구간 밖 예약은 기록용으로 안 센다");
+assert.equal(missingRecordSchedules([{ ...daily, enabled: false }], "a").length, 2, "꺼진 예약은 안 센다");
 console.log("Schedule hint tests passed.");
