@@ -695,19 +695,25 @@ def sync_combined():
     return jsonify({"ok": ok, "message": message}), 200 if ok else 400
 
 
-def verify_app_user(access_token):
-    """웹 앱 로그인 토큰이 유효한지 Supabase에 확인하고 사용자 ID를 돌려준다. 무효하면 빈 문자열."""
+def fetch_approved_credentials(access_token):
+    """웹 앱 로그인 토큰으로 서버에서 '공유 PC 수집 승인'된 본인의 NRC 계정 정보를 받는다.
+
+    수집이 쓰는 것과 같은 계정이다. 서버가 토큰을 확인하고 본인 계정만 돌려준다.
+    토큰이 무효하면 PermissionError.
+    """
     if len(access_token or "") < 20:
-        return ""
-    request_obj = urllib.request.Request(
-        f"{SUPABASE_URL}/auth/v1/user",
-        headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {access_token}"},
-    )
+        raise PermissionError("앱 로그인 정보가 없습니다.")
     try:
-        with urllib.request.urlopen(request_obj, timeout=15) as response:
-            return str(json.loads(response.read().decode("utf-8")).get("id") or "")
-    except Exception:
-        return ""
+        data = queue_worker._json_request(
+            f"{queue_worker.CLOUD_COORDINATOR}/credentials/reveal",
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=90,  # 무료 서버가 잠들어 있으면 깨어나는 데 1분 가까이 걸린다.
+        )
+    except RuntimeError as exc:
+        if "(401)" in str(exc):
+            raise PermissionError(str(exc)) from exc
+        raise
+    return [row for row in ((data or {}).get("credentials") or []) if row.get("loginId") and row.get("password")]
 
 
 @app.route("/lookup/member", methods=["POST", "OPTIONS"])
@@ -716,7 +722,8 @@ def lookup_member():
 
     /register-device-auto처럼 웹 앱에 로그인된 Supabase 토큰으로 호출자를 확인한다.
     (/api/* 경로가 쓰는 연결 코드는 지금 배포에 설정돼 있지 않다.)
-    NRC 계정은 그 사용자가 이 PC에 저장해 둔 것만 쓰고, 비밀번호는 요청으로 받지 않는다.
+    NRC 계정은 매출 수집과 같이 서버에 '공유 PC 수집 승인'된 계정을 PC가 서버에서 직접 받아 쓴다.
+    비밀번호는 웹 페이지나 요청 본문을 거치지 않는다.
     """
     if request.method == "OPTIONS":
         return "", 204
@@ -724,23 +731,33 @@ def lookup_member():
     name = str(body.get("name", "")).strip()
     if not name or len(name) > 30:
         return jsonify({"ok": False, "message": "찾을 이름을 1~30자로 입력하세요."}), 400
-    app_user_id = verify_app_user(str(body.get("accessToken", "")))
-    if not app_user_id:
-        return jsonify({"ok": False, "message": "앱 로그인 확인에 실패했습니다. 다시 로그인한 뒤 시도하세요."}), 401
-    saved_text = keyring.get_password(MANUAL_KEYRING_SERVICE, app_user_id)
-    saved = json.loads(saved_text) if saved_text else {}
-    login_id, password = str(saved.get("loginId", "")).strip(), str(saved.get("password", ""))
-    if len(login_id) < 3 or len(password) < 4:
-        return jsonify({"ok": False, "code": "NO_CREDENTIALS",
-                        "message": "이 PC에 저장된 NRC 아이디·비밀번호가 없습니다. 이 PC에서 NRC 계정을 저장한 뒤 다시 시도하세요."}), 400
     try:
-        result = run_member_lookup(name, login_id, password, str(body.get("payDate", "")).strip() or None)
+        accounts = fetch_approved_credentials(str(body.get("accessToken", "")))
+    except PermissionError:
+        return jsonify({"ok": False, "message": "앱 로그인 확인에 실패했습니다. 다시 로그인한 뒤 시도하세요."}), 401
+    except Exception as exc:
+        print(f"승인 계정 확인 오류: {exc}")
+        return jsonify({"ok": False, "message": f"서버에서 승인된 NRC 계정을 확인하지 못했습니다: {exc}"}), 502
+    if not accounts:
+        return jsonify({"ok": False, "code": "NO_CREDENTIALS",
+                        "message": "공유 PC 수집 승인에 등록된 NRC 계정이 없습니다. 설정 > 수집에서 승인한 뒤 다시 시도하세요."}), 400
+    wanted = str(body.get("sourceAccountId", "")).strip()
+    if wanted:
+        chosen = next((row for row in accounts if row.get("sourceAccountId") == wanted or row.get("loginId") == wanted), None)
+        if not chosen:
+            return jsonify({"ok": False, "code": "ACCOUNT_NOT_APPROVED",
+                            "message": f"NRC 계정 {wanted}은(는) 공유 PC 수집 승인 목록에 없습니다."}), 400
+    else:
+        chosen = accounts[0]
+    try:
+        result = run_member_lookup(name, str(chosen["loginId"]), str(chosen["password"]),
+                                   str(body.get("payDate", "")).strip() or None)
     except ValueError as exc:
         return jsonify({"ok": False, "message": str(exc)}), 400
     except Exception as exc:
         print(f"회원 검색 오류: {exc}")
         return jsonify({"ok": False, "message": f"NRC에서 회원을 찾지 못했습니다: {exc}"}), 500
-    return jsonify({"ok": True, **result})
+    return jsonify({"ok": True, "sourceAccountId": chosen.get("sourceAccountId") or chosen["loginId"], **result})
 
 
 @app.route("/collect/start", methods=["POST"])
