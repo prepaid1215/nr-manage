@@ -40,6 +40,29 @@ def utc_now():
     return datetime.now(timezone.utc).isoformat()
 
 
+def log_event(message):
+    """작업 수신·진행·실패를 시각과 함께 로그(nrcsync.log)에 남긴다."""
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {message}", flush=True)
+
+
+_throttle = {}
+
+
+def log_throttled(key, message, interval=300):
+    """같은 내용이 반복되면 interval초에 한 번만 남기고, 생략한 횟수를 다음 줄에 적는다.
+
+    네트워크가 끊긴 PC가 5초마다 같은 오류를 남겨 로그를 덮는 것을 막는다.
+    """
+    now = time.time()
+    entry = _throttle.get(key)
+    if entry and entry["text"] == message and now - entry["at"] < interval:
+        entry["suppressed"] += 1
+        return
+    extra = f" (같은 내용 {entry['suppressed']}회 생략)" if entry and entry["suppressed"] else ""
+    _throttle[key] = {"text": message, "at": now, "suppressed": 0}
+    log_event(message + extra)
+
+
 def _json_request(url, method="GET", body=None, headers=None, timeout=60):
     request_headers = {"Content-Type": "application/json", **(headers or {})}
     payload = None if body is None else json.dumps(body).encode("utf-8")
@@ -243,8 +266,15 @@ def claim_job():
         return None
     if device.get("revoked"):
         return None
+    started = time.time()
     result = _coordinator("/worker/claim", {"deviceId": device["id"],
                           "collectorVersion":COLLECTOR_VERSION, "lineMetricsVersion":2}) or {}
+    elapsed = time.time() - started
+    if elapsed > 8:
+        # 요청한 PC 우선 배정은 15초 동안만 유지된다. 응답이 느리면 다른 PC로 넘어갈 수 있다.
+        log_throttled("slow-claim", f"작업 요청 응답이 느립니다({elapsed:.0f}초). 우선 배정 15초를 놓칠 수 있습니다.")
+    if result.get("updateRequired"):
+        log_throttled("update-required", "서버가 이 수집기를 업데이트가 필요한 버전으로 판단해 작업을 주지 않았습니다.")
     return result.get("job")
 
 
@@ -289,11 +319,14 @@ def process_job(job):
 
     if not heartbeat("BUSY", None):
         raise RuntimeError("이 PC의 등록이 해제되어 수집을 중단했습니다.")
+    tracked = tracked_members_from_job(job)
+    log_event(f"수집 시작: 작업 {str(job.get('id'))[:8]} · NRC 계정 {login_id} · 등록 회원 {len(tracked)}개")
+    started = time.time()
     try:
         (DATA_DIR / "combined_latest.json").unlink(missing_ok=True)
         scraper_module.USER_ID = login_id
         scraper_module.USER_PW = credentials["password"]
-        scraper_module.TRACKED_MEMBERS = tracked_members_from_job(job)
+        scraper_module.TRACKED_MEMBERS = tracked
         try:
             run_combined()
         finally:
@@ -304,6 +337,10 @@ def process_job(job):
             raise RuntimeError(
                 f"요청 계정({login_id})과 수집 계정({collected_account})이 다릅니다."
             )
+        log_event(
+            f"수집 끝({time.time() - started:.0f}초): 계보 {len(data.get('rstLst') or [])}명 · "
+            f"등록 회원 {len(data.get('trackedMembers') or [])}/{len(tracked)}개 읽음. 결과를 올립니다."
+        )
         _coordinator(
             "/worker/complete",
             {
@@ -315,7 +352,10 @@ def process_job(job):
             timeout=180,
         )
         heartbeat("ONLINE", None)
+        log_event(f"결과 업로드 완료: 작업 {str(job.get('id'))[:8]}")
     except Exception as exc:
+        log_event(f"수집 실패({time.time() - started:.0f}초 경과): 작업 {str(job.get('id'))[:8]} · {str(exc)[:300]}")
+        exc.nrc_logged = True  # worker_loop가 같은 실패를 한 번 더 적지 않게 표시한다.
         try:
             _coordinator(
                 "/worker/complete",
@@ -346,13 +386,18 @@ def worker_loop():
             with ACTIVITY.activity():
                 job = claim_job()
                 if job:
+                    log_event(f"작업 배정받음: 작업 {str(job.get('id'))[:8]} · 계정 {job.get('sourceAccountId')}")
                     try:
                         process_job(job)
                     except Exception as exc:
                         message = str(exc)
+                        if not getattr(exc, "nrc_logged", False):
+                            # 수집을 시작하기 전 단계(계정 불일치·등록 해제 등)의 실패
+                            log_event(f"작업 처리 중단: {message[:300]}")
                         heartbeat("ERROR", message)
             if not job:
                 time.sleep(5)
         except Exception as exc:
-            print(f"Supabase 작업 대기열 오류: {exc}")
+            # 네트워크가 끊긴 동안 같은 오류가 5초마다 쌓이지 않도록 줄인다.
+            log_throttled("queue-error", f"Supabase 작업 대기열 오류: {exc}")
             time.sleep(10)
