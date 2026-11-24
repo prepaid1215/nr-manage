@@ -98,10 +98,10 @@ export async function customTreePage(root, me) {
     });
   const sectionHtml = (id) => {
     const row = model.byId.get(id);
-    return `<section class="ct-sec" data-ct-sec="${safe(id)}"><div class="ct-print-head">${safe(row.userName)} ${safe(id)} ${safe(notes[id] || "")} — 수집 ${safe(collectedText)}</div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b style="font-size:15px">${safe(row.userName)} ${safe(id)}</b> <small class="help">${safe(row.rankName || "")}/${safe(row.rankMaxName || "")} · ${safe(notes[id] || "")}</small><span style="margin-left:auto"></span><button type="button" class="secondary compact" data-ct-print>인쇄</button><button type="button" class="secondary compact" data-ct-close="${safe(id)}" aria-label="닫기">×</button></div><div class="box-tree pannable-tree" style="margin-top:8px"><div class="tree-stage" data-ct-stage="${safe(id)}"></div></div></section>`;
+    return `<section class="ct-sec" data-ct-sec="${safe(id)}"><div class="ct-print-head">${safe(row.userName)} ${safe(id)} ${safe(notes[id] || "")} — 수집 ${safe(collectedText)}</div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b style="font-size:15px">${safe(row.userName)} ${safe(id)}</b> <small class="help">${safe(row.rankName || "")}/${safe(row.rankMaxName || "")} · ${safe(notes[id] || "")}</small><span style="margin-left:auto"></span><button type="button" class="secondary compact" data-ct-full>전체화면</button><button class="secondary compact" type="button" data-ct-print>인쇄</button><button type="button" class="secondary compact" data-ct-close="${safe(id)}" aria-label="닫기">×</button></div><div class="box-tree pannable-tree" style="margin-top:8px"><div class="tree-stage" data-ct-stage="${safe(id)}"></div></div></section>`;
   };
   const composedSectionHtml = () =>
-    `<section class="ct-sec" data-ct-composed><div class="ct-print-head">내가 구성한 계보도 — 불 켠 사람 ${number(picks.size)}명 · 수집 ${safe(collectedText)}</div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><h3 style="margin:0">내가 구성한 계보도</h3><span style="margin-left:auto"></span><button type="button" class="secondary compact" data-ct-print>인쇄</button></div><p class="help">불 켜진 사람만 모았습니다. 켜지 않은 사람은 빠지고, 그 아래 켜진 사람은 윗사람 밑에 붙습니다.</p><div id="ctComposed"></div></section>`;
+    `<section class="ct-sec" data-ct-composed><div class="ct-print-head">내가 구성한 계보도 — 불 켠 사람 ${number(picks.size)}명 · 수집 ${safe(collectedText)}</div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><h3 style="margin:0">내가 구성한 계보도</h3><span style="margin-left:auto"></span><button type="button" class="secondary compact" data-ct-full>전체화면</button><button class="secondary compact" type="button" data-ct-print>인쇄</button></div><p class="help">불 켜진 사람만 모았습니다. 켜지 않은 사람은 빠지고, 그 아래 켜진 사람은 윗사람 밑에 붙습니다.</p><div id="ctComposed"></div></section>`;
   const composedHtml = () => {
     if (!picks.size) return '<p class="help">아직 켠 사람이 없습니다. 위 계보도에서 사람을 눌러 불을 켜 보세요.</p>';
     const lit = litPersonTree(codeView, litCodesOf(persons, picks));
@@ -200,6 +200,13 @@ export async function customTreePage(root, me) {
       if (box) box.checked = false;
       saveRoots();
       drawSections();
+      return;
+    }
+    const fullBtn = event.target.closest("[data-ct-full]");
+    if (fullBtn) {
+      const section = fullBtn.closest(".ct-sec");
+      if (document.fullscreenElement) document.exitFullscreen?.();
+      else section?.requestFullscreen?.().catch(() => {});
       return;
     }
     const printBtn = event.target.closest("[data-ct-print]");

@@ -333,6 +333,8 @@ button:active{transform:translateY(1px)}button:disabled{cursor:not-allowed;opaci
 .box-line-total{display:block;margin-top:2px;font-size:10px;font-weight:800;color:#b3541e}
 .box-lines{display:block;margin-top:2px;font-size:11px;color:#1f5f3a}
 .box-lines b{font-weight:800}
+.ct-sec:fullscreen{background:#fff;padding:12px;overflow:auto}
+.ct-sec:fullscreen .box-tree{max-height:none;height:calc(100vh - 90px)}
 .cl-sec:fullscreen{background:#fff;padding:12px;overflow:auto}
 .cl-sec:fullscreen .box-tree{max-height:none;height:calc(100vh - 90px)}
 .box-grand-total{color:var(--brand2)}

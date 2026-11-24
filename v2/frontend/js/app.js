@@ -17,7 +17,7 @@ import {
 import { closingPage, commissionPage } from "./finance.js?v=20260916-2";
 import { performancePage } from "./performance.js?v=20261124-1";
 import { manualClosePage } from "./manual-close.js?v=20261124-1";
-import { customTreePage } from "./custom-tree.js?v=20261124-1";
+import { customTreePage } from "./custom-tree.js?v=20261124-2";
 import { closingLabPage } from "./closing-lab.js?v=20261124-1";
 import { teamPage } from "./team.js?v=20261101-10";
 import { localDate, monthRange } from "./date.js?v=20260829-25";
