@@ -52,6 +52,9 @@ drop policy if exists nrc_tracked_members_owner_all on public.nrc_tracked_member
 create policy nrc_tracked_members_owner_all on public.nrc_tracked_members
   for all using (owner_id = auth.uid()) with check (owner_id = auth.uid());
 grant select, insert, update, delete on public.nrc_tracked_members to authenticated;
+-- Render 서버(service_role 키)가 수집 작업을 줄 때 등록 목록을 읽는다. 이 권한이 없으면 "permission denied"가 나고
+-- 서버는 수집을 막지 않으려고 빈 목록으로 넘어가므로 등록한 사람이 조회되지 않는다. (RUN_016·RUN_023과 같은 실수)
+grant select on public.nrc_tracked_members to service_role;
 
 -- RUN_051의 함수와 같고, 등록 인원(trackedMembers)을 함께 기록하도록 두 곳만 바꿨다.
 create or replace function public.capture_daily_nrc_metrics(p_date date default null)
