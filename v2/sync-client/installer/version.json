@@ -1,8 +1,8 @@
 {
   "schema": 1,
-  "release": 2026112504,
-  "collectorVersion": "20261125-member-lookup-3",
-  "builtAt": "2026-11-24T09:49:02.898672+00:00",
-  "bytes": 59997592,
-  "sha256": "5bd5badfe9bdb7091201b6854dbe5dd41193c6471e2c95f57558d6e0a8faf0c2"
+  "release": 2026112505,
+  "collectorVersion": "20261125-tracked-members-1",
+  "builtAt": "2026-11-24T10:29:07.186480+00:00",
+  "bytes": 60001992,
+  "sha256": "4f84d0eb8fda55a0c1bfae61332927d5ab34b7b6925b389f146040f8bc71bb19"
 }
