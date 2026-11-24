@@ -61,7 +61,7 @@ assert.equal(lines[0].split(",").length, lines[2].split(",").length, "열 수가
 
 console.log("Records tab tests passed: closing rounds, deltas, csv.");
 
-import { monthDates, nextDate, gridValue, buildGrid, toGridCsv, matchPeople, trackedPeople } from "../js/records-logic.js";
+import { monthDates, nextDate, gridValue, buildGrid, toGridCsv, matchPeople, trackedPeople, kstDate, snapshotRows, withProvisional, FINAL_RULE_START, kstHour, finalPreviewRows } from "../js/records-logic.js";
 assert.equal(monthDates("2026-11").length, 30);
 assert.equal(monthDates("2026-11")[7], "2026-11-08");
 assert.equal(gridValue({ ord_pv: 10, max_pv: 100, min_pv: 5 }, "total"), 115);
@@ -113,4 +113,55 @@ assert.deepEqual([tp[1].code, tp[1].s1.user_id, tp[1].s2], ["2999000", "2999000"
 assert.equal(trackedPeople(tracked, new Set(["2893496"])).length, 1, "이미 기록에 있는 사람은 중복해서 만들지 않는다");
 assert.deepEqual(trackedPeople(null), []);
 assert.equal(matchPeople(tp, "주영돈")[0].code, "2893496", "등록한 사람도 이름으로 찾는다");
+// 오늘 칸 미리 보기
+assert.equal(kstDate("2026-11-24T10:00:00Z"), "2026-11-24");
+assert.equal(kstDate("2026-11-24T16:00:00Z"), "2026-11-25", "한국시간 자정이 지나면 다음 날");
+const snap = {
+  collected_at: "2026-11-24T10:44:25Z",
+  payload: {
+    members: [{ userId: "11", ordPv: "5", maxPv: "100", minPv: "20", lineMetricsVersion: 2, lineMetricsAvailable: { realLines: true, consumerTotalLines: false }, realLines: 0, consumerTotalLines: 9 }],
+    trackedMembers: [{ userId: "2893497", ordPv: 0, maxPv: 125000, minPv: 8100, lineMetricsVersion: 2, lineMetricsAvailable: { realLines: true }, realLines: 4 }],
+  },
+};
+const pr = snapshotRows(snap, ["11", "2893497", "999", "", null], "2026-11-24");
+assert.deepEqual(pr.map((r) => r.user_id), ["11", "2893497"], "수집 결과에 없는 코드는 만들지 않는다");
+assert.equal(pr[0].real_lines, 0, "표시된 실제 0 회선은 0");
+assert.equal(pr[0].consumer_total_lines, null, "읽지 못한 값은 null");
+assert.equal(pr[1].max_pv, 125000, "등록한 사람(trackedMembers)도 읽는다");
+assert.deepEqual(snapshotRows(snap, ["11"], "2026-11-25"), [], "수집이 오늘이 아니면 미리 보기를 만들지 않는다");
+assert.deepEqual(snapshotRows(null, ["11"], "2026-11-24"), []);
+assert.deepEqual(snapshotRows({ collected_at: snap.collected_at, payload: "{bad" }, ["11"], "2026-11-24"), []);
+assert.equal(snapshotRows({ collected_at: snap.collected_at, payload: JSON.stringify(snap.payload) }, ["11"], "2026-11-24").length, 1, "payload가 문자열이어도 읽는다");
+const official = [{ metric_date: "2026-11-24", user_id: "11", ord_pv: 1, max_pv: 777, min_pv: 1, real_lines: 1 }];
+const merged = withProvisional(official, pr);
+assert.equal(merged.rows.find((r) => r.user_id === "11").max_pv, 777, "공식 기록은 덮어쓰지 않는다");
+assert.deepEqual([...merged.provisional], ["2026-11-24|2893497"], "공식 기록이 없는 칸만 미리 보기");
+// 최종마감 기록 규칙
+const pp = [{ code: "10", name: "홍길동", s1: "11", s2: "12" }];
+const dailyRows = [
+  { metric_date: "2026-11-23", user_id: "11", ord_pv: 0, max_pv: 100, min_pv: 1, real_lines: 1 },
+  { metric_date: "2026-11-24", user_id: "11", ord_pv: 0, max_pv: 200, min_pv: 2, real_lines: 1 },
+  { metric_date: "2026-11-30", user_id: "11", ord_pv: 0, max_pv: 300, min_pv: 3, real_lines: 1 },
+  { metric_date: "2026-12-01", user_id: "11", ord_pv: 0, max_pv: 999, min_pv: 9, real_lines: 1 },
+];
+const finals = [{ metric_date: "2026-11-30", user_id: "11", ord_pv: 0, max_pv: 350, min_pv: 5, real_lines: 1 }];
+const dates = monthDates("2026-11");
+const grid1 = buildGrid(dailyRows, pp, dates, "max_pv", finals);
+const finalOf = (grid, date) => grid.find((row) => row.final && row.date === date);
+assert.equal(FINAL_RULE_START, "2026-11-25");
+assert.equal(finalOf(grid1, "2026-11-23").cells[0], 200, "규칙 시작 전 마감일은 이전 규칙(다음 날 기록)을 그대로 보여 준다");
+assert.equal(finalOf(grid1, "2026-11-23").strict, false);
+assert.equal(finalOf(grid1, "2026-11-30").cells[0], 350, "규칙 시작 후 마감일은 최종마감 기록만 쓴다");
+assert.equal(finalOf(grid1, "2026-11-30").strict, true);
+assert.equal(grid1.find((row) => !row.final && row.date === "2026-11-30").cells[0], 300, "마감일의 일반 줄은 일반 기록");
+const grid2 = buildGrid(dailyRows, pp, dates, "max_pv", []);
+assert.equal(finalOf(grid2, "2026-11-30").cells[0], null, "시간대에 수집이 없으면 다음 날 일반 기록으로 채우지 않고 비운다");
+assert.equal(finalOf(buildGrid(dailyRows, pp, dates, "max_pv"), "2026-11-30").cells[0], 999, "RUN_053 적용 전(finalRows 없음)에는 이전 규칙");
+// 새벽 시간대 미리 보기
+assert.equal(kstHour("2026-11-30T16:30:00Z"), 1, "한국시간 새벽 1시");
+const dawn = { collected_at: "2026-11-30T16:30:00Z", payload: { members: [{ userId: "11", ordPv: 0, maxPv: 777, minPv: 7 }] } };
+assert.equal(finalPreviewRows(dawn, ["11"], "2026-11-30")[0].max_pv, 777, "마감 다음날 0~6시 수집은 최종마감 미리 보기");
+assert.equal(finalPreviewRows(dawn, ["11"], "2026-11-30")[0].metric_date, "2026-11-30");
+assert.deepEqual(finalPreviewRows({ ...dawn, collected_at: "2026-11-30T21:30:00Z" }, ["11"], "2026-11-30"), [], "오전 6시 30분 수집은 시간대 밖");
+assert.deepEqual(finalPreviewRows({ ...dawn, collected_at: "2026-11-30T10:00:00Z" }, ["11"], "2026-11-30"), [], "마감 당일 저녁 수집은 최종마감이 아님");
 console.log("Records grid tests passed.");

@@ -533,3 +533,5 @@ button:active{transform:translateY(1px)}button:disabled{cursor:not-allowed;opaci
 .rc-lookup-head{display:flex;flex-wrap:wrap;gap:10px;align-items:baseline;margin-bottom:6px}.rc-lookup-head a{margin-left:auto;color:var(--danger);text-decoration:none;font-size:18px}
 .rc-addbox[hidden]{display:none}
 .rc-lookup-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}.rc-lookup-actions button{width:auto;margin:0}
+.rc-prov{color:#7f84a8;font-style:italic;background:#f5f6ff}.rc-closing .rc-prov,.rc-final .rc-prov{background:transparent}
+.schedule-warn{color:#9a5a00}

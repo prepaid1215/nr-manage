@@ -19,7 +19,8 @@ import { performancePage } from "./performance.js?v=20261124-1";
 import { manualClosePage } from "./manual-close.js?v=20261124-1";
 import { customTreePage } from "./custom-tree.js?v=20261124-2";
 import { closingLabPage } from "./closing-lab.js?v=20261124-1";
-import { recordsPage } from "./records.js?v=20261125-14";
+import { recordsPage } from "./records.js?v=20261125-17";
+import { scheduleTimeNote } from "./schedule-hint.js?v=20261125-17";
 import { teamPage } from "./team.js?v=20261101-10";
 import { localDate, monthRange } from "./date.js?v=20260829-25";
 import { memberLineMetrics } from "./line-metrics.js?v=20261108-2";
@@ -1104,7 +1105,7 @@ async function settings(initialView = "profile") {
           refreshToken: session.refresh_token,
           expiresIn: session.expires_in,
         }),
-        targetAddressSpace: "local",
+        // 주의: POST에 targetAddressSpace를 붙이면 Chrome이 본 요청을 보내지 않고(Failed to fetch) 연결 오류가 난다.
       }).catch(() => {
         throw Error(
           "NRC Sync 프로그램에 연결할 수 없습니다. 이 컴퓨터에 설치·실행 중인지 확인해 주세요.",
@@ -1171,7 +1172,7 @@ async function settings(initialView = "profile") {
 }
 async function collection() {
   $("content").innerHTML =
-    `<div class="view-tabs settings-tabs"><button data-settings-jump="profile" type="button">내 정보</button><button data-settings-jump="connection" type="button">수집 PC</button><button class="active" type="button">수집</button><button data-settings-jump="account" type="button">계정</button></div><section class="card"><div class="section-head"><div><h2>공유 PC 수집 승인</h2><p class="help">NRC 로그인정보를 암호화해 보관하고, 승인된 온라인 Windows PC에 수집할 때만 전달합니다. <b>본인 계정뿐 아니라 하위 사업자의 NRC 아이디도 여기에 추가하면, 매번 그 사람이 직접 로그인하지 않아도 한 번에 같이 매출을 받아볼 수 있습니다.</b></p></div><button class="secondary compact" id="cloudCredentialAddToggle" type="button" hidden>+ 계정 추가</button></div><div id="cloudCredentialList" class="schedule-list"></div><form id="cloudCredentialForm"><label>NRC 홈페이지 아이디<input id="cloudLoginId" autocomplete="off" required></label><label>NRC 홈페이지 비밀번호<input id="cloudPassword" type="password" autocomplete="new-password" required></label><button class="primary" id="cloudCredentialSave" type="submit">공유 PC 수집 승인·저장</button></form><div id="cloudCredentialStatus" class="connection-status">공유 수집 승인 상태 확인 중...</div><div id="cloudCredentialError" class="error"></div></section><section class="card"><h2>NRC 데이터 수집</h2><p class="help">승인된 PC 중 현재 켜져 있는 한 대가 계보·NV·소비자회선을 수집합니다. 모든 PC가 꺼져 있으면 요청은 대기합니다.</p><form id="collectForm"><label>수집할 NRC 계정<select id="nrcSourceAccount" required><option value="">승인 계정 확인 중...</option></select></label><button class="primary" id="nrcRun" type="submit">매출 데이터 받기</button></form><div id="nrcStatus" class="connection-status">수집 준비</div><div id="nrcError" class="error"></div></section><section class="card"><h2>공유 PC 자동수집 예약</h2><p class="help">지정 시간에 켜져 있는 승인 PC 한 대가 자동 수집합니다.</p><form id="scheduleForm"><label>예약 이름<input id="scheduleLabel" placeholder="예: 주하루 오전 수집" required></label><label>NRC 계정<select id="scheduleSourceAccount" required><option value="">승인 계정 확인 중...</option></select></label><label>반복 방식<select id="scheduleFrequency"><option value="daily">매일</option><option value="weekly">매주</option><option value="monthly">매월(특정 날짜)</option><option value="closing">마감일 마감값 (8·15·23·말일 자정 직후)</option></select></label><p id="scheduleClosingHelp" class="help" hidden>마감일(8일·15일·23일·말일) 밤 매출이 끝난 뒤 자정 이후에 한 번 수집합니다. 그래서 실행은 마감 다음 날인 매월 9일·16일·24일·1일에 잡히고, 시간은 00:10을 권장합니다.</p><label id="scheduleWeekdayField" hidden>요일<select id="scheduleWeekday"><option value="0">일요일</option><option value="1">월요일</option><option value="2">화요일</option><option value="3">수요일</option><option value="4">목요일</option><option value="5">금요일</option><option value="6">토요일</option></select></label><label id="scheduleMonthDaysField" hidden>실행일<input id="scheduleMonthDays" placeholder="예: 8,15,23,말일"><small class="help">쉼표로 여러 날짜, "말일"은 매달 마지막 날</small></label><label>실행 시간<input id="scheduleTime" type="time" required></label><button class="primary" type="submit">자동수집 예약 저장</button></form><div id="scheduleList" class="schedule-list"></div><div id="scheduleError" class="error"></div></section><section class="card"><h2>최근 수집 요청</h2><div id="jobList" class="schedule-list"><p class="help">요청 내역을 불러오는 중...</p></div></section>`;
+    `<div class="view-tabs settings-tabs"><button data-settings-jump="profile" type="button">내 정보</button><button data-settings-jump="connection" type="button">수집 PC</button><button class="active" type="button">수집</button><button data-settings-jump="account" type="button">계정</button></div><section class="card"><div class="section-head"><div><h2>공유 PC 수집 승인</h2><p class="help">NRC 로그인정보를 암호화해 보관하고, 승인된 온라인 Windows PC에 수집할 때만 전달합니다. <b>본인 계정뿐 아니라 하위 사업자의 NRC 아이디도 여기에 추가하면, 매번 그 사람이 직접 로그인하지 않아도 한 번에 같이 매출을 받아볼 수 있습니다.</b></p></div><button class="secondary compact" id="cloudCredentialAddToggle" type="button" hidden>+ 계정 추가</button></div><div id="cloudCredentialList" class="schedule-list"></div><form id="cloudCredentialForm"><label>NRC 홈페이지 아이디<input id="cloudLoginId" autocomplete="off" required></label><label>NRC 홈페이지 비밀번호<input id="cloudPassword" type="password" autocomplete="new-password" required></label><button class="primary" id="cloudCredentialSave" type="submit">공유 PC 수집 승인·저장</button></form><div id="cloudCredentialStatus" class="connection-status">공유 수집 승인 상태 확인 중...</div><div id="cloudCredentialError" class="error"></div></section><section class="card"><h2>NRC 데이터 수집</h2><p class="help">승인된 PC 중 현재 켜져 있는 한 대가 계보·NV·소비자회선을 수집합니다. 모든 PC가 꺼져 있으면 요청은 대기합니다.</p><form id="collectForm"><label>수집할 NRC 계정<select id="nrcSourceAccount" required><option value="">승인 계정 확인 중...</option></select></label><button class="primary" id="nrcRun" type="submit">매출 데이터 받기</button></form><div id="nrcStatus" class="connection-status">수집 준비</div><div id="nrcError" class="error"></div></section><section class="card"><h2>공유 PC 자동수집 예약</h2><p class="help">지정 시간에 켜져 있는 승인 PC 한 대가 자동 수집합니다.</p><form id="scheduleForm"><label>예약 이름<input id="scheduleLabel" placeholder="예: 주하루 오전 수집" required></label><label>NRC 계정<select id="scheduleSourceAccount" required><option value="">승인 계정 확인 중...</option></select></label><label>반복 방식<select id="scheduleFrequency"><option value="daily">매일</option><option value="weekly">매주</option><option value="monthly">매월(특정 날짜)</option><option value="closing">마감일 마감값 (8·15·23·말일 자정 직후)</option></select></label><p id="scheduleClosingHelp" class="help" hidden>마감일(8일·15일·23일·말일) 밤 매출이 끝난 뒤 자정 이후에 한 번 수집합니다. 그래서 실행은 마감 다음 날인 매월 9일·16일·24일·1일에 잡히고, 시간은 00:10을 권장합니다.</p><label id="scheduleWeekdayField" hidden>요일<select id="scheduleWeekday"><option value="0">일요일</option><option value="1">월요일</option><option value="2">화요일</option><option value="3">수요일</option><option value="4">목요일</option><option value="5">금요일</option><option value="6">토요일</option></select></label><label id="scheduleMonthDaysField" hidden>실행일<input id="scheduleMonthDays" placeholder="예: 8,15,23,말일"><small class="help">쉼표로 여러 날짜, "말일"은 매달 마지막 날</small></label><label>실행 시간<input id="scheduleTime" type="time" required></label><p id="scheduleTimeHelp" class="help" hidden></p><button class="primary" type="submit">자동수집 예약 저장</button></form><div id="scheduleList" class="schedule-list"></div><div id="scheduleError" class="error"></div></section><section class="card"><h2>최근 수집 요청</h2><div id="jobList" class="schedule-list"><p class="help">요청 내역을 불러오는 중...</p></div></section>`;
   $("cloudCredentialForm").onsubmit = saveCloudCredential;
   $("cloudCredentialAddToggle").onclick = () => {
     $("cloudCredentialForm").hidden = false;
@@ -1186,7 +1187,9 @@ async function collection() {
     $("scheduleMonthDaysField").hidden = frequency !== "monthly";
     $("scheduleClosingHelp").hidden = frequency !== "closing";
     if (frequency === "closing" && !$("scheduleTime").value) $("scheduleTime").value = "00:10";
+    updateScheduleTimeHelp();
   };
+  $("scheduleTime").oninput = updateScheduleTimeHelp;
   document
     .querySelectorAll("[data-settings-jump]")
     .forEach(
@@ -1679,6 +1682,14 @@ const safe = (value) =>
       ],
   );
 const WEEKDAY_NAMES = ["일", "월", "화", "수", "목", "금", "토"];
+function updateScheduleTimeHelp() {
+  const box = $("scheduleTimeHelp");
+  if (!box) return;
+  const note = scheduleTimeNote($("scheduleFrequency").value, $("scheduleTime").value);
+  box.hidden = !note.text;
+  box.textContent = note.text;
+  box.classList.toggle("schedule-warn", note.warn);
+}
 function scheduleFrequencyLabel(item) {
   if (item.frequency === "weekly")
     return `매주 ${WEEKDAY_NAMES[item.weekday] || "?"}요일`;
@@ -1764,6 +1775,7 @@ async function addSchedule(e) {
     $("scheduleWeekdayField").hidden = true;
     $("scheduleMonthDaysField").hidden = true;
     $("scheduleClosingHelp").hidden = true;
+    updateScheduleTimeHelp();
     await loadSchedules();
   } catch (err) {
     error.textContent = friendlyError(err);

@@ -1,5 +1,5 @@
 import { supabase } from "./supabase.js?v=20260829-34";
-import { closingRound, withDeltas, toPeopleCsv, labelCodes, groupPeople, personValue, GRID_METRICS, monthDates, nextDate, buildGrid, toGridCsv, matchPeople, trackedPeople } from "./records-logic.js?v=20261125-14";
+import { closingRound, withDeltas, toPeopleCsv, labelCodes, groupPeople, personValue, GRID_METRICS, monthDates, nextDate, buildGrid, toGridCsv, matchPeople, trackedPeople, kstDate, snapshotRows, withProvisional, finalPreviewRows, FINAL_RULE_START, closingRound as closingRoundOf } from "./records-logic.js?v=20261125-17";
 
 // 기록 탭: 매일 저장된 코드별 대실적·소실적·실회선을 날짜별로 보고 엑셀(CSV)로 내려받는다.
 // 표는 nrc_daily_metrics(RUN_051)에서 읽는다. 내 계정 자료만 보인다(RLS).
@@ -27,8 +27,11 @@ export async function recordsPage(root, me, tools = {}) {
   const $ = (id) => document.getElementById(id);
   const state = { account: "", date: "", rows: [], sort: { key: "code", dir: 1 }, query: "", showMain: false, tracked: [] };
 
+  // RUN_053의 record_kind 열이 있으면 일반 기록('daily')만 날짜별 기록으로 읽는다. 아직 없으면 필터 없이 이전 방식으로 읽는다.
+  const dailyOnly = (query) => (state.noKind ? query : query.eq("record_kind", "daily"));
+
   const latest = async (account) => {
-    let query = supabase.from("nrc_daily_metrics").select("metric_date,source_account_id").eq("owner_id", me.id);
+    let query = dailyOnly(supabase.from("nrc_daily_metrics").select("metric_date,source_account_id").eq("owner_id", me.id));
     if (account) query = query.eq("source_account_id", account);
     const { data, error } = await query.order("metric_date", { ascending: false }).limit(PAGE);
     if (error) throw error;
@@ -36,14 +39,14 @@ export async function recordsPage(root, me, tools = {}) {
   };
 
   const nearDate = async (account, date, direction) => {
-    const query = supabase.from("nrc_daily_metrics").select("metric_date").eq("owner_id", me.id).eq("source_account_id", account);
+    const query = dailyOnly(supabase.from("nrc_daily_metrics").select("metric_date").eq("owner_id", me.id).eq("source_account_id", account));
     const { data, error } = await (direction < 0 ? query.lt("metric_date", date).order("metric_date", { ascending: false }) : query.gt("metric_date", date).order("metric_date", { ascending: true })).limit(1);
     if (error) throw error;
     return data?.[0]?.metric_date || "";
   };
 
   const loadDay = async (account, date) =>
-    fetchAll(() => supabase.from("nrc_daily_metrics").select(COLUMNS).eq("owner_id", me.id).eq("source_account_id", account).eq("metric_date", date).order("user_id"));
+    fetchAll(() => dailyOnly(supabase.from("nrc_daily_metrics").select(COLUMNS).eq("owner_id", me.id).eq("source_account_id", account).eq("metric_date", date)).order("user_id"));
 
   // 표에 등록한 사람(RUN_052의 nrc_tracked_members). 표가 아직 없으면 빈 목록으로 보고 등록 기능만 막는다.
   const loadTracked = async () => {
@@ -55,6 +58,28 @@ export async function recordsPage(root, me, tools = {}) {
       return;
     }
     state.tracked = data || [];
+  };
+
+  // 오늘 칸 미리 보기용 최신 수집 결과. 실패하면 미리 보기만 없을 뿐 표는 그대로 쓴다. 60초 동안 다시 읽지 않는다.
+  const latestSnapshot = async () => {
+    const cached = state.snapshot;
+    if (cached && cached.account === state.account && Date.now() - cached.at < 60000) return cached.data;
+    let data = null;
+    try {
+      const result = await supabase
+        .from("nrc_sync_snapshots")
+        .select("collected_at,payload")
+        .eq("owner_id", me.id)
+        .eq("source_account_id", state.account)
+        .eq("snapshot_type", "combined")
+        .order("collected_at", { ascending: false })
+        .limit(1);
+      if (!result.error) data = result.data?.[0] || null;
+    } catch {
+      data = null;
+    }
+    state.snapshot = { account: state.account, at: Date.now(), data };
+    return data;
   };
 
   const sortValue = (person, key) => {
@@ -156,6 +181,8 @@ export async function recordsPage(root, me, tools = {}) {
   };
 
   try {
+    const probe = await supabase.from("nrc_daily_metrics").select("record_kind").limit(1);
+    state.noKind = Boolean(probe.error);
     const recent = await latest("");
     if (!recent.length) {
       $("rcInfo").textContent = "아직 저장된 기록이 없습니다. 자동수집 예약이 돌고 자정이 지나면 첫 기록이 쌓입니다.";
@@ -163,7 +190,7 @@ export async function recordsPage(root, me, tools = {}) {
     }
     const accounts = [...new Set(recent.map((row) => row.source_account_id))].sort();
     $("rcInfo").textContent = "매일 저장된 사람별 서브1·서브2의 대실적·소실적·회선수입니다. 이전 기록일과 비교한 증감이 함께 나옵니다.";
-    $("rcBody").innerHTML = `<div class="view-tabs"><button class="active" id="rcTabDay" type="button">날짜별 보기</button><button id="rcTabOne" type="button">하루 보기</button></div><div id="rcGridPane"><div class="rc-controls"><label>기간(월)<input id="rcMonth" type="month"></label><label>값<select id="rcMetric">${GRID_METRICS.map(([key, label]) => `<option value="${key}">${label}</option>`).join("")}</select></label><button class="secondary compact" id="rcGridCsv" type="button">엑셀(CSV) 내려받기</button></div><div class="rc-ptabs" id="rcPTabs"></div><div id="rcAddBox" class="rc-addbox" hidden><input id="rcAddPerson" list="rcPeopleList" placeholder="이름 입력 (목록에 없으면 NRC에서 검색)" autocomplete="off"><button class="secondary compact" id="rcNrcFind" type="button">NRC에서 찾기</button><datalist id="rcPeopleList"></datalist></div><p class="help" id="rcLookupStatus"></p><div id="rcLookup"></div><div class="rc-wrap" id="rcGridTable"></div><p class="help">"전체" 탭은 탭으로 열어 둔 사람들의 서브1·서브2를 한 표로 보여 주고, 이름 탭은 그 사람만 보여 줍니다. 이름 탭 끝의 ×는 탭 닫기, +는 사람 추가입니다. 10단계 밖의 하위는 "NRC에서 찾기"로 찾은 뒤 "표에 등록"하면 다음 수집부터 매일 기록됩니다. 노란 줄은 마감일(8일·15일·23일·말일)입니다. 기록이 없는 날은 "-"입니다. 기록은 매일 한 번 쌓이므로 처음에는 비어 있고 날이 지날수록 채워집니다.</p></div><div id="rcDayPane" hidden><div class="rc-controls"><label>계정<select id="rcAccount">${accounts.map((a) => `<option value="${safe(a)}">${safe(a)}</option>`).join("")}</select></label><div class="rc-datebox"><button class="secondary compact" id="rcPrev" type="button">◀ 이전</button><input id="rcDate" type="date"><button class="secondary compact" id="rcNext" type="button">다음 ▶</button></div><label>검색<input id="rcSearch" placeholder="이름 또는 코드"></label><label class="check"><input id="rcMain" type="checkbox"> 본코드도 보기</label><button class="secondary compact" id="rcCsv" type="button">엑셀(CSV) 내려받기</button></div><p class="help"><span id="rcRound"></span> <span id="rcMeta"></span> · <span id="rcCount"></span></p><div class="rc-wrap" id="rcTable"></div><p class="help">증감은 바로 이전에 기록된 날짜와 비교한 값입니다. 실회선이 "미수집"이면 그날 읽지 못한 값이며 0과 다릅니다. 마감일은 8일·15일·23일·말일입니다. 본코드는 마감 계산에만 쓰여서 기본으로 숨겼습니다(“본코드도 보기”로 표시). 이름 아래 작은 숫자는 본코드 번호입니다.</p></div>`;
+    $("rcBody").innerHTML = `<div class="view-tabs"><button class="active" id="rcTabDay" type="button">날짜별 보기</button><button id="rcTabOne" type="button">하루 보기</button></div><div id="rcGridPane"><div class="rc-controls"><label>기간(월)<input id="rcMonth" type="month"></label><label>값<select id="rcMetric">${GRID_METRICS.map(([key, label]) => `<option value="${key}">${label}</option>`).join("")}</select></label><button class="secondary compact" id="rcGridCsv" type="button">엑셀(CSV) 내려받기</button></div><div class="rc-ptabs" id="rcPTabs"></div><div id="rcAddBox" class="rc-addbox" hidden><input id="rcAddPerson" list="rcPeopleList" placeholder="이름 입력 (목록에 없으면 NRC에서 검색)" autocomplete="off"><button class="secondary compact" id="rcNrcFind" type="button">NRC에서 찾기</button><datalist id="rcPeopleList"></datalist></div><p class="help" id="rcLookupStatus"></p><div id="rcLookup"></div><div class="rc-wrap" id="rcGridTable"></div><p class="help">"전체" 탭은 탭으로 열어 둔 사람들의 서브1·서브2를 한 표로 보여 주고, 이름 탭은 그 사람만 보여 줍니다. 이름 탭 끝의 ×는 탭 닫기, +는 사람 추가입니다. 10단계 밖의 하위는 "NRC에서 찾기"로 찾은 뒤 "표에 등록"하면 다음 수집부터 매일 기록됩니다. 노란 줄은 마감일(8일·15일·23일·말일)입니다. 기록이 없는 날은 "-"입니다. 오늘 칸은 오늘 수집한 최신 값을 회색 기울임으로 미리 보여 주고, 공식 기록이 만들어지면 그 값으로 바뀝니다. 날짜 칸은 그날 저녁 6시~자정에 마지막으로 수집한 값이고, 마감일 아래의 "최종마감" 줄은 마감 다음날 0~6시에 마지막으로 수집한 값입니다. 공식 기록은 다음 날 오전 6시 30분 이후에 만들어지며, 그 시간대에 수집이 없으면 "-"로 둡니다. 기록은 매일 한 번 쌓이므로 처음에는 비어 있고 날이 지날수록 채워집니다.</p></div><div id="rcDayPane" hidden><div class="rc-controls"><label>계정<select id="rcAccount">${accounts.map((a) => `<option value="${safe(a)}">${safe(a)}</option>`).join("")}</select></label><div class="rc-datebox"><button class="secondary compact" id="rcPrev" type="button">◀ 이전</button><input id="rcDate" type="date"><button class="secondary compact" id="rcNext" type="button">다음 ▶</button></div><label>검색<input id="rcSearch" placeholder="이름 또는 코드"></label><label class="check"><input id="rcMain" type="checkbox"> 본코드도 보기</label><button class="secondary compact" id="rcCsv" type="button">엑셀(CSV) 내려받기</button></div><p class="help"><span id="rcRound"></span> <span id="rcMeta"></span> · <span id="rcCount"></span></p><div class="rc-wrap" id="rcTable"></div><p class="help">증감은 바로 이전에 기록된 날짜와 비교한 값입니다. 실회선이 "미수집"이면 그날 읽지 못한 값이며 0과 다릅니다. 마감일은 8일·15일·23일·말일입니다. 본코드는 마감 계산에만 쓰여서 기본으로 숨겼습니다(“본코드도 보기”로 표시). 이름 아래 작은 숫자는 본코드 번호입니다.</p></div>`;
 
     const first = async (account) => {
       const rows = await latest(account);
@@ -286,19 +313,50 @@ export async function recordsPage(root, me, tools = {}) {
       try {
         const dates = monthDates(grid.month);
         const codes = people.flatMap((p) => [p.s1, p.s2]).filter(Boolean);
-        const rows = await fetchAll(() =>
-          supabase.from("nrc_daily_metrics").select(COLUMNS).eq("owner_id", me.id).eq("source_account_id", state.account).in("user_id", codes).gte("metric_date", dates[0]).lte("metric_date", nextDate(dates[dates.length - 1])).order("metric_date"),
+        const officialRows = await fetchAll(() =>
+          dailyOnly(supabase.from("nrc_daily_metrics").select(COLUMNS).eq("owner_id", me.id).eq("source_account_id", state.account).in("user_id", codes).gte("metric_date", dates[0]).lte("metric_date", nextDate(dates[dates.length - 1]))).order("metric_date"),
         );
+        // 마감일의 최종마감 값은 마감 다음날 0~6시 수집으로 만든 별도 기록(record_kind='final')이다.
+        let officialFinal = null;
+        if (!state.noKind) {
+          officialFinal = await fetchAll(() =>
+            supabase.from("nrc_daily_metrics").select(COLUMNS).eq("owner_id", me.id).eq("source_account_id", state.account).eq("record_kind", "final").in("user_id", codes).gte("metric_date", dates[0]).lte("metric_date", dates[dates.length - 1]).order("metric_date"),
+          );
+        }
+        // 오늘이 표 범위(최종마감 줄이 쓰는 다음 날 포함)에 들면, 오늘 수집한 최신 값을 공식 기록이 없는 칸에만 미리 채운다.
+        const today = kstDate(new Date());
+        let rows = officialRows;
+        let provisional = new Set();
+        let finalRows = officialFinal;
+        let finalProvisional = new Set();
+        const snapshotNeeded = (today >= dates[0] && today <= nextDate(dates[dates.length - 1])) || (finalRows && dates.some((date) => closingRoundOf(date) && date >= FINAL_RULE_START && nextDate(date) === today));
+        if (snapshotNeeded) {
+          const snapshot = await latestSnapshot();
+          if (today >= dates[0] && today <= nextDate(dates[dates.length - 1])) ({ rows, provisional } = withProvisional(officialRows, snapshotRows(snapshot, codes, today)));
+          if (finalRows) {
+            const preview = dates.filter((date) => closingRoundOf(date) && date >= FINAL_RULE_START).flatMap((date) => finalPreviewRows(snapshot, codes, date));
+            ({ rows: finalRows, provisional: finalProvisional } = withProvisional(officialFinal, preview));
+          }
+        }
+        const cellCodes = people.flatMap((p) => [p.s1, p.s2]);
         const metricLabel = GRID_METRICS.find(([key]) => key === grid.metric)?.[1].split(" ")[0] || "";
         const unit = grid.metric === "real_lines" ? "회선" : "";
-        const data = buildGrid(rows, people, dates, grid.metric);
+        const data = buildGrid(rows, people, dates, grid.metric, finalRows);
         grid.last = { data, people, metricLabel, everyone };
         // 마감일은 두 줄: 그날 줄 + 바로 아래 "최종마감N차"(마감일 다음날 0시 기록).
-        const cell = (value) => (value == null ? '<td class="num rc-na">-</td>' : `<td class="num">${number(value)}${unit}</td>`);
+        const previewTip = "수집한 최신 값(진행 중)입니다. 공식 기록(다음 날 오전 6시 30분 이후)이 만들어지면 그 값으로 바뀝니다.";
+        const cell = (value, preview) =>
+          value == null ? '<td class="num rc-na">-</td>' : preview ? `<td class="num rc-prov" title="${previewTip}">${number(value)}${unit}</td>` : `<td class="num">${number(value)}${unit}</td>`;
+        const cells = (row) => {
+          // 새 규칙의 최종마감 줄은 마감일 기준 최종마감 기록을, 이전 규칙의 줄은 다음 날 일반 기록을 쓴다.
+          const set = row.final && row.strict ? finalProvisional : provisional;
+          const cellDate = row.final && !row.strict ? nextDate(row.date) : row.date;
+          return row.cells.map((value, index) => cell(value, set.has(`${cellDate}|${cellCodes[index]}`))).join("");
+        };
         const dayRows = (row) =>
           row.final
-            ? `<tr class="rc-final"><td class="rc-dayno">최종마감${row.round}차<small>${safe(nextDate(row.date))} 기록</small></td>${row.cells.map(cell).join("")}</tr>`
-            : `<tr class="${row.round ? "rc-closing" : ""}"><td class="rc-dayno">${safe(row.date)}${row.round ? `<small>${row.round}차 마감일</small>` : ""}</td>${row.cells.map(cell).join("")}</tr>`;
+            ? `<tr class="rc-final"><td class="rc-dayno">최종마감${row.round}차<small>${safe(nextDate(row.date))}${row.strict ? " 새벽(0~6시) 수집" : " 기록"}</small></td>${cells(row)}</tr>`
+            : `<tr class="${row.round ? "rc-closing" : ""}"><td class="rc-dayno">${safe(row.date)}${row.date === today ? "<small>오늘 · 진행 중</small>" : ""}${row.round ? `<small>${row.round}차 마감일</small>` : ""}</td>${cells(row)}</tr>`;
         const head = everyone
           ? `<tr><th rowspan="2" class="rc-stick">날짜</th>${people.map((p) => `<th colspan="2" class="rc-group">${safe(p.name || p.code)}</th>`).join("")}</tr><tr>${people.map((p) => `<th class="num">서브1<small class="rc-d">${safe(p.s1 || "-")}</small></th><th class="num">서브2<small class="rc-d">${safe(p.s2 || "-")}</small></th>`).join("")}</tr>`
           : `<tr><th class="rc-stick">날짜</th>${people.map((p) => `<th class="num">서브1 ${safe(metricLabel)}<small class="rc-d">${safe(p.s1 || "-")}</small></th><th class="num">서브2 ${safe(metricLabel)}<small class="rc-d">${safe(p.s2 || "-")}</small></th>`).join("")}</tr>`;
@@ -419,7 +477,7 @@ export async function recordsPage(root, me, tools = {}) {
         renderGridPickers();
         drawGrid();
         renderLookups();
-        $("rcLookupStatus").textContent = "표에 등록했습니다. 다음 수집부터 함께 조회해 기록하고, 첫 기록은 수집을 마친 다음 날 오전 9시 이후에 생깁니다.";
+        $("rcLookupStatus").textContent = "표에 등록했습니다. 다음 수집부터 함께 조회해 기록하고, 첫 기록은 등록 뒤 저녁(18~24시) 수집을 마친 다음 날 오전 6시 30분 이후에 생깁니다.";
       } catch (error) {
         const message = String(error.message || error);
         $("rcError").textContent = /nrc_tracked_members|schema cache|does not exist/.test(message)

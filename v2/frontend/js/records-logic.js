@@ -123,15 +123,24 @@ export function nextDate(dateText) {
   return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
 }
 
+// 최종마감 기록 규칙(RUN_053)이 시작된 날짜. 이 날짜부터의 마감일은 "마감 다음날 0~6시 수집"으로 만든 최종마감 기록만 쓰고,
+// 그 전 마감일은 이전 규칙(다음 날 기록)을 그대로 보여 준다.
+export const FINAL_RULE_START = "2026-11-25";
+
 // 마감일 줄 바로 아래에 "최종마감N차" 줄(final: true)을 하나 더 둔다.
-// 최종마감 값은 마감일이 지나고 자정 뒤에 저장된 다음날 0시 기록이다. 그 기록이 없으면 null.
-export function buildGrid(rows, people, dates, metric) {
-  const byKey = new Map(rows.map((row) => [`${row.metric_date}|${row.user_id}`, row]));
-  const cellsOn = (date) => people.flatMap((p) => [p.s1, p.s2].map((code) => gridValue(code ? byKey.get(`${date}|${code}`) : null, metric)));
+// finalRows(최종마감 기록, record_kind='final')가 있으면 규칙 시작일 이후의 마감일은 그 기록만 쓰고 없으면 null.
+// finalRows가 null(RUN_053 적용 전)이거나 규칙 시작일 이전 마감일은 이전 규칙대로 다음 날의 일반 기록을 쓴다.
+export function buildGrid(rows, people, dates, metric, finalRows = null) {
+  const keyed = (list) => new Map(list.map((row) => [`${row.metric_date}|${row.user_id}`, row]));
+  const byKey = keyed(rows);
+  const finalByKey = finalRows ? keyed(finalRows) : null;
+  const cellsFrom = (map, date) => people.flatMap((p) => [p.s1, p.s2].map((code) => gridValue(code ? map.get(`${date}|${code}`) : null, metric)));
   return dates.flatMap((date) => {
     const round = closingRound(date);
-    const line = { date, round, cells: cellsOn(date) };
-    return round ? [line, { date, round, final: true, cells: cellsOn(nextDate(date)) }] : [line];
+    const line = { date, round, cells: cellsFrom(byKey, date) };
+    if (!round) return [line];
+    const strict = finalByKey && date >= FINAL_RULE_START;
+    return [line, { date, round, final: true, strict: Boolean(strict), cells: strict ? cellsFrom(finalByKey, date) : cellsFrom(byKey, nextDate(date)) }];
   });
 }
 
@@ -181,4 +190,65 @@ export function trackedPeople(tracked, knownCodes = new Set()) {
     });
   }
   return people;
+}
+
+// ---- 오늘(진행 중) 칸 미리 보기 ----
+// 공식 기록은 하루가 끝난 뒤 다음 날 오전 6시 30분 이후에 만들어진다(저녁 18~24시 수집 기준). 그 전에는 오늘 칸이 비므로, 오늘 수집한 최신 결과로
+// 미리 채워 보여 준다. 공식 기록이 있는 칸은 절대 덮어쓰지 않고, 공식 기록이 생기면 그 값으로 바뀐다.
+export function kstDate(value) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value));
+}
+
+// snapshot: { collected_at, payload }. 수집 시각이 오늘(한국시간)이 아니면 빈 목록(어제 값을 오늘 값처럼 보이지 않게).
+export function snapshotRows(snapshot, codes, today) {
+  if (!snapshot || !snapshot.collected_at || kstDate(snapshot.collected_at) !== today) return [];
+  let payload = snapshot.payload;
+  if (typeof payload === "string") {
+    try {
+      payload = JSON.parse(payload);
+    } catch {
+      return [];
+    }
+  }
+  if (!payload) return [];
+  const byId = new Map();
+  for (const member of [...(payload.members || []), ...(payload.trackedMembers || [])]) byId.set(String(member.userId), member);
+  const lines = (member, field) =>
+    Number(member.lineMetricsVersion || 0) >= 2 && member.lineMetricsAvailable?.[field] === true && member[field] != null ? Number(member[field]) : null;
+  const rows = [];
+  for (const code of new Set((codes || []).filter(Boolean).map(String))) {
+    const member = byId.get(code);
+    if (!member) continue;
+    rows.push({
+      metric_date: today,
+      user_id: code,
+      ord_pv: Number(member.ordPv || 0),
+      max_pv: Number(member.maxPv || 0),
+      min_pv: Number(member.minPv || 0),
+      real_lines: lines(member, "realLines"),
+      consumer_total_lines: lines(member, "consumerTotalLines"),
+    });
+  }
+  return rows;
+}
+
+// 공식 기록(rows)에 없는 (날짜|코드)만 미리 보기 값(extra)으로 채운다. provisional: 미리 보기로 채운 칸의 키 집합.
+export function withProvisional(rows, extra) {
+  const have = new Set(rows.map((row) => `${row.metric_date}|${row.user_id}`));
+  const added = (extra || []).filter((row) => !have.has(`${row.metric_date}|${row.user_id}`));
+  return { rows: [...rows, ...added], provisional: new Set(added.map((row) => `${row.metric_date}|${row.user_id}`)) };
+}
+
+// ---- 최종마감 미리 보기 ----
+// 최종마감 값은 마감 다음날 00:00~06:00에 수집한 마지막 결과다. 공식 기록(오전 6시 30분 이후 생성) 전에는 그 시간대에
+// 수집한 최신 결과로 미리 보여 준다. 시간대 밖의 수집은 쓰지 않는다.
+export function kstHour(value) {
+  return Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Seoul", hour: "2-digit", hourCycle: "h23" }).format(new Date(value)));
+}
+
+export function finalPreviewRows(snapshot, codes, closingDate) {
+  if (!snapshot || !snapshot.collected_at) return [];
+  if (kstDate(snapshot.collected_at) !== nextDate(closingDate) || kstHour(snapshot.collected_at) >= 6) return [];
+  // 같은 규칙으로 값을 읽되, 날짜는 마감일로 둔다.
+  return snapshotRows(snapshot, codes, nextDate(closingDate)).map((row) => ({ ...row, metric_date: closingDate }));
 }
