@@ -135,6 +135,30 @@ class DeviceControlTests(unittest.TestCase):
         self.assertEqual(response.status_code,401)
         self.assertEqual(self.db.call_count,1)
 
+    def claim_with_tracked(self, tracked_result):
+        job = dict(id=JOB, owner_id=OWNER, source_account_id='qndnjsqlsim')
+        self.db.side_effect = [[self.device],[job],{'ok':True},tracked_result]
+        with patch.object(service,'load_credentials',return_value={'loginId':'qndnjsqlsim','password':'pw'}):
+            return self.client.post('/worker/claim',json={'deviceId':DEVICE,'lineMetricsVersion':2,'collectorVersion':'new'})
+
+    def test_claim_hands_the_registered_members_to_the_pc(self):
+        response = self.claim_with_tracked([
+            {'user_id':'2893496','user_name':'주영돈','rank_cd':'25','rank_name':'골드'},
+            {'user_id':'abc','user_name':'bad'},
+        ])
+        self.assertEqual(response.status_code,200)
+        self.assertEqual(response.json['job']['trackedMembers'],
+                         [{'userId':'2893496','userName':'주영돈','rankCd':'25','rankName':'골드'}])
+        query = self.db.call_args_list[-1].args[0]
+        self.assertIn('nrc_tracked_members?owner_id=eq.'+OWNER,query)
+        self.assertIn('source_account_id=eq.qndnjsqlsim',query)
+
+    def test_claim_still_works_when_the_registered_members_table_is_missing(self):
+        response = self.claim_with_tracked(RuntimeError('relation nrc_tracked_members does not exist'))
+        self.assertEqual(response.status_code,200)
+        self.assertEqual(response.json['job']['trackedMembers'],[])
+        self.assertEqual(response.json['job']['sourceAccountId'],'qndnjsqlsim')
+
     def test_completion_uses_atomic_rpc(self):
         self.db.side_effect = [[self.device],{'ok':True}]
         worker = service.pc_worker_id(OWNER,DEVICE)

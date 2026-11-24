@@ -12,6 +12,7 @@ import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import quote
 
 import requests
 from cryptography.fernet import Fernet, InvalidToken
@@ -460,6 +461,33 @@ def load_credentials(owner_id, source_account_id):
         raise RuntimeError("저장된 NRC 로그인 정보를 복호화할 수 없습니다.") from exc
 
 
+def load_tracked_members(owner_id, source_account_id):
+    """수집 때 함께 조회할 '표에 등록한 하위 회원' 목록(RUN_052의 nrc_tracked_members).
+
+    표가 아직 없거나 조회에 실패해도 수집 자체는 막지 않는다. 빈 목록을 돌려준다.
+    """
+    try:
+        rows = admin_request(
+            f"nrc_tracked_members?owner_id=eq.{owner_id}&source_account_id=eq.{quote(str(source_account_id), safe='')}"
+            "&select=user_id,user_name,rank_cd,rank_name&order=created_at"
+        ) or []
+    except Exception as exc:
+        print(f"등록 회원 목록을 읽지 못해 건너뜁니다: {exc}")
+        return []
+    tracked = []
+    for row in rows[:150]:
+        user_id = str(row.get("user_id") or "")
+        if not user_id.isdigit():
+            continue
+        tracked.append({
+            "userId": user_id,
+            "userName": str(row.get("user_name") or "")[:30],
+            "rankCd": str(row.get("rank_cd") or "")[:4],
+            "rankName": str(row.get("rank_name") or "")[:20],
+        })
+    return tracked
+
+
 def pc_worker_id(user_id, device_id):
     clean_device_id = str(device_id or "").strip()
     if len(clean_device_id) < 8:
@@ -508,6 +536,7 @@ def worker_claim():
             raise
         admin_request("rpc/start_pc_sync_job", "POST", {
             "p_actor":user["id"], "p_device":device_id, "p_job":job["id"]})
+        tracked_members = load_tracked_members(job["owner_id"], job["source_account_id"])
         return jsonify(
             {
                 "ok": True,
@@ -516,6 +545,7 @@ def worker_claim():
                     "ownerId": job["owner_id"],
                     "sourceAccountId": job["source_account_id"],
                     "credentials": credentials,
+                    "trackedMembers": tracked_members,
                     "leaseToken": lease_token(job["id"], worker_id),
                 },
             }
