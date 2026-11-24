@@ -19,7 +19,7 @@ import { performancePage } from "./performance.js?v=20261124-1";
 import { manualClosePage } from "./manual-close.js?v=20261124-1";
 import { customTreePage } from "./custom-tree.js?v=20261124-2";
 import { closingLabPage } from "./closing-lab.js?v=20261124-1";
-import { recordsPage } from "./records.js?v=20261125-11";
+import { recordsPage } from "./records.js?v=20261125-12";
 import { teamPage } from "./team.js?v=20261101-10";
 import { localDate, monthRange } from "./date.js?v=20260829-25";
 import { memberLineMetrics } from "./line-metrics.js?v=20261108-2";
@@ -427,7 +427,7 @@ async function show(page, options) {
   if (page === "checklist") return checklistPage($("content"), me);
   if (page === "organization") return organizationDashboard();
   if (page === "mytree") return customTreePage($("content"), me);
-  if (page === "records") return recordsPage($("content"), me, { localApi });
+  if (page === "records") return recordsPage($("content"), me, { lookupMember: lookupMemberOnPc });
   if (page === "performance") {
     $("content").innerHTML =
       '<div class="view-tabs perf-subtabs"><button class="active" data-ptab="close" type="button">마감 계산</button><button data-ptab="lab" type="button">추천·제외</button><button data-ptab="sum" type="button">목표합 추천</button></div><div id="perfClose"><div id="mcHost"></div><details class="card" id="oldCalc" style="margin:8px 0"><summary><b>자동 추천 계산기 (기존 방식)</b></summary><div id="oldCalcHost"></div></details></div><div id="perfLab" hidden></div><div id="perfSum" hidden></div>';
@@ -1221,6 +1221,27 @@ async function localApi(path, options = {}) {
     requestError.status = response.status;
     throw requestError;
   }
+  return data;
+}
+// 이 PC의 NRC Sync가 이름으로 내 산하 회원을 NRC에서 찾는다(10단계 밖 포함). 앱 로그인 토큰으로 호출자를 확인한다.
+// 주의: POST에 targetAddressSpace를 붙이면 Chrome이 요청을 보내지 않고 Failed to fetch가 되므로 붙이지 않는다.
+async function lookupMemberOnPc(name) {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) throw Error("앱 로그인 세션이 만료되었습니다. 다시 로그인해 주세요.");
+  let response;
+  try {
+    response = await fetch(`${LOCAL_SYNC}/lookup/member`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accessToken: session.access_token, name }),
+    });
+  } catch {
+    throw Error("이 PC의 NRC Sync에 연결할 수 없습니다. NRC Sync가 실행 중인지 확인하고, Chrome의 로컬 네트워크 접근을 허용한 뒤 새로고침해 주세요.");
+  }
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.ok) throw Error(data.message || "NRC에서 회원을 찾지 못했습니다.");
   return data;
 }
 async function cloudApi(path, options = {}) {

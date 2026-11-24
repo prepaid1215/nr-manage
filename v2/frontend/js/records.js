@@ -1,5 +1,5 @@
 import { supabase } from "./supabase.js?v=20260829-34";
-import { closingRound, withDeltas, toPeopleCsv, labelCodes, groupPeople, personValue, GRID_METRICS, monthDates, nextDate, buildGrid, toGridCsv, matchPeople } from "./records-logic.js?v=20261125-11";
+import { closingRound, withDeltas, toPeopleCsv, labelCodes, groupPeople, personValue, GRID_METRICS, monthDates, nextDate, buildGrid, toGridCsv, matchPeople } from "./records-logic.js?v=20261125-12";
 
 // 기록 탭: 매일 저장된 코드별 대실적·소실적·실회선을 날짜별로 보고 엑셀(CSV)로 내려받는다.
 // 표는 nrc_daily_metrics(RUN_051)에서 읽는다. 내 계정 자료만 보인다(RLS).
@@ -338,7 +338,7 @@ export async function recordsPage(root, me, tools = {}) {
     const nrcLookup = async (rawName) => {
       const name = String(rawName || "").trim();
       if (!name || lookingUp) return;
-      if (!tools.localApi) {
+      if (!tools.lookupMember) {
         $("rcError").textContent = "NRC 검색을 사용할 수 없습니다. 페이지를 새로고침해 주세요.";
         return;
       }
@@ -347,11 +347,7 @@ export async function recordsPage(root, me, tools = {}) {
       $("rcError").textContent = "";
       $("rcLookupStatus").textContent = `NRC에서 "${name}"을(를) 찾는 중입니다. 로그인부터 하므로 30초~1분 걸립니다...`;
       try {
-        const result = await tools.localApi("/api/member-lookup", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, appUserId: me.id }),
-        });
+        const result = await tools.lookupMember(name);
         lookups.unshift({ name: result.name || name, payDate: result.payDate, total: result.total || 0, members: result.members || [], at: Date.now() });
         renderLookups();
         $("rcAddPerson").value = "";
