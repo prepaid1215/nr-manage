@@ -151,3 +151,34 @@ export function matchPeople(people, text) {
   if (exact.length) return exact;
   return people.filter((p) => label(p).includes(query));
 }
+
+// 표에 등록한 사람(nrc_tracked_members)을 기록 목록의 '사람'과 같은 모양으로 만든다.
+// 등록한 뒤 기록이 쌓이기 전에도 표에 열이 보이도록 한다. knownCodes: 이미 기록에서 묶인 본코드 번호 집합(중복 방지).
+// 서브가 없는 단독 코드는 서브1 열 하나로 보여 준다.
+export function trackedPeople(tracked, knownCodes = new Set()) {
+  const groups = new Map();
+  for (const row of tracked || []) {
+    const code = String(row.group_id || row.user_id);
+    if (!groups.has(code)) groups.set(code, []);
+    groups.get(code).push(row);
+  }
+  const people = [];
+  for (const [code, rows] of groups) {
+    if (knownCodes.has(code)) continue;
+    const byRole = (role) => rows.find((row) => row.role === role);
+    const main = byRole("본") || rows.find((row) => String(row.user_id) === code) || rows[0];
+    const sub1 = byRole("서브1");
+    const sub2 = byRole("서브2");
+    const id = (row) => (row ? { user_id: String(row.user_id) } : undefined);
+    people.push({
+      code,
+      name: main.user_name || rows.find((row) => row.user_name)?.user_name || code,
+      rank: main.rank_name || "",
+      main: id(main),
+      s1: id(sub1) || (sub2 ? undefined : id(main)),
+      s2: id(sub2),
+      tracked: true,
+    });
+  }
+  return people;
+}

@@ -532,3 +532,4 @@ button:active{transform:translateY(1px)}button:disabled{cursor:not-allowed;opaci
 .rc-lookup{margin:10px 0;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#fbfbff}
 .rc-lookup-head{display:flex;flex-wrap:wrap;gap:10px;align-items:baseline;margin-bottom:6px}.rc-lookup-head a{margin-left:auto;color:var(--danger);text-decoration:none;font-size:18px}
 .rc-addbox[hidden]{display:none}
+.rc-lookup-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}.rc-lookup-actions button{width:auto;margin:0}

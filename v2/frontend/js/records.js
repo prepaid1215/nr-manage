@@ -1,5 +1,5 @@
 import { supabase } from "./supabase.js?v=20260829-34";
-import { closingRound, withDeltas, toPeopleCsv, labelCodes, groupPeople, personValue, GRID_METRICS, monthDates, nextDate, buildGrid, toGridCsv, matchPeople } from "./records-logic.js?v=20261125-13";
+import { closingRound, withDeltas, toPeopleCsv, labelCodes, groupPeople, personValue, GRID_METRICS, monthDates, nextDate, buildGrid, toGridCsv, matchPeople, trackedPeople } from "./records-logic.js?v=20261125-14";
 
 // 기록 탭: 매일 저장된 코드별 대실적·소실적·실회선을 날짜별로 보고 엑셀(CSV)로 내려받는다.
 // 표는 nrc_daily_metrics(RUN_051)에서 읽는다. 내 계정 자료만 보인다(RLS).
@@ -25,7 +25,7 @@ async function fetchAll(build) {
 export async function recordsPage(root, me, tools = {}) {
   root.innerHTML = `<section class="card"><div class="section-head"><div><h2>기록</h2><p class="help" id="rcInfo">불러오는 중...</p></div></div><div id="rcError" class="error"></div><div id="rcBody"></div></section>`;
   const $ = (id) => document.getElementById(id);
-  const state = { account: "", date: "", rows: [], sort: { key: "code", dir: 1 }, query: "", showMain: false };
+  const state = { account: "", date: "", rows: [], sort: { key: "code", dir: 1 }, query: "", showMain: false, tracked: [] };
 
   const latest = async (account) => {
     let query = supabase.from("nrc_daily_metrics").select("metric_date,source_account_id").eq("owner_id", me.id);
@@ -44,6 +44,18 @@ export async function recordsPage(root, me, tools = {}) {
 
   const loadDay = async (account, date) =>
     fetchAll(() => supabase.from("nrc_daily_metrics").select(COLUMNS).eq("owner_id", me.id).eq("source_account_id", account).eq("metric_date", date).order("user_id"));
+
+  // 표에 등록한 사람(RUN_052의 nrc_tracked_members). 표가 아직 없으면 빈 목록으로 보고 등록 기능만 막는다.
+  const loadTracked = async () => {
+    state.trackedError = "";
+    const { data, error } = await supabase.from("nrc_tracked_members").select("user_id,user_name,rank_cd,rank_name,role,group_id").eq("owner_id", me.id).eq("source_account_id", state.account);
+    if (error) {
+      state.tracked = [];
+      state.trackedError = error.message || String(error);
+      return;
+    }
+    state.tracked = data || [];
+  };
 
   const sortValue = (person, key) => {
     if (!key.startsWith("sum.")) return personValue(person, key);
@@ -151,7 +163,7 @@ export async function recordsPage(root, me, tools = {}) {
     }
     const accounts = [...new Set(recent.map((row) => row.source_account_id))].sort();
     $("rcInfo").textContent = "매일 저장된 사람별 서브1·서브2의 대실적·소실적·회선수입니다. 이전 기록일과 비교한 증감이 함께 나옵니다.";
-    $("rcBody").innerHTML = `<div class="view-tabs"><button class="active" id="rcTabDay" type="button">날짜별 보기</button><button id="rcTabOne" type="button">하루 보기</button></div><div id="rcGridPane"><div class="rc-controls"><label>기간(월)<input id="rcMonth" type="month"></label><label>값<select id="rcMetric">${GRID_METRICS.map(([key, label]) => `<option value="${key}">${label}</option>`).join("")}</select></label><button class="secondary compact" id="rcGridCsv" type="button">엑셀(CSV) 내려받기</button></div><div class="rc-ptabs" id="rcPTabs"></div><div id="rcAddBox" class="rc-addbox" hidden><input id="rcAddPerson" list="rcPeopleList" placeholder="이름 입력 (목록에 없으면 NRC에서 검색)" autocomplete="off"><button class="secondary compact" id="rcNrcFind" type="button">NRC에서 찾기</button><datalist id="rcPeopleList"></datalist></div><p class="help" id="rcLookupStatus"></p><div id="rcLookup"></div><div class="rc-wrap" id="rcGridTable"></div><p class="help">"전체" 탭은 모든 사람의 서브1·서브2를 한 표로 보여 주고, 이름 탭은 그 사람만 보여 줍니다. 이름 탭 끝의 ×는 탭 닫기, +는 사람 추가입니다. 노란 줄은 마감일(8일·15일·23일·말일)입니다. 기록이 없는 날은 "-"입니다. 기록은 매일 한 번 쌓이므로 처음에는 비어 있고 날이 지날수록 채워집니다.</p></div><div id="rcDayPane" hidden><div class="rc-controls"><label>계정<select id="rcAccount">${accounts.map((a) => `<option value="${safe(a)}">${safe(a)}</option>`).join("")}</select></label><div class="rc-datebox"><button class="secondary compact" id="rcPrev" type="button">◀ 이전</button><input id="rcDate" type="date"><button class="secondary compact" id="rcNext" type="button">다음 ▶</button></div><label>검색<input id="rcSearch" placeholder="이름 또는 코드"></label><label class="check"><input id="rcMain" type="checkbox"> 본코드도 보기</label><button class="secondary compact" id="rcCsv" type="button">엑셀(CSV) 내려받기</button></div><p class="help"><span id="rcRound"></span> <span id="rcMeta"></span> · <span id="rcCount"></span></p><div class="rc-wrap" id="rcTable"></div><p class="help">증감은 바로 이전에 기록된 날짜와 비교한 값입니다. 실회선이 "미수집"이면 그날 읽지 못한 값이며 0과 다릅니다. 마감일은 8일·15일·23일·말일입니다. 본코드는 마감 계산에만 쓰여서 기본으로 숨겼습니다(“본코드도 보기”로 표시). 이름 아래 작은 숫자는 본코드 번호입니다.</p></div>`;
+    $("rcBody").innerHTML = `<div class="view-tabs"><button class="active" id="rcTabDay" type="button">날짜별 보기</button><button id="rcTabOne" type="button">하루 보기</button></div><div id="rcGridPane"><div class="rc-controls"><label>기간(월)<input id="rcMonth" type="month"></label><label>값<select id="rcMetric">${GRID_METRICS.map(([key, label]) => `<option value="${key}">${label}</option>`).join("")}</select></label><button class="secondary compact" id="rcGridCsv" type="button">엑셀(CSV) 내려받기</button></div><div class="rc-ptabs" id="rcPTabs"></div><div id="rcAddBox" class="rc-addbox" hidden><input id="rcAddPerson" list="rcPeopleList" placeholder="이름 입력 (목록에 없으면 NRC에서 검색)" autocomplete="off"><button class="secondary compact" id="rcNrcFind" type="button">NRC에서 찾기</button><datalist id="rcPeopleList"></datalist></div><p class="help" id="rcLookupStatus"></p><div id="rcLookup"></div><div class="rc-wrap" id="rcGridTable"></div><p class="help">"전체" 탭은 탭으로 열어 둔 사람들의 서브1·서브2를 한 표로 보여 주고, 이름 탭은 그 사람만 보여 줍니다. 이름 탭 끝의 ×는 탭 닫기, +는 사람 추가입니다. 10단계 밖의 하위는 "NRC에서 찾기"로 찾은 뒤 "표에 등록"하면 다음 수집부터 매일 기록됩니다. 노란 줄은 마감일(8일·15일·23일·말일)입니다. 기록이 없는 날은 "-"입니다. 기록은 매일 한 번 쌓이므로 처음에는 비어 있고 날이 지날수록 채워집니다.</p></div><div id="rcDayPane" hidden><div class="rc-controls"><label>계정<select id="rcAccount">${accounts.map((a) => `<option value="${safe(a)}">${safe(a)}</option>`).join("")}</select></label><div class="rc-datebox"><button class="secondary compact" id="rcPrev" type="button">◀ 이전</button><input id="rcDate" type="date"><button class="secondary compact" id="rcNext" type="button">다음 ▶</button></div><label>검색<input id="rcSearch" placeholder="이름 또는 코드"></label><label class="check"><input id="rcMain" type="checkbox"> 본코드도 보기</label><button class="secondary compact" id="rcCsv" type="button">엑셀(CSV) 내려받기</button></div><p class="help"><span id="rcRound"></span> <span id="rcMeta"></span> · <span id="rcCount"></span></p><div class="rc-wrap" id="rcTable"></div><p class="help">증감은 바로 이전에 기록된 날짜와 비교한 값입니다. 실회선이 "미수집"이면 그날 읽지 못한 값이며 0과 다릅니다. 마감일은 8일·15일·23일·말일입니다. 본코드는 마감 계산에만 쓰여서 기본으로 숨겼습니다(“본코드도 보기”로 표시). 이름 아래 작은 숫자는 본코드 번호입니다.</p></div>`;
 
     const first = async (account) => {
       const rows = await latest(account);
@@ -199,13 +211,16 @@ export async function recordsPage(root, me, tools = {}) {
         return null;
       }
     };
-    const peopleOf = () => groupPeople(state.rows).people.filter((p) => p.s1 || p.s2);
+    const peopleOf = () => {
+      const recorded = groupPeople(state.rows).people.filter((p) => p.s1 || p.s2);
+      return [...recorded, ...trackedPeople(state.tracked, new Set(recorded.map((p) => p.code)))];
+    };
+    const isTracked = (code) => state.tracked.some((row) => String(row.group_id || row.user_id) === String(code));
     const chosenPeople = () => {
       const all = peopleOf();
       return grid.codes.map((code) => all.find((p) => p.code === code)).filter(Boolean).map((p) => ({ code: p.code, name: p.name, s1: p.s1?.user_id || "", s2: p.s2?.user_id || "" }));
     };
     const activePerson = () => chosenPeople().find((p) => p.code === grid.active) || null;
-    const allPeople = () => peopleOf().map((p) => ({ code: p.code, name: p.name, s1: p.s1?.user_id || "", s2: p.s2?.user_id || "" }));
     const renderGridPickers = () => {
       const all = peopleOf();
       const people = chosenPeople();
@@ -214,7 +229,7 @@ export async function recordsPage(root, me, tools = {}) {
       $("rcPeopleList").innerHTML = all.filter((p) => !grid.codes.includes(p.code)).map((p) => `<option value="${safe(p.name || p.code)} (${safe(p.code)})"></option>`).join("");
       $("rcPTabs").innerHTML = `<div class="rc-ptab${grid.active === ALL ? " active" : ""}"><button type="button" data-rc-tab="${ALL}" title="모든 사람을 한 번에 보기">전체</button></div>${people
         .map((p) => `<div class="rc-ptab${p.code === grid.active ? " active" : ""}"><button type="button" data-rc-tab="${safe(p.code)}">${safe(p.name || p.code)}</button><a href="#" data-rc-del="${safe(p.code)}" title="탭 닫기">×</a></div>`)
-        .join("")}<button type="button" class="rc-ptab-add" id="rcAddTab" title="사람 추가·NRC에서 찾기">+</button>`;
+        .join("")}<button type="button" class="rc-ptab-add" id="rcAddTab" title="사람 추가·NRC에서 찾기">+</button>${grid.active !== ALL && isTracked(grid.active) ? '<button type="button" class="secondary compact" id="rcUntrack" title="이 사람을 매일 기록에서 뺍니다">등록 해제</button>' : ""}`;
       $("rcPTabs").querySelectorAll("[data-rc-tab]").forEach((button) => {
         button.onclick = () => {
           grid.active = button.dataset.rcTab;
@@ -237,14 +252,33 @@ export async function recordsPage(root, me, tools = {}) {
         $("rcAddBox").hidden = !$("rcAddBox").hidden;
         if (!$("rcAddBox").hidden) $("rcAddPerson").focus();
       };
+      if ($("rcUntrack")) $("rcUntrack").onclick = untrack;
+    };
+    const untrack = async () => {
+      const person = activePerson();
+      if (!person) return;
+      if (!confirm(`${person.name || person.code}의 등록을 해제할까요? 앞으로 이 사람은 매일 기록에 추가되지 않습니다. 이미 쌓인 기록은 남습니다.`)) return;
+      try {
+        const { error } = await supabase.from("nrc_tracked_members").delete().eq("owner_id", me.id).eq("source_account_id", state.account).eq("group_id", String(person.code));
+        if (error) throw error;
+        state.tracked = state.tracked.filter((row) => String(row.group_id || row.user_id) !== String(person.code));
+        grid.codes = grid.codes.filter((code) => code !== person.code);
+        grid.active = ALL;
+        saveTabs();
+        renderGridPickers();
+        drawGrid();
+        renderLookups();
+      } catch (error) {
+        $("rcError").textContent = `등록 해제에 실패했습니다: ${error.message || error}`;
+      }
     };
     const drawGrid = async () => {
       const everyone = grid.active === ALL;
       const person = activePerson();
-      const people = everyone ? allPeople() : person ? [person] : [];
+      const people = everyone ? chosenPeople() : person ? [person] : [];
       const target = $("rcGridTable");
       if (!people.length) {
-        target.innerHTML = '<p class="help" style="padding:12px">표시할 사람이 없습니다.</p>';
+        target.innerHTML = '<p class="help" style="padding:12px">표에 올려 둔 사람이 없습니다. 위의 + 로 사람을 추가하거나, 목록에 없으면 "NRC에서 찾기"로 찾아 "표에 등록"하세요.</p>';
         return;
       }
       if (!grid.month) return;
@@ -323,9 +357,28 @@ export async function recordsPage(root, me, tools = {}) {
                 .join("")
             : `<tr><td colspan="9" class="help">내 산하 회원 중 "${safe(item.name)}"을(를) 찾지 못했습니다. 이름이 정확한지 확인해 주세요.</td></tr>`;
           const more = item.total > item.members.length ? ` · 일치 ${number(item.total)}명 중 ${number(item.members.length)}명만 표시` : "";
-          return `<div class="rc-lookup"><div class="rc-lookup-head"><b>NRC 검색: ${safe(item.name)}</b><span class="help">${payLabel(item.payDate)} 마감차수 기준 · ${new Date(item.at).toLocaleTimeString("ko-KR")} 조회${more}</span><a href="#" data-rc-lookup-del="${index}" title="닫기">×</a></div><div class="rc-wrap"><table class="rc-table"><thead><tr><th>구분</th><th>회원번호</th><th>직급</th><th>후원인</th><th class="num">본인NV</th><th class="num">대실적</th><th class="num">소실적</th><th class="num">실회선</th><th class="num">총회선</th></tr></thead><tbody>${body}</tbody></table></div></div>`;
+          const groups = [...new Set(item.members.filter((m) => m.group).map((m) => String(m.group)))];
+          const recordedCodes = new Set(groupPeople(state.rows).people.map((p) => p.code));
+          const registerButtons = groups
+            .map((group) => {
+              const rows = item.members.filter((m) => String(m.group) === group);
+              const label = groups.length > 1 ? ` ${safe(rows.find((m) => m.memberNo)?.memberNo || group)}` : "";
+              if (rows.some((m) => m.error)) return `<span class="help">${label} 일부 코드를 읽지 못해 등록할 수 없습니다. 다시 찾아 주세요.</span>`;
+              if (recordedCodes.has(group)) return `<span class="help">${label} 이미 매일 기록되는 사람입니다.</span>`;
+              if (isTracked(group)) return `<span class="help">${label} 표에 등록됨 ✓ — 다음 수집부터 매일 기록됩니다.</span>`;
+              return `<button class="compact" type="button" data-rc-register="${index}:${safe(group)}">표에 등록${label}</button>`;
+            })
+            .join("");
+          const actions = registerButtons ? `<div class="rc-lookup-actions">${registerButtons}</div>` : "";
+          return `<div class="rc-lookup"><div class="rc-lookup-head"><b>NRC 검색: ${safe(item.name)}</b><span class="help">${payLabel(item.payDate)} 마감차수 기준 · ${new Date(item.at).toLocaleTimeString("ko-KR")} 조회${more}</span><a href="#" data-rc-lookup-del="${index}" title="닫기">×</a></div><div class="rc-wrap"><table class="rc-table"><thead><tr><th>구분</th><th>회원번호</th><th>직급</th><th>후원인</th><th class="num">본인NV</th><th class="num">대실적</th><th class="num">소실적</th><th class="num">실회선</th><th class="num">총회선</th></tr></thead><tbody>${body}</tbody></table></div>${actions}</div>`;
         })
         .join("");
+      $("rcLookup").querySelectorAll("[data-rc-register]").forEach((button) => {
+        button.onclick = () => {
+          const [index, group] = button.dataset.rcRegister.split(":");
+          registerGroup(Number(index), group);
+        };
+      });
       $("rcLookup").querySelectorAll("[data-rc-lookup-del]").forEach((link) => {
         link.onclick = (event) => {
           event.preventDefault();
@@ -333,6 +386,46 @@ export async function recordsPage(root, me, tools = {}) {
           renderLookups();
         };
       });
+    };
+    // 찾은 사람(본·서브1·서브2)을 표에 등록한다. 수집기가 다음 수집부터 함께 조회해 매일 기록한다.
+    const registerGroup = async (index, group) => {
+      const item = lookups[index];
+      const members = (item?.members || []).filter((m) => String(m.group) === String(group));
+      if (!members.length || members.some((m) => m.error)) return;
+      const account = item.sourceAccountId || state.account;
+      if (account !== state.account) {
+        $("rcError").textContent = "지금 보고 있는 계정과 다른 계정으로 찾은 결과라 등록할 수 없습니다. 같은 계정에서 다시 찾아 주세요.";
+        return;
+      }
+      $("rcError").textContent = "";
+      const rows = members.map((m) => ({
+        owner_id: me.id,
+        source_account_id: account,
+        user_id: String(m.userId),
+        user_name: m.userName || item.name,
+        rank_cd: m.rankCd || null,
+        rank_name: m.rankNewName || m.rankName || null,
+        role: m.role,
+        group_id: String(group),
+      }));
+      try {
+        const { error } = await supabase.from("nrc_tracked_members").upsert(rows, { onConflict: "owner_id,source_account_id,user_id" });
+        if (error) throw error;
+        const ids = new Set(rows.map((row) => row.user_id));
+        state.tracked = [...state.tracked.filter((row) => !ids.has(String(row.user_id))), ...rows.map(({ user_id, user_name, rank_cd, rank_name, role, group_id }) => ({ user_id, user_name, rank_cd, rank_name, role, group_id }))];
+        if (!grid.codes.includes(String(group))) grid.codes.push(String(group));
+        grid.active = String(group);
+        saveTabs();
+        renderGridPickers();
+        drawGrid();
+        renderLookups();
+        $("rcLookupStatus").textContent = "표에 등록했습니다. 다음 수집부터 함께 조회해 기록하고, 첫 기록은 수집을 마친 다음 날 오전 9시 이후에 생깁니다.";
+      } catch (error) {
+        const message = String(error.message || error);
+        $("rcError").textContent = /nrc_tracked_members|schema cache|does not exist/.test(message)
+          ? "표에 등록하는 기능이 아직 준비되지 않았습니다. Supabase에서 RUN_052_TRACKED_MEMBERS.sql을 한 번 실행해야 합니다."
+          : `표에 등록하지 못했습니다: ${message}`;
+      }
     };
     let lookingUp = false;
     const nrcLookup = async (rawName) => {
@@ -348,7 +441,7 @@ export async function recordsPage(root, me, tools = {}) {
       $("rcLookupStatus").textContent = `NRC에서 "${name}"을(를) 찾는 중입니다. 로그인부터 하므로 30초~1분 걸립니다...`;
       try {
         const result = await tools.lookupMember(name, state.account);
-        lookups.unshift({ name: result.name || name, payDate: result.payDate, total: result.total || 0, members: result.members || [], at: Date.now() });
+        lookups.unshift({ name: result.name || name, payDate: result.payDate, total: result.total || 0, members: result.members || [], sourceAccountId: result.sourceAccountId || state.account, at: Date.now() });
         renderLookups();
         $("rcAddPerson").value = "";
       } catch (error) {
@@ -404,6 +497,7 @@ export async function recordsPage(root, me, tools = {}) {
     showDay = async (account, date) => {
       const changedAccount = account !== state.account;
       await baseShowDay(account, date);
+      if (changedAccount) await loadTracked();
       if (!grid.month) {
         grid.month = date.slice(0, 7);
         $("rcMonth").value = grid.month;

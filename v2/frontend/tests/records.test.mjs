@@ -61,7 +61,7 @@ assert.equal(lines[0].split(",").length, lines[2].split(",").length, "열 수가
 
 console.log("Records tab tests passed: closing rounds, deltas, csv.");
 
-import { monthDates, nextDate, gridValue, buildGrid, toGridCsv, matchPeople } from "../js/records-logic.js";
+import { monthDates, nextDate, gridValue, buildGrid, toGridCsv, matchPeople, trackedPeople } from "../js/records-logic.js";
 assert.equal(monthDates("2026-11").length, 30);
 assert.equal(monthDates("2026-11")[7], "2026-11-08");
 assert.equal(gridValue({ ord_pv: 10, max_pv: 100, min_pv: 5 }, "total"), 115);
@@ -99,4 +99,18 @@ assert.equal(matchPeople(ppl, "김철").length, 2, "여러 명이면 정하지 �
 assert.equal(matchPeople(ppl, "없는사람").length, 0);
 assert.deepEqual(matchPeople(ppl, "300").map((p) => p.code), ["300"], "코드로도 찾는다");
 assert.equal(matchPeople(ppl, "  ").length, 0);
+const tracked = [
+  { user_id: "2893496", user_name: "주영돈", rank_name: "GD", role: "본", group_id: "2893496" },
+  { user_id: "2893497", user_name: "주영돈", rank_name: "GD", role: "서브1", group_id: "2893496" },
+  { user_id: "2893498", user_name: "주영돈", rank_name: "GD", role: "서브2", group_id: "2893496" },
+  { user_id: "2999000", user_name: "홍단독", rank_name: "회원", role: "단독", group_id: "2999000" },
+];
+const tp = trackedPeople(tracked);
+assert.equal(tp.length, 2, "본·서브1·서브2는 한 사람으로 묶인다");
+assert.deepEqual([tp[0].code, tp[0].name, tp[0].s1.user_id, tp[0].s2.user_id], ["2893496", "주영돈", "2893497", "2893498"]);
+assert.equal(tp[0].tracked, true);
+assert.deepEqual([tp[1].code, tp[1].s1.user_id, tp[1].s2], ["2999000", "2999000", undefined], "단독 코드는 서브1 열 하나");
+assert.equal(trackedPeople(tracked, new Set(["2893496"])).length, 1, "이미 기록에 있는 사람은 중복해서 만들지 않는다");
+assert.deepEqual(trackedPeople(null), []);
+assert.equal(matchPeople(tp, "주영돈")[0].code, "2893496", "등록한 사람도 이름으로 찾는다");
 console.log("Records grid tests passed.");
