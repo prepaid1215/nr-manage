@@ -12,9 +12,9 @@
   "cloudTestsPassed": 32,
   "databaseIntegration": "not rerun; this release has no database change",
   "scope": "Local scan at the recorded time; not a guarantee of all security products or future verdicts",
-  "windowsReplacementTest": "not run before publishing; to be confirmed by the automatic update on a registered PC (failed start rolls back)",
-  "settingsPreservationTest": "not run before publishing; to be confirmed by the automatic update on a registered PC",
-  "installedFileSha256": null,
-  "installedFileScanCompletedAt": null,
-  "installedFileScanDetections": null
+  "windowsReplacementTest": "passed (2026-11-24 18:41 KST, automatic update on a registered PC replaced 2026112502 with 2026112503 and the new version answered /health)",
+  "settingsPreservationTest": "passed (same deviceId, deviceRevoked false, registration and saved data kept after replacement)",
+  "installedFileSha256": "90a64554f5997b542ceeec969275533243872ab528e6374c6ca32780234610df",
+  "installedFileScanCompletedAt": "2026-11-24T18:42:17+09:00",
+  "installedFileScanDetections": 0
 }
