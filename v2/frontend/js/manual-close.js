@@ -5,7 +5,7 @@ import {
   buildPerformanceModel,
   planBalancedSplit,
 } from "./performance-calculator.js?v=20261108-3";
-import { loadExclusions, loadPicks } from "./custom-tree.js?v=20261123-4";
+import { loadExclusions, loadPicks } from "./custom-tree.js?v=20261124-1";
 import { activeExclusions, visibleChildrenMap, buildPersons, codesOutsidePicks } from "./custom-tree-logic.js?v=20261123-1";
 
 // 직접계산: 추천은 하지 않는다. NRC 계보도처럼 박스 그림을 그리고, 박스에 매출(원)을 직접 넣으면
@@ -193,7 +193,7 @@ export async function manualClosePage(root, me) {
   const cardHtml = (row) => {
     const id = String(row.userId);
     const realLines = memberLineMetrics(row).real;
-    return `<div class="box-node" data-mc-card="${safe(id)}" style="min-width:150px"><b>${safe(row.userName || "이름 없음")}</b><small>*${safe(id)}</small><small>${safe(row.rankName || "회원")}/${safe(row.rankMaxName || "회원")}</small><em>본인 ${fmt(row.ordPv)} NV</em><div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 6px;margin-top:4px;text-align:center"><span>서브1</span><span>서브2</span>${val(id, "l0")}${val(id, "l1")}</div><div style="margin-top:4px">실회선 <b>${realLines == null ? "미수집" : `${fmt(realLines)}회선`}</b></div><div style="margin-top:6px"><input type="number" inputmode="numeric" min="0" step="1" placeholder="${unit === "won" ? "매출(원)" : "매출(NV)"}" data-mc-sale="${safe(id)}" value="${safe(shown(id))}" style="width:96px;height:26px;padding:2px 6px;font-size:12px"><small data-mc-won="${safe(id)}" style="display:block"></small></div></div>`;
+    return `<div class="box-node" data-mc-card="${safe(id)}" style="min-width:150px"><b>${safe(row.userName || "이름 없음")}</b><small>${safe(id)}</small><small>${safe(row.rankName || "회원")}/${safe(row.rankMaxName || "회원")}</small><em>본인 ${fmt(row.ordPv)} NV</em><div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 6px;margin-top:4px;text-align:center"><span>서브1</span><span>서브2</span>${val(id, "l0")}${val(id, "l1")}</div><div style="margin-top:4px">실회선 <b>${realLines == null ? "미수집" : `${fmt(realLines)}회선`}</b></div><div style="margin-top:6px"><input type="number" inputmode="numeric" min="0" step="1" placeholder="${unit === "won" ? "매출(원)" : "매출(NV)"}" data-mc-sale="${safe(id)}" value="${safe(shown(id))}" style="width:96px;height:26px;padding:2px 6px;font-size:12px"><small data-mc-won="${safe(id)}" style="display:block"></small></div></div>`;
   };
   const treeHtml = (rid) => {
     const shownKids = visibleChildrenMap(model, excluded, rid);
@@ -215,7 +215,7 @@ export async function manualClosePage(root, me) {
       .map((rid) => {
         const top = model.byId.get(rid);
         const t = targetOf(rid);
-        return `<section data-mc-section="${safe(rid)}" style="margin-top:14px;padding-top:10px;border-top:2px solid #c3cede"><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b style="font-size:15px">${safe(top.userName)} *${safe(rid)}</b> <small>${safe(top.rankName || "")}/${safe(top.rankMaxName || "")}</small><span style="margin-left:auto"></span>${ancestorRoot(rid) ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:13px"><input type="checkbox" data-mc-follow="${safe(rid)}"${followsAbove(rid) ? " checked" : ""} style="width:18px;height:18px;min-height:0;margin:0;padding:0"> 위에서 따라가기</span>` : ""}마감 목표 대 <input type="number" min="0" step="any" style="width:84px" data-mc-tmaj="${safe(rid)}" value="${followsAbove(rid) ? "" : t.major}" placeholder="${followsAbove(rid) ? "자동" : ""}"${followsAbove(rid) ? " readonly" : ""}> 만 / 소 <input type="number" min="0" step="any" style="width:84px" data-mc-tmin="${safe(rid)}" value="${followsAbove(rid) ? "" : t.minor}" placeholder="${followsAbove(rid) ? "자동" : ""}"${followsAbove(rid) ? " readonly" : ""}> 만 <button type="button" class="secondary compact" data-mc-rec-btn="${safe(rid)}">추천 보기</button> <span class="box-zoom"><button type="button" class="secondary compact" data-mc-zoom="out" aria-label="축소">−</button><button type="button" class="secondary compact" data-mc-zoom="reset" data-mc-zoomlabel>${Math.round(zoom * 100)}%</button><button type="button" class="secondary compact" data-mc-zoom="in" aria-label="확대">＋</button></span> <button type="button" class="secondary compact" data-mc-print="${safe(rid)}">🖨 인쇄</button> <button type="button" class="compact" data-mc-unroot="${safe(rid)}" aria-label="이 계보도 닫기" style="min-width:0">×</button></div><div data-mc-rec="${safe(rid)}" style="margin-top:6px"></div><div class="box-tree pannable-tree" style="margin-top:8px"><div class="tree-stage" style="zoom:${zoom}">${treeHtml(rid)}</div></div></section>`;
+        return `<section data-mc-section="${safe(rid)}" style="margin-top:14px;padding-top:10px;border-top:2px solid #c3cede"><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b style="font-size:15px">${safe(top.userName)} ${safe(rid)}</b> <small>${safe(top.rankName || "")}/${safe(top.rankMaxName || "")}</small><span style="margin-left:auto"></span>${ancestorRoot(rid) ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:13px"><input type="checkbox" data-mc-follow="${safe(rid)}"${followsAbove(rid) ? " checked" : ""} style="width:18px;height:18px;min-height:0;margin:0;padding:0"> 위에서 따라가기</span>` : ""}마감 목표 대 <input type="number" min="0" step="any" style="width:84px" data-mc-tmaj="${safe(rid)}" value="${followsAbove(rid) ? "" : t.major}" placeholder="${followsAbove(rid) ? "자동" : ""}"${followsAbove(rid) ? " readonly" : ""}> 만 / 소 <input type="number" min="0" step="any" style="width:84px" data-mc-tmin="${safe(rid)}" value="${followsAbove(rid) ? "" : t.minor}" placeholder="${followsAbove(rid) ? "자동" : ""}"${followsAbove(rid) ? " readonly" : ""}> 만 <button type="button" class="secondary compact" data-mc-rec-btn="${safe(rid)}">추천 보기</button> <span class="box-zoom"><button type="button" class="secondary compact" data-mc-zoom="out" aria-label="축소">−</button><button type="button" class="secondary compact" data-mc-zoom="reset" data-mc-zoomlabel>${Math.round(zoom * 100)}%</button><button type="button" class="secondary compact" data-mc-zoom="in" aria-label="확대">＋</button></span> <button type="button" class="secondary compact" data-mc-print="${safe(rid)}">🖨 인쇄</button> <button type="button" class="compact" data-mc-unroot="${safe(rid)}" aria-label="이 계보도 닫기" style="min-width:0">×</button></div><div data-mc-rec="${safe(rid)}" style="margin-top:6px"></div><div class="box-tree pannable-tree" style="margin-top:8px"><div class="tree-stage" style="zoom:${zoom}">${treeHtml(rid)}</div></div></section>`;
       })
       .join("");
   const drawTrees = () => {
@@ -260,7 +260,7 @@ export async function manualClosePage(root, me) {
         list
           .map(
             ([id, nv]) =>
-              `<span style="display:inline-block;margin:2px 6px 2px 0;padding:1px 8px;border:1px solid #e5e7eb;border-radius:12px">${safe(model.byId.get(id)?.userName || "")} *${safe(id)} <b>${fmt(nv)} NV</b> <button type="button" class="compact" data-mc-clear="${safe(id)}" aria-label="빼기" style="min-width:0;height:20px;padding:0 6px">×</button></span>`,
+              `<span style="display:inline-block;margin:2px 6px 2px 0;padding:1px 8px;border:1px solid #e5e7eb;border-radius:12px">${safe(model.byId.get(id)?.userName || "")} ${safe(id)} <b>${fmt(nv)} NV</b> <button type="button" class="compact" data-mc-clear="${safe(id)}" aria-label="빼기" style="min-width:0;height:20px;padding:0 6px">×</button></span>`,
           )
           .join("")
       : "";
@@ -335,7 +335,7 @@ export async function manualClosePage(root, me) {
       if (majInput) majInput.value = manText(pair.majorNv);
       if (minInput) minInput.value = manText(pair.minorNv);
     }
-    const name = (id) => `${safe(model.byId.get(id)?.userName || "-")} *${safe(id)}`;
+    const name = (id) => `${safe(model.byId.get(id)?.userName || "-")} ${safe(id)}`;
     const blocks = [];
     const list = [];
     if (pair.from) {

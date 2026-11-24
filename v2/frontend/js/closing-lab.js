@@ -86,7 +86,7 @@ export async function closingLabPage(root, me, options = {}) {
     const list = key ? persons.codes.get(key) : null;
     return list && list.length === 3 ? LABEL[list.indexOf(id)] : "단독";
   };
-  const nameOf = (id) => `${safe(rowOf(id)?.userName || "-")} *${safe(id)} ${labelOf(id)}`;
+  const nameOf = (id) => `${safe(rowOf(id)?.userName || "-")} ${safe(id)} ${labelOf(id)}`;
   // 제외하면 그 코드에 넣어 둔 매출도 뺀다(빠진 몫은 다시 계산해서 다른 곳으로 나뉜다).
   const excludeCode = (id) => {
     excl.add(id);
@@ -128,7 +128,7 @@ export async function closingLabPage(root, me, options = {}) {
     const cell = (a, b) => (a === b ? fmt(b) : `<span class="cl-old">${fmt(a)}</span> → <span class="cl-new">${fmt(b)}</span>`);
     const real = memberLineMetrics(row).real;
     const pv = previewOf(id);
-    return `<div class="box-node cl-card${lit.has(id) ? " lit" : ""}${excl.has(id) ? " ex" : ""}${changed ? " chg" : ""}" data-cl-card="${safe(id)}"><b>${safe(row.userName || "이름 없음")}</b><small>*${safe(id)} · ${labelOf(id)}</small><small>${safe(row.rankName || "회원")}/${safe(row.rankMaxName || "회원")}</small><em>본인 ${fmt(row.ordPv)} NV</em><div class="cl-g2"><span>서브1</span><span>서브2</span><b>${cell(before.lines[0], now.lines[0])}</b><b>${cell(before.lines[1], now.lines[1])}</b></div><div style="margin-top:4px">실회선 <b>${real == null ? "미수집" : `${fmt(real)}회선`}</b></div>${pv ? `<span class="cl-pv">추천 +${fmt(pv)}원</span>` : ""}${excl.has(id) ? '<span class="cl-exl">제외됨 (누르면 되돌림)</span>' : ""}<input type="number" min="0" step="1" placeholder="매출(NV)" data-cl-sale="${safe(id)}" value="${safe(sales[id] || "")}"><small>${sales[id] ? `≈ ${fmt(Math.ceil(sales[id] / UNIT_NV) * 1000)}원` : ""}</small></div>`;
+    return `<div class="box-node cl-card${lit.has(id) ? " lit" : ""}${excl.has(id) ? " ex" : ""}${changed ? " chg" : ""}" data-cl-card="${safe(id)}"><b>${safe(row.userName || "이름 없음")}</b><small>${safe(id)} · ${labelOf(id)}</small><small>${safe(row.rankName || "회원")}/${safe(row.rankMaxName || "회원")}</small><em>본인 ${fmt(row.ordPv)} NV</em><div class="cl-g2"><span>서브1</span><span>서브2</span><b>${cell(before.lines[0], now.lines[0])}</b><b>${cell(before.lines[1], now.lines[1])}</b></div><div style="margin-top:4px">실회선 <b>${real == null ? "미수집" : `${fmt(real)}회선`}</b></div>${pv ? `<span class="cl-pv">추천 +${fmt(pv)}원</span>` : ""}${excl.has(id) ? '<span class="cl-exl">제외됨 (누르면 되돌림)</span>' : ""}<input type="number" min="0" step="1" placeholder="매출(NV)" data-cl-sale="${safe(id)}" value="${safe(sales[id] || "")}"><small>${sales[id] ? `≈ ${fmt(Math.ceil(sales[id] / UNIT_NV) * 1000)}원` : ""}</small></div>`;
   };
   const treeHtml = (rid) => {
     const base = {};
@@ -260,7 +260,7 @@ export async function closingLabPage(root, me, options = {}) {
     const inputs = sumMode
       ? `목표합(서브1 + 서브2) <input type="number" data-cl-ttot="${safe(id)}" min="0" step="any" value="${t.total}" style="width:90px"> 만`
       : `마감 목표 대 <input type="number" data-cl-tmaj="${safe(id)}" min="0" step="any" value="${t.major}" style="width:84px"> 만 / 소 <input type="number" data-cl-tmin="${safe(id)}" min="0" step="any" value="${t.minor}" style="width:84px"> 만`;
-    return `<section class="cl-sec" data-cl-sec="${safe(id)}"><div class="cl-print-head">${safe(row.userName)} *${safe(id)} ${labelOf(id)} — 수집 ${safe(new Date(collectedAt).toLocaleString("ko-KR"))}</div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b style="font-size:15px">${safe(row.userName)} *${safe(id)}</b> <small class="help">${safe(row.rankName || "")}/${safe(row.rankMaxName || "")} · ${labelOf(id)}</small><span style="margin-left:auto"></span>${inputs} <button class="secondary compact" data-cl-rec-btn="${safe(id)}" type="button">추천 보기</button><span class="box-zoom"><button class="secondary compact" data-cl-zoom="out" type="button" aria-label="축소">−</button><button class="secondary compact" data-cl-zoom="reset" data-cl-zoomlabel type="button">100%</button><button class="secondary compact" data-cl-zoom="in" type="button" aria-label="확대">＋</button></span><button class="secondary compact" data-cl-reset type="button">입력 초기화</button><button class="secondary compact" data-cl-print type="button">인쇄</button><button class="secondary compact" data-cl-close="${safe(id)}" type="button" aria-label="닫기">×</button></div><div class="cl-body"><div class="cl-main"><div class="box-tree pannable-tree" style="margin-top:8px"><div class="tree-stage" data-cl-stage="${safe(id)}"></div></div></div><aside class="cl-recbox" data-cl-rec="${safe(id)}"></aside></div></section>`;
+    return `<section class="cl-sec" data-cl-sec="${safe(id)}"><div class="cl-print-head">${safe(row.userName)} ${safe(id)} ${labelOf(id)} — 수집 ${safe(new Date(collectedAt).toLocaleString("ko-KR"))}</div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b style="font-size:15px">${safe(row.userName)} ${safe(id)}</b> <small class="help">${safe(row.rankName || "")}/${safe(row.rankMaxName || "")} · ${labelOf(id)}</small><span style="margin-left:auto"></span>${inputs} <button class="secondary compact" data-cl-rec-btn="${safe(id)}" type="button">추천 보기</button><span class="box-zoom"><button class="secondary compact" data-cl-zoom="out" type="button" aria-label="축소">−</button><button class="secondary compact" data-cl-zoom="reset" data-cl-zoomlabel type="button">100%</button><button class="secondary compact" data-cl-zoom="in" type="button" aria-label="확대">＋</button></span><button class="secondary compact" data-cl-full type="button">전체화면</button><button class="secondary compact" data-cl-reset type="button">입력 초기화</button><button class="secondary compact" data-cl-print type="button">인쇄</button><button class="secondary compact" data-cl-close="${safe(id)}" type="button" aria-label="닫기">×</button></div><div class="cl-body"><div class="cl-main"><div class="box-tree pannable-tree" style="margin-top:8px"><div class="tree-stage" data-cl-stage="${safe(id)}"></div></div></div><aside class="cl-recbox" data-cl-rec="${safe(id)}"></aside></div></section>`;
   };
   const drawSections = () => {
     $("clTrees").innerHTML = rids.length ? rootsSorted().map(sectionHtml).join("") : '<p class="help">위 목록에서 맨 위 박스를 체크하면 아래에 그 박스 기준 계보도가 나옵니다.</p>';
@@ -452,6 +452,13 @@ export async function closingLabPage(root, me, options = {}) {
       const kind = zoomBtn.dataset.clZoom;
       zoom = Math.min(1.6, Math.max(0.3, Number((kind === "out" ? zoom - 0.1 : kind === "in" ? zoom + 0.1 : 1).toFixed(2))));
       draw();
+      return;
+    }
+    const fullBtn = event.target.closest("[data-cl-full]");
+    if (fullBtn) {
+      const section = fullBtn.closest("[data-cl-sec]");
+      if (document.fullscreenElement) document.exitFullscreen?.();
+      else section?.requestFullscreen?.().catch(() => {});
       return;
     }
     const floatBtn = event.target.closest("[data-cl-float-toggle]");

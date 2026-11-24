@@ -1,5 +1,5 @@
 import { supabase } from "./supabase.js?v=20260829-34";
-import { boxTreeHtml } from "./box-tree.js?v=20261109-1";
+import { boxTreeHtml } from "./box-tree.js?v=20261124-1";
 import { buildPerformanceModel } from "./performance-calculator.js?v=20261108-3";
 import { buildPersons, litPersonTree, buildCodeView, litCodesOf, codeNotes } from "./custom-tree-logic.js?v=20261123-1";
 
@@ -94,10 +94,11 @@ export async function customTreePage(root, me) {
       notes,
       litIds: litCodesOf(persons, picks),
       hideDate: true,
+      showLines: true,
     });
   const sectionHtml = (id) => {
     const row = model.byId.get(id);
-    return `<section class="ct-sec" data-ct-sec="${safe(id)}"><div class="ct-print-head">${safe(row.userName)} *${safe(id)} ${safe(notes[id] || "")} — 수집 ${safe(collectedText)}</div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b style="font-size:15px">${safe(row.userName)} *${safe(id)}</b> <small class="help">${safe(row.rankName || "")}/${safe(row.rankMaxName || "")} · ${safe(notes[id] || "")}</small><span style="margin-left:auto"></span><button type="button" class="secondary compact" data-ct-print>인쇄</button><button type="button" class="secondary compact" data-ct-close="${safe(id)}" aria-label="닫기">×</button></div><div class="box-tree pannable-tree" style="margin-top:8px"><div class="tree-stage" data-ct-stage="${safe(id)}"></div></div></section>`;
+    return `<section class="ct-sec" data-ct-sec="${safe(id)}"><div class="ct-print-head">${safe(row.userName)} ${safe(id)} ${safe(notes[id] || "")} — 수집 ${safe(collectedText)}</div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b style="font-size:15px">${safe(row.userName)} ${safe(id)}</b> <small class="help">${safe(row.rankName || "")}/${safe(row.rankMaxName || "")} · ${safe(notes[id] || "")}</small><span style="margin-left:auto"></span><button type="button" class="secondary compact" data-ct-print>인쇄</button><button type="button" class="secondary compact" data-ct-close="${safe(id)}" aria-label="닫기">×</button></div><div class="box-tree pannable-tree" style="margin-top:8px"><div class="tree-stage" data-ct-stage="${safe(id)}"></div></div></section>`;
   };
   const composedSectionHtml = () =>
     `<section class="ct-sec" data-ct-composed><div class="ct-print-head">내가 구성한 계보도 — 불 켠 사람 ${number(picks.size)}명 · 수집 ${safe(collectedText)}</div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><h3 style="margin:0">내가 구성한 계보도</h3><span style="margin-left:auto"></span><button type="button" class="secondary compact" data-ct-print>인쇄</button></div><p class="help">불 켜진 사람만 모았습니다. 켜지 않은 사람은 빠지고, 그 아래 켜진 사람은 윗사람 밑에 붙습니다.</p><div id="ctComposed"></div></section>`;
@@ -106,7 +107,7 @@ export async function customTreePage(root, me) {
     const lit = litPersonTree(codeView, litCodesOf(persons, picks));
     const ctx = { byId: model.byId, children: lit.children };
     return lit.tops
-      .map((top) => `<div class="box-tree pannable-tree" style="margin-top:8px"><div class="tree-stage" style="zoom:${zoom}">${boxTreeHtml(ctx, top, { depth: 16, notes, litIds: lit.keep, hideDate: true, clickable: false })}</div></div>`)
+      .map((top) => `<div class="box-tree pannable-tree" style="margin-top:8px"><div class="tree-stage" style="zoom:${zoom}">${boxTreeHtml(ctx, top, { depth: 16, notes, litIds: lit.keep, hideDate: true, showLines: true, clickable: false })}</div></div>`)
       .join("");
   };
   const summary = () =>

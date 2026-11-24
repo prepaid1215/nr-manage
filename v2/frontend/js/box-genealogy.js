@@ -1,5 +1,5 @@
 import { supabase } from "./supabase.js?v=20260829-34";
-import { boxCardHtml, boxTreeHtml } from "./box-tree.js?v=20260831-60";
+import { boxCardHtml, boxTreeHtml } from "./box-tree.js?v=20261124-1";
 import { friendlyError } from "./errors.js?v=20260830-1";
 
 const number = (value) => Number(value || 0).toLocaleString("ko-KR");
@@ -125,7 +125,7 @@ export async function boxGenealogyPage(root) {
       return;
     }
     const parent = focused ? byId.get(String(focused.ppId || "")) : null;
-    $("boxFocusBar").innerHTML = `<span>기준 회원: <b>${safe(focused?.userName || "-")}</b> <small>*${safe(focused?.userId || "")}</small> · 대실적 ${number(focused?.maxPv)} / 소실적 ${number(focused?.minPv)}</span><div>${parent ? '<button class="secondary compact" id="boxUp" type="button">상위 회원으로</button>' : ""}${focused && roots[0] && String(focused.userId) !== String(roots[0].userId) ? '<button class="secondary compact" id="boxTop" type="button">맨 위로</button>' : ""}</div>`;
+    $("boxFocusBar").innerHTML = `<span>기준 회원: <b>${safe(focused?.userName || "-")}</b> <small>${safe(focused?.userId || "")}</small> · 대실적 ${number(focused?.maxPv)} / 소실적 ${number(focused?.minPv)}</span><div>${parent ? '<button class="secondary compact" id="boxUp" type="button">상위 회원으로</button>' : ""}${focused && roots[0] && String(focused.userId) !== String(roots[0].userId) ? '<button class="secondary compact" id="boxTop" type="button">맨 위로</button>' : ""}</div>`;
     $("boxStage").innerHTML = focused
       ? boxTreeHtml(
           { byId, children },

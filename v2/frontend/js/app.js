@@ -15,15 +15,15 @@ import {
   checklistPage,
 } from "./checklist.js?v=20260906-31";
 import { closingPage, commissionPage } from "./finance.js?v=20260916-2";
-import { performancePage } from "./performance.js?v=20261101-1";
-import { manualClosePage } from "./manual-close.js?v=20261109-1";
-import { customTreePage } from "./custom-tree.js?v=20261123-4";
-import { closingLabPage } from "./closing-lab.js?v=20261123-10";
+import { performancePage } from "./performance.js?v=20261124-1";
+import { manualClosePage } from "./manual-close.js?v=20261124-1";
+import { customTreePage } from "./custom-tree.js?v=20261124-1";
+import { closingLabPage } from "./closing-lab.js?v=20261124-1";
 import { teamPage } from "./team.js?v=20261101-10";
 import { localDate, monthRange } from "./date.js?v=20260829-25";
 import { memberLineMetrics } from "./line-metrics.js?v=20261108-2";
 import { friendlyError } from "./errors.js?v=20260830-1";
-import { adminPage, isAppAdmin } from "./admin.js?v=20261108-1";
+import { adminPage, isAppAdmin } from "./admin.js?v=20261124-1";
 import {
   loadManualLinks,
   mergeManualLinks,
@@ -849,7 +849,7 @@ async function organizationDashboard(targetOwner) {
           ),
         sub1 = branchTotal(descendants[0]),
         sub2 = branchTotal(descendants[1]),
-        content = `<b>${safe(item.userName || "이름 없음")}${item.manualLink ? ' <i class="manual-link-badge">수동</i>' : ""}</b><small>*${safe(String(item.userId || "").slice(-6))} · ${safe(item.rankName || "회원")} / ${safe(item.rankMaxName || "회원")}</small><span class="family-own">본인 NV <strong>${number(item.ordPv)}</strong></span><span class="family-sales"><em>서브1 실적<strong>${number(sub1)}</strong></em><em>서브2 실적<strong>${number(sub2)}</strong></em>${sub1 >= sub2 ? `<em>대실적<strong>${number(item.maxPv)}</strong></em><em>소실적<strong>${number(item.minPv)}</strong></em>` : `<em>소실적<strong>${number(item.minPv)}</strong></em><em>대실적<strong>${number(item.maxPv)}</strong></em>`}</span>`;
+        content = `<b>${safe(item.userName || "이름 없음")}${item.manualLink ? ' <i class="manual-link-badge">수동</i>' : ""}</b><small>${safe(String(item.userId || "").slice(-6))} · ${safe(item.rankName || "회원")} / ${safe(item.rankMaxName || "회원")}</small><span class="family-own">본인 NV <strong>${number(item.ordPv)}</strong></span><span class="family-sales"><em>서브1 실적<strong>${number(sub1)}</strong></em><em>서브2 실적<strong>${number(sub2)}</strong></em>${sub1 >= sub2 ? `<em>대실적<strong>${number(item.maxPv)}</strong></em><em>소실적<strong>${number(item.minPv)}</strong></em>` : `<em>소실적<strong>${number(item.minPv)}</strong></em><em>대실적<strong>${number(item.maxPv)}</strong></em>`}</span>`;
       return `<li><button class="family-node" data-member="${safe(item.userId)}" data-tree-focus type="button">${content}</button>${descendants.length ? `<ul>${descendants.map((child) => horizontalTreeNode(child, next)).join("")}</ul>` : ""}</li>`;
     };
     const render = () => {

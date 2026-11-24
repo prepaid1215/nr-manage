@@ -21,7 +21,7 @@ import {
   salesTopUpForDeficit,
   sortMembersDeepestFirst,
 } from "./performance-calculator.js?v=20261031-4";
-import { boxTreeHtml } from "./box-tree.js?v=20261002-1";
+import { boxTreeHtml } from "./box-tree.js?v=20261124-1";
 import {
   addManualLink,
   loadManualLinks,
