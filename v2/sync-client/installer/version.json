@@ -1,8 +1,8 @@
 {
   "schema": 1,
-  "release": 2026110804,
-  "collectorVersion": "20261108-device-control-1",
-  "builtAt": "2026-11-08T08:39:06.161773+00:00",
-  "bytes": 57975332,
-  "sha256": "7748b4919f0794016e7dad0c886202bbdd4f075f35f9aa3955e590891acdc67d"
+  "release": 2026112501,
+  "collectorVersion": "20261125-member-search-1",
+  "builtAt": "2026-11-24T08:54:53.211557+00:00",
+  "bytes": 59994125,
+  "sha256": "f04d3419b871c625510dd2d2856ad7bb2b740a4b2d459ce06a834ce0730081f7"
 }
