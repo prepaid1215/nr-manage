@@ -695,24 +695,44 @@ def sync_combined():
     return jsonify({"ok": ok, "message": message}), 200 if ok else 400
 
 
-@app.route("/api/member-lookup", methods=["POST"])
-def member_lookup():
-    """이름으로 내 산하 회원(10단계 밖 포함)을 NRC에서 찾아 매출 데이터를 돌려준다. 저장하지 않는다."""
+def verify_app_user(access_token):
+    """웹 앱 로그인 토큰이 유효한지 Supabase에 확인하고 사용자 ID를 돌려준다. 무효하면 빈 문자열."""
+    if len(access_token or "") < 20:
+        return ""
+    request_obj = urllib.request.Request(
+        f"{SUPABASE_URL}/auth/v1/user",
+        headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {access_token}"},
+    )
+    try:
+        with urllib.request.urlopen(request_obj, timeout=15) as response:
+            return str(json.loads(response.read().decode("utf-8")).get("id") or "")
+    except Exception:
+        return ""
+
+
+@app.route("/lookup/member", methods=["POST", "OPTIONS"])
+def lookup_member():
+    """이름으로 내 산하 회원(10단계 밖 포함)을 NRC에서 찾아 매출 데이터를 돌려준다. 저장하지 않는다.
+
+    /register-device-auto처럼 웹 앱에 로그인된 Supabase 토큰으로 호출자를 확인한다.
+    (/api/* 경로가 쓰는 연결 코드는 지금 배포에 설정돼 있지 않다.)
+    NRC 계정은 그 사용자가 이 PC에 저장해 둔 것만 쓰고, 비밀번호는 요청으로 받지 않는다.
+    """
+    if request.method == "OPTIONS":
+        return "", 204
     body = request.get_json(silent=True) or {}
     name = str(body.get("name", "")).strip()
     if not name or len(name) > 30:
         return jsonify({"ok": False, "message": "찾을 이름을 1~30자로 입력하세요."}), 400
-    app_user_id = str(body.get("appUserId", ""))
-    login_id = str(body.get("loginId", "")).strip()
-    password = str(body.get("password", ""))
-    saved_text = keyring.get_password(MANUAL_KEYRING_SERVICE, app_user_id) if app_user_id else None
-    if (not login_id or not password) and saved_text:
-        saved = json.loads(saved_text)
-        login_id = login_id or saved.get("loginId", "")
-        password = password or saved.get("password", "")
+    app_user_id = verify_app_user(str(body.get("accessToken", "")))
+    if not app_user_id:
+        return jsonify({"ok": False, "message": "앱 로그인 확인에 실패했습니다. 다시 로그인한 뒤 시도하세요."}), 401
+    saved_text = keyring.get_password(MANUAL_KEYRING_SERVICE, app_user_id)
+    saved = json.loads(saved_text) if saved_text else {}
+    login_id, password = str(saved.get("loginId", "")).strip(), str(saved.get("password", ""))
     if len(login_id) < 3 or len(password) < 4:
         return jsonify({"ok": False, "code": "NO_CREDENTIALS",
-                        "message": "이 PC에 저장된 NRC 아이디·비밀번호가 없습니다. 설정에서 NRC 계정을 저장한 뒤 다시 시도하세요."}), 400
+                        "message": "이 PC에 저장된 NRC 아이디·비밀번호가 없습니다. 이 PC에서 NRC 계정을 저장한 뒤 다시 시도하세요."}), 400
     try:
         result = run_member_lookup(name, login_id, password, str(body.get("payDate", "")).strip() or None)
     except ValueError as exc:
