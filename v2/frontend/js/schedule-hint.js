@@ -47,3 +47,9 @@ function hasRecordSchedule(existing, accountId, spec) {
 export function missingRecordSchedules(existing, accountId) {
   return RECORD_SCHEDULE_DEFAULTS.filter((spec) => !hasRecordSchedule(existing, accountId, spec));
 }
+
+// 저장된 예약이 안내 규칙의 어느 종류(daily/closing/그 밖)인지 알려 준다.
+export function scheduleKind(item) {
+  if (item.frequency === "monthly" && sameClosingDays(item.month_days)) return "closing";
+  return item.frequency;
+}

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { scheduleTimeNote, missingRecordSchedules } from "../js/schedule-hint.js";
+import { scheduleTimeNote, missingRecordSchedules, scheduleKind } from "../js/schedule-hint.js";
 
 // 일일 예약: 저녁 6시~자정만 기록에 쓰인다
 for (const time of ["18:00", "20:30", "23:59"]) {
@@ -29,4 +29,7 @@ assert.deepEqual(missingRecordSchedules([daily, closing], "a"), []);
 assert.equal(missingRecordSchedules([daily, closing], "b").length, 2, "다른 계정은 따로 센다");
 assert.equal(missingRecordSchedules([{ ...daily, run_time: "09:00:00" }], "a").length, 2, "저녁 구간 밖 예약은 기록용으로 안 센다");
 assert.equal(missingRecordSchedules([{ ...daily, enabled: false }], "a").length, 2, "꺼진 예약은 안 센다");
+assert.equal(scheduleKind(daily), "daily");
+assert.equal(scheduleKind(closing), "closing");
+assert.equal(scheduleKind({ frequency: "monthly", month_days: [8, 15] }), "monthly");
 console.log("Schedule hint tests passed.");

@@ -20,7 +20,7 @@ import { manualClosePage } from "./manual-close.js?v=20261124-1";
 import { customTreePage } from "./custom-tree.js?v=20261124-2";
 import { closingLabPage } from "./closing-lab.js?v=20261124-1";
 import { recordsPage } from "./records.js?v=20261125-18";
-import { scheduleTimeNote, missingRecordSchedules } from "./schedule-hint.js?v=20261125-19";
+import { scheduleTimeNote, missingRecordSchedules, scheduleKind } from "./schedule-hint.js?v=20261125-20";
 import { teamPage } from "./team.js?v=20261101-10";
 import { localDate, monthRange } from "./date.js?v=20260829-25";
 import { memberLineMetrics } from "./line-metrics.js?v=20261108-2";
@@ -1727,14 +1727,18 @@ async function loadSchedules() {
       )
       .order("run_time");
     if (error) throw error;
+    scheduleCache = data;
     list.innerHTML = data.length
       ? data
           .map(
             (item) =>
-              `<article class="schedule-item"><div><b>${safe(item.label)}</b><small>${safe(item.source_account_id)} · ${safe(scheduleFrequencyLabel(item))} ${safe(String(item.run_time).slice(0,5))}</small><small>${item.last_enqueued_on ? `최근 요청: ${safe(item.last_enqueued_on)}` : "아직 실행 전"}</small></div><button class="secondary schedule-delete" data-id="${safe(item.id)}" type="button">삭제</button></article>`,
+              `<article class="schedule-item" data-schedule="${safe(item.id)}"><div><b>${safe(item.label)}</b><small>${safe(item.source_account_id)} · ${safe(scheduleFrequencyLabel(item))} ${safe(String(item.run_time).slice(0,5))}</small><small>${item.last_enqueued_on ? `최근 요청: ${safe(item.last_enqueued_on)}` : "아직 실행 전"}</small></div><div style="display:flex;gap:8px"><button class="secondary schedule-edit" data-id="${safe(item.id)}" type="button">수정</button><button class="secondary schedule-delete" data-id="${safe(item.id)}" type="button">삭제</button></div></article>`,
           )
           .join("")
       : '<p class="help">등록된 자동수집 예약이 없습니다.</p>';
+    list
+      .querySelectorAll(".schedule-edit")
+      .forEach((button) => (button.onclick = () => startEditSchedule(button.dataset.id)));
     list
       .querySelectorAll(".schedule-delete")
       .forEach(
@@ -1821,6 +1825,41 @@ async function addDefaultSchedules() {
   } finally {
     button.disabled = false;
   }
+}
+let scheduleCache = [];
+function startEditSchedule(scheduleId) {
+  const item = scheduleCache.find((row) => row.id === scheduleId);
+  const article = $("scheduleList")?.querySelector(`[data-schedule="${scheduleId}"]`);
+  if (!item || !article) return;
+  const kind = scheduleKind(item);
+  article.innerHTML = `<form class="schedule-edit-form" style="display:grid;gap:8px;width:100%"><label>예약 이름<input name="label" required value="${safe(item.label)}"></label><label>실행 시간<input name="time" type="time" required value="${safe(String(item.run_time).slice(0, 5))}"></label><small class="help">${safe(item.source_account_id)} · ${safe(scheduleFrequencyLabel(item))} (반복 방식은 바꿀 수 없습니다. 바꾸려면 삭제 후 새로 만드세요)</small><p class="help schedule-edit-help" hidden></p><div style="display:flex;gap:8px"><button class="primary" type="submit">저장</button><button class="secondary" type="button" data-cancel>취소</button></div></form>`;
+  const form = article.querySelector("form");
+  const help = form.querySelector(".schedule-edit-help");
+  const updateHelp = () => {
+    const note = scheduleTimeNote(kind, form.elements.time.value);
+    help.hidden = !note.text;
+    help.textContent = note.text;
+    help.classList.toggle("schedule-warn", note.warn);
+  };
+  form.elements.time.oninput = updateHelp;
+  updateHelp();
+  form.querySelector("[data-cancel]").onclick = () => loadSchedules();
+  form.onsubmit = async (event) => {
+    event.preventDefault();
+    const error = $("scheduleError");
+    error.textContent = "";
+    try {
+      const { error: saveError } = await supabase
+        .from("nrc_sync_schedules")
+        .update({ label: form.elements.label.value.trim(), run_time: form.elements.time.value })
+        .eq("id", scheduleId);
+      if (saveError) throw saveError;
+      await loadSchedules();
+    } catch (err) {
+      error.textContent = friendlyError(err);
+    }
+  };
+  form.elements.label.focus();
 }
 async function deleteSchedule(scheduleId) {
   if (!confirm("이 자동수집 예약을 삭제할까요?")) return;
