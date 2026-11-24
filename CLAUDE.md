@@ -2,10 +2,11 @@
 
 작업을 시작할 때 다음 문서를 먼저 읽는다.
 
-1. [최신 인계 문서 — 2026-11-09 (추가분)](v2/docs/CLAUDE_CODE_HANDOFF_2026-11-09.md)
-2. [기준 인계 문서 — 2026-11-08](v2/docs/CLAUDE_CODE_HANDOFF_2026-11-08.md)
-3. [기존 작업 기록](v2/docs/HANDOFF.md)
-4. 기능에 따라 `v2/docs/account-recovery.md`, `v2/docs/line-metrics.md`, `v2/docs/closing-calculator.md`
+1. [최신 인계 문서 — 2026-11-24 (기록 탭·NRC 검색·등록 회원·수집기 로그)](v2/docs/CLAUDE_CODE_HANDOFF_2026-11-24.md)
+2. [인계 문서 — 2026-11-09 (추가분)](v2/docs/CLAUDE_CODE_HANDOFF_2026-11-09.md)
+3. [기준 인계 문서 — 2026-11-08](v2/docs/CLAUDE_CODE_HANDOFF_2026-11-08.md)
+4. [기존 작업 기록](v2/docs/HANDOFF.md)
+5. 기능에 따라 `v2/docs/account-recovery.md`, `v2/docs/line-metrics.md`, `v2/docs/closing-calculator.md`, `v2/docs/record-windows.md`, `v2/docs/tracked-members.md`
 
 ## 현재 구조
 
@@ -26,7 +27,8 @@
 ## 개발·배포 주의사항
 
 - 먼저 `git status`와 최근 커밋을 확인하고 사용자 변경을 보존한다.
-- 운영 DB에는 RUN_046~RUN_050 변경이 적용돼 있다. 전체 SQL 재실행이나 DB 초기화를 하지 않는다.
+- 운영 DB에는 RUN_046~RUN_052, RUN_054 변경이 적용돼 있다(RUN_053 적용 여부는 최신 인계 문서에서 확인). 전체 SQL 재실행이나 DB 초기화를 하지 않는다.
+- 새 표를 만들면 `authenticated`뿐 아니라 Render 서버가 쓰는 `service_role`에도 GRANT한다(빠뜨리면 서버가 오류를 삼켜 기능이 조용히 안 된다).
 - 프런트엔드 변경 시 실제 수정 모듈의 import `?v=`와 `index.html`의 앱 버전을 함께 갱신한다.
 - Windows EXE는 `requirements-build.txt`로 만든 별도 환경에서 `build_release.py`로 빌드한다. 후보 파일의 Defender 검사와 해시 검증 후 동일한 파일만 게시한다.
 - 이전 EXE에 실제 Defender 탐지가 있었다. 격리 복원·백신 예외 추가·보호 해제는 하지 않는다.
