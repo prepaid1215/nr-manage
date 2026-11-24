@@ -1,5 +1,5 @@
 import { supabase } from "./supabase.js?v=20260829-34";
-import { closingRound, withDeltas, toPeopleCsv, labelCodes, groupPeople, personValue, GRID_METRICS, monthDates, nextDate, buildGrid, toGridCsv } from "./records-logic.js?v=20261125-8";
+import { closingRound, withDeltas, toPeopleCsv, labelCodes, groupPeople, personValue, GRID_METRICS, monthDates, nextDate, buildGrid, toGridCsv } from "./records-logic.js?v=20261125-9";
 
 // 기록 탭: 매일 저장된 코드별 대실적·소실적·실회선을 날짜별로 보고 엑셀(CSV)로 내려받는다.
 // 표는 nrc_daily_metrics(RUN_051)에서 읽는다. 내 계정 자료만 보인다(RLS).
@@ -151,7 +151,7 @@ export async function recordsPage(root, me) {
     }
     const accounts = [...new Set(recent.map((row) => row.source_account_id))].sort();
     $("rcInfo").textContent = "매일 저장된 사람별 서브1·서브2의 대실적·소실적·회선수입니다. 이전 기록일과 비교한 증감이 함께 나옵니다.";
-    $("rcBody").innerHTML = `<div class="view-tabs"><button class="active" id="rcTabDay" type="button">날짜별 보기</button><button id="rcTabOne" type="button">하루 보기</button></div><div id="rcGridPane"><div class="rc-controls"><label>기간(월)<input id="rcMonth" type="month"></label><label>값<select id="rcMetric">${GRID_METRICS.map(([key, label]) => `<option value="${key}">${label}</option>`).join("")}</select></label><button class="secondary compact" id="rcGridCsv" type="button">엑셀(CSV) 내려받기</button></div><div class="rc-ptabs" id="rcPTabs"></div><select id="rcAddPerson" hidden></select><div class="rc-wrap" id="rcGridTable"></div><p class="help">위의 이름 탭을 누르면 그 사람의 서브1·서브2 기록이 날짜별로 나옵니다. 탭 끝의 ×는 탭 닫기, +는 사람 추가입니다. 노란 줄은 마감일(8일·15일·23일·말일)입니다. 기록이 없는 날은 "-"입니다. 기록은 매일 한 번 쌓이므로 처음에는 비어 있고 날이 지날수록 채워집니다.</p></div><div id="rcDayPane" hidden><div class="rc-controls"><label>계정<select id="rcAccount">${accounts.map((a) => `<option value="${safe(a)}">${safe(a)}</option>`).join("")}</select></label><div class="rc-datebox"><button class="secondary compact" id="rcPrev" type="button">◀ 이전</button><input id="rcDate" type="date"><button class="secondary compact" id="rcNext" type="button">다음 ▶</button></div><label>검색<input id="rcSearch" placeholder="이름 또는 코드"></label><label class="check"><input id="rcMain" type="checkbox"> 본코드도 보기</label><button class="secondary compact" id="rcCsv" type="button">엑셀(CSV) 내려받기</button></div><p class="help"><span id="rcRound"></span> <span id="rcMeta"></span> · <span id="rcCount"></span></p><div class="rc-wrap" id="rcTable"></div><p class="help">증감은 바로 이전에 기록된 날짜와 비교한 값입니다. 실회선이 "미수집"이면 그날 읽지 못한 값이며 0과 다릅니다. 마감일은 8일·15일·23일·말일입니다. 본코드는 마감 계산에만 쓰여서 기본으로 숨겼습니다(“본코드도 보기”로 표시). 이름 아래 작은 숫자는 본코드 번호입니다.</p></div>`;
+    $("rcBody").innerHTML = `<div class="view-tabs"><button class="active" id="rcTabDay" type="button">날짜별 보기</button><button id="rcTabOne" type="button">하루 보기</button></div><div id="rcGridPane"><div class="rc-controls"><label>기간(월)<input id="rcMonth" type="month"></label><label>값<select id="rcMetric">${GRID_METRICS.map(([key, label]) => `<option value="${key}">${label}</option>`).join("")}</select></label><button class="secondary compact" id="rcGridCsv" type="button">엑셀(CSV) 내려받기</button></div><div class="rc-ptabs" id="rcPTabs"></div><select id="rcAddPerson" hidden></select><div class="rc-wrap" id="rcGridTable"></div><p class="help">"전체" 탭은 모든 사람의 서브1·서브2를 한 표로 보여 주고, 이름 탭은 그 사람만 보여 줍니다. 이름 탭 끝의 ×는 탭 닫기, +는 사람 추가입니다. 노란 줄은 마감일(8일·15일·23일·말일)입니다. 기록이 없는 날은 "-"입니다. 기록은 매일 한 번 쌓이므로 처음에는 비어 있고 날이 지날수록 채워집니다.</p></div><div id="rcDayPane" hidden><div class="rc-controls"><label>계정<select id="rcAccount">${accounts.map((a) => `<option value="${safe(a)}">${safe(a)}</option>`).join("")}</select></label><div class="rc-datebox"><button class="secondary compact" id="rcPrev" type="button">◀ 이전</button><input id="rcDate" type="date"><button class="secondary compact" id="rcNext" type="button">다음 ▶</button></div><label>검색<input id="rcSearch" placeholder="이름 또는 코드"></label><label class="check"><input id="rcMain" type="checkbox"> 본코드도 보기</label><button class="secondary compact" id="rcCsv" type="button">엑셀(CSV) 내려받기</button></div><p class="help"><span id="rcRound"></span> <span id="rcMeta"></span> · <span id="rcCount"></span></p><div class="rc-wrap" id="rcTable"></div><p class="help">증감은 바로 이전에 기록된 날짜와 비교한 값입니다. 실회선이 "미수집"이면 그날 읽지 못한 값이며 0과 다릅니다. 마감일은 8일·15일·23일·말일입니다. 본코드는 마감 계산에만 쓰여서 기본으로 숨겼습니다(“본코드도 보기”로 표시). 이름 아래 작은 숫자는 본코드 번호입니다.</p></div>`;
 
     const first = async (account) => {
       const rows = await latest(account);
@@ -181,7 +181,8 @@ export async function recordsPage(root, me) {
       setTimeout(() => URL.revokeObjectURL(link.href), 1000);
     };
     // ---- 날짜별 보기 ----
-    const grid = { codes: [], active: "", month: "", metric: "total" };
+    const ALL = "*all";
+    const grid = { codes: [], active: ALL, month: "", metric: "total" };
     const tabsKey = () => `nrc.records.tabs.${state.account}`;
     const saveTabs = () => {
       try {
@@ -203,17 +204,15 @@ export async function recordsPage(root, me) {
       const all = peopleOf();
       return grid.codes.map((code) => all.find((p) => p.code === code)).filter(Boolean).map((p) => ({ code: p.code, name: p.name, s1: p.s1?.user_id || "", s2: p.s2?.user_id || "" }));
     };
-    const activePerson = () => {
-      const people = chosenPeople();
-      return people.find((p) => p.code === grid.active) || people[0] || null;
-    };
+    const activePerson = () => chosenPeople().find((p) => p.code === grid.active) || null;
+    const allPeople = () => peopleOf().map((p) => ({ code: p.code, name: p.name, s1: p.s1?.user_id || "", s2: p.s2?.user_id || "" }));
     const renderGridPickers = () => {
       const all = peopleOf();
       const people = chosenPeople();
       grid.codes = people.map((p) => p.code);
-      grid.active = activePerson()?.code || "";
+      if (grid.active !== ALL && !activePerson()) grid.active = ALL;
       $("rcAddPerson").innerHTML = `<option value="">사람 고르기...</option>${all.filter((p) => !grid.codes.includes(p.code)).map((p) => `<option value="${safe(p.code)}">${safe(p.name || p.code)} (${safe(p.code)})</option>`).join("")}`;
-      $("rcPTabs").innerHTML = `${people
+      $("rcPTabs").innerHTML = `<div class="rc-ptab${grid.active === ALL ? " active" : ""}"><button type="button" data-rc-tab="${ALL}" title="모든 사람을 한 번에 보기">전체</button></div>${people
         .map((p) => `<div class="rc-ptab${p.code === grid.active ? " active" : ""}"><button type="button" data-rc-tab="${safe(p.code)}">${safe(p.name || p.code)}</button><a href="#" data-rc-del="${safe(p.code)}" title="탭 닫기">×</a></div>`)
         .join("")}<button type="button" class="rc-ptab-add" id="rcAddTab" title="사람 추가"${all.length === people.length ? " disabled" : ""}>+</button>`;
       $("rcPTabs").querySelectorAll("[data-rc-tab]").forEach((button) => {
@@ -228,6 +227,7 @@ export async function recordsPage(root, me) {
         link.onclick = (event) => {
           event.preventDefault();
           grid.codes = grid.codes.filter((code) => code !== link.dataset.rcDel);
+          if (grid.active === link.dataset.rcDel) grid.active = ALL;
           saveTabs();
           renderGridPickers();
           drawGrid();
@@ -239,11 +239,12 @@ export async function recordsPage(root, me) {
       };
     };
     const drawGrid = async () => {
+      const everyone = grid.active === ALL;
       const person = activePerson();
-      const people = person ? [person] : [];
+      const people = everyone ? allPeople() : person ? [person] : [];
       const target = $("rcGridTable");
       if (!people.length) {
-        target.innerHTML = '<p class="help" style="padding:12px">오른쪽 + 버튼으로 사람을 추가하세요.</p>';
+        target.innerHTML = '<p class="help" style="padding:12px">표시할 사람이 없습니다.</p>';
         return;
       }
       if (!grid.month) return;
@@ -257,14 +258,17 @@ export async function recordsPage(root, me) {
         const metricLabel = GRID_METRICS.find(([key]) => key === grid.metric)?.[1].split(" ")[0] || "";
         const unit = grid.metric === "real_lines" ? "회선" : "";
         const data = buildGrid(rows, people, dates, grid.metric);
-        grid.last = { data, people, metricLabel };
+        grid.last = { data, people, metricLabel, everyone };
         // 마감일은 두 줄: 그날 줄 + 바로 아래 "최종마감N차"(마감일 다음날 0시 기록).
         const cell = (value) => (value == null ? '<td class="num rc-na">-</td>' : `<td class="num">${number(value)}${unit}</td>`);
         const dayRows = (row) =>
           row.final
             ? `<tr class="rc-final"><td class="rc-dayno">최종마감${row.round}차<small>${safe(nextDate(row.date))} 기록</small></td>${row.cells.map(cell).join("")}</tr>`
             : `<tr class="${row.round ? "rc-closing" : ""}"><td class="rc-dayno">${safe(row.date)}${row.round ? `<small>${row.round}차 마감일</small>` : ""}</td>${row.cells.map(cell).join("")}</tr>`;
-        target.innerHTML = `<table class="rc-table rc-grid"><thead><tr><th>날짜</th>${people.map((p) => `<th class="num">서브1 ${safe(metricLabel)}<small class="rc-d">${safe(p.s1 || "-")}</small></th><th class="num">서브2 ${safe(metricLabel)}<small class="rc-d">${safe(p.s2 || "-")}</small></th>`).join("")}</tr></thead><tbody>${data
+        const head = everyone
+          ? `<tr><th rowspan="2" class="rc-stick">날짜</th>${people.map((p) => `<th colspan="2" class="rc-group">${safe(p.name || p.code)}</th>`).join("")}</tr><tr>${people.map((p) => `<th class="num">서브1<small class="rc-d">${safe(p.s1 || "-")}</small></th><th class="num">서브2<small class="rc-d">${safe(p.s2 || "-")}</small></th>`).join("")}</tr>`
+          : `<tr><th class="rc-stick">날짜</th>${people.map((p) => `<th class="num">서브1 ${safe(metricLabel)}<small class="rc-d">${safe(p.s1 || "-")}</small></th><th class="num">서브2 ${safe(metricLabel)}<small class="rc-d">${safe(p.s2 || "-")}</small></th>`).join("")}</tr>`;
+        target.innerHTML = `<table class="rc-table rc-grid"><thead>${head}</thead><tbody>${data
           .map(dayRows)
           .join("")}</tbody></table>`;
       } catch (error) {
@@ -277,7 +281,7 @@ export async function recordsPage(root, me) {
       const exists = new Set(peopleOf().map((p) => p.code));
       const codes = (saved?.codes || []).filter((code) => exists.has(code));
       grid.codes = codes.length ? codes : peopleOf().slice(0, 3).map((p) => p.code);
-      grid.active = codes.includes(saved?.active) ? saved.active : "";
+      grid.active = codes.includes(saved?.active) ? saved.active : ALL;
       renderGridPickers();
       drawGrid();
     };
@@ -317,7 +321,7 @@ export async function recordsPage(root, me) {
       const blob = new Blob([toGridCsv(grid.last.data, grid.last.people, grid.last.metricLabel)], { type: "text/csv;charset=utf-8" });
       const link = document.createElement("a");
       link.href = URL.createObjectURL(blob);
-      link.download = `기록_날짜별_${grid.last.people[0]?.name || ""}_${state.account}_${grid.month}.csv`;
+      link.download = `기록_날짜별_${grid.last.everyone ? "전체" : grid.last.people[0]?.name || ""}_${state.account}_${grid.month}.csv`;
       link.click();
       setTimeout(() => URL.revokeObjectURL(link.href), 1000);
     };

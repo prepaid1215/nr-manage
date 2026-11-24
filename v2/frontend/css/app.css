@@ -525,3 +525,6 @@ button:active{transform:translateY(1px)}button:disabled{cursor:not-allowed;opaci
 .rc-ptab.active{border-color:var(--brand);background:var(--brand)}.rc-ptab.active button,.rc-ptab.active a{color:#fff}
 .rc-ptab-add{margin:0;width:42px;padding:8px 0;border:1px dashed var(--line);border-radius:12px;background:#fff;color:var(--brand);font-size:20px;line-height:1;box-shadow:none}
 #rcAddPerson{max-width:260px;margin:0 0 8px}
+.rc-grid .rc-stick,.rc-grid .rc-dayno{position:sticky;left:0;z-index:2;background:#f7f9fc;min-width:110px}
+.rc-grid tbody .rc-dayno{background:#fff}.rc-grid .rc-closing .rc-dayno{background:#fff3b0}.rc-grid .rc-final .rc-dayno{background:#ffe08a}
+.rc-grid{min-width:0}
