@@ -1,5 +1,5 @@
 import { supabase } from "./supabase.js?v=20260829-34";
-import { closingRound, withDeltas, toPeopleCsv, labelCodes, groupPeople, personValue, GRID_METRICS, monthDates, nextDate, buildGrid, toGridCsv } from "./records-logic.js?v=20261125-9";
+import { closingRound, withDeltas, toPeopleCsv, labelCodes, groupPeople, personValue, GRID_METRICS, monthDates, nextDate, buildGrid, toGridCsv, matchPeople } from "./records-logic.js?v=20261125-11";
 
 // 기록 탭: 매일 저장된 코드별 대실적·소실적·실회선을 날짜별로 보고 엑셀(CSV)로 내려받는다.
 // 표는 nrc_daily_metrics(RUN_051)에서 읽는다. 내 계정 자료만 보인다(RLS).
@@ -22,7 +22,7 @@ async function fetchAll(build) {
   return all;
 }
 
-export async function recordsPage(root, me) {
+export async function recordsPage(root, me, tools = {}) {
   root.innerHTML = `<section class="card"><div class="section-head"><div><h2>기록</h2><p class="help" id="rcInfo">불러오는 중...</p></div></div><div id="rcError" class="error"></div><div id="rcBody"></div></section>`;
   const $ = (id) => document.getElementById(id);
   const state = { account: "", date: "", rows: [], sort: { key: "code", dir: 1 }, query: "", showMain: false };
@@ -151,7 +151,7 @@ export async function recordsPage(root, me) {
     }
     const accounts = [...new Set(recent.map((row) => row.source_account_id))].sort();
     $("rcInfo").textContent = "매일 저장된 사람별 서브1·서브2의 대실적·소실적·회선수입니다. 이전 기록일과 비교한 증감이 함께 나옵니다.";
-    $("rcBody").innerHTML = `<div class="view-tabs"><button class="active" id="rcTabDay" type="button">날짜별 보기</button><button id="rcTabOne" type="button">하루 보기</button></div><div id="rcGridPane"><div class="rc-controls"><label>기간(월)<input id="rcMonth" type="month"></label><label>값<select id="rcMetric">${GRID_METRICS.map(([key, label]) => `<option value="${key}">${label}</option>`).join("")}</select></label><button class="secondary compact" id="rcGridCsv" type="button">엑셀(CSV) 내려받기</button></div><div class="rc-ptabs" id="rcPTabs"></div><select id="rcAddPerson" hidden></select><div class="rc-wrap" id="rcGridTable"></div><p class="help">"전체" 탭은 모든 사람의 서브1·서브2를 한 표로 보여 주고, 이름 탭은 그 사람만 보여 줍니다. 이름 탭 끝의 ×는 탭 닫기, +는 사람 추가입니다. 노란 줄은 마감일(8일·15일·23일·말일)입니다. 기록이 없는 날은 "-"입니다. 기록은 매일 한 번 쌓이므로 처음에는 비어 있고 날이 지날수록 채워집니다.</p></div><div id="rcDayPane" hidden><div class="rc-controls"><label>계정<select id="rcAccount">${accounts.map((a) => `<option value="${safe(a)}">${safe(a)}</option>`).join("")}</select></label><div class="rc-datebox"><button class="secondary compact" id="rcPrev" type="button">◀ 이전</button><input id="rcDate" type="date"><button class="secondary compact" id="rcNext" type="button">다음 ▶</button></div><label>검색<input id="rcSearch" placeholder="이름 또는 코드"></label><label class="check"><input id="rcMain" type="checkbox"> 본코드도 보기</label><button class="secondary compact" id="rcCsv" type="button">엑셀(CSV) 내려받기</button></div><p class="help"><span id="rcRound"></span> <span id="rcMeta"></span> · <span id="rcCount"></span></p><div class="rc-wrap" id="rcTable"></div><p class="help">증감은 바로 이전에 기록된 날짜와 비교한 값입니다. 실회선이 "미수집"이면 그날 읽지 못한 값이며 0과 다릅니다. 마감일은 8일·15일·23일·말일입니다. 본코드는 마감 계산에만 쓰여서 기본으로 숨겼습니다(“본코드도 보기”로 표시). 이름 아래 작은 숫자는 본코드 번호입니다.</p></div>`;
+    $("rcBody").innerHTML = `<div class="view-tabs"><button class="active" id="rcTabDay" type="button">날짜별 보기</button><button id="rcTabOne" type="button">하루 보기</button></div><div id="rcGridPane"><div class="rc-controls"><label>기간(월)<input id="rcMonth" type="month"></label><label>값<select id="rcMetric">${GRID_METRICS.map(([key, label]) => `<option value="${key}">${label}</option>`).join("")}</select></label><button class="secondary compact" id="rcGridCsv" type="button">엑셀(CSV) 내려받기</button></div><div class="rc-ptabs" id="rcPTabs"></div><div id="rcAddBox" class="rc-addbox" hidden><input id="rcAddPerson" list="rcPeopleList" placeholder="이름 입력 (목록에 없으면 NRC에서 검색)" autocomplete="off"><button class="secondary compact" id="rcNrcFind" type="button">NRC에서 찾기</button><datalist id="rcPeopleList"></datalist></div><p class="help" id="rcLookupStatus"></p><div id="rcLookup"></div><div class="rc-wrap" id="rcGridTable"></div><p class="help">"전체" 탭은 모든 사람의 서브1·서브2를 한 표로 보여 주고, 이름 탭은 그 사람만 보여 줍니다. 이름 탭 끝의 ×는 탭 닫기, +는 사람 추가입니다. 노란 줄은 마감일(8일·15일·23일·말일)입니다. 기록이 없는 날은 "-"입니다. 기록은 매일 한 번 쌓이므로 처음에는 비어 있고 날이 지날수록 채워집니다.</p></div><div id="rcDayPane" hidden><div class="rc-controls"><label>계정<select id="rcAccount">${accounts.map((a) => `<option value="${safe(a)}">${safe(a)}</option>`).join("")}</select></label><div class="rc-datebox"><button class="secondary compact" id="rcPrev" type="button">◀ 이전</button><input id="rcDate" type="date"><button class="secondary compact" id="rcNext" type="button">다음 ▶</button></div><label>검색<input id="rcSearch" placeholder="이름 또는 코드"></label><label class="check"><input id="rcMain" type="checkbox"> 본코드도 보기</label><button class="secondary compact" id="rcCsv" type="button">엑셀(CSV) 내려받기</button></div><p class="help"><span id="rcRound"></span> <span id="rcMeta"></span> · <span id="rcCount"></span></p><div class="rc-wrap" id="rcTable"></div><p class="help">증감은 바로 이전에 기록된 날짜와 비교한 값입니다. 실회선이 "미수집"이면 그날 읽지 못한 값이며 0과 다릅니다. 마감일은 8일·15일·23일·말일입니다. 본코드는 마감 계산에만 쓰여서 기본으로 숨겼습니다(“본코드도 보기”로 표시). 이름 아래 작은 숫자는 본코드 번호입니다.</p></div>`;
 
     const first = async (account) => {
       const rows = await latest(account);
@@ -211,10 +211,10 @@ export async function recordsPage(root, me) {
       const people = chosenPeople();
       grid.codes = people.map((p) => p.code);
       if (grid.active !== ALL && !activePerson()) grid.active = ALL;
-      $("rcAddPerson").innerHTML = `<option value="">사람 고르기...</option>${all.filter((p) => !grid.codes.includes(p.code)).map((p) => `<option value="${safe(p.code)}">${safe(p.name || p.code)} (${safe(p.code)})</option>`).join("")}`;
+      $("rcPeopleList").innerHTML = all.filter((p) => !grid.codes.includes(p.code)).map((p) => `<option value="${safe(p.name || p.code)} (${safe(p.code)})"></option>`).join("");
       $("rcPTabs").innerHTML = `<div class="rc-ptab${grid.active === ALL ? " active" : ""}"><button type="button" data-rc-tab="${ALL}" title="모든 사람을 한 번에 보기">전체</button></div>${people
         .map((p) => `<div class="rc-ptab${p.code === grid.active ? " active" : ""}"><button type="button" data-rc-tab="${safe(p.code)}">${safe(p.name || p.code)}</button><a href="#" data-rc-del="${safe(p.code)}" title="탭 닫기">×</a></div>`)
-        .join("")}<button type="button" class="rc-ptab-add" id="rcAddTab" title="사람 추가"${all.length === people.length ? " disabled" : ""}>+</button>`;
+        .join("")}<button type="button" class="rc-ptab-add" id="rcAddTab" title="사람 추가·NRC에서 찾기">+</button>`;
       $("rcPTabs").querySelectorAll("[data-rc-tab]").forEach((button) => {
         button.onclick = () => {
           grid.active = button.dataset.rcTab;
@@ -234,8 +234,8 @@ export async function recordsPage(root, me) {
         };
       });
       $("rcAddTab").onclick = () => {
-        $("rcAddPerson").hidden = !$("rcAddPerson").hidden;
-        if (!$("rcAddPerson").hidden) $("rcAddPerson").focus();
+        $("rcAddBox").hidden = !$("rcAddBox").hidden;
+        if (!$("rcAddBox").hidden) $("rcAddPerson").focus();
       };
     };
     const drawGrid = async () => {
@@ -305,16 +305,94 @@ export async function recordsPage(root, me) {
       grid.month = $("rcMonth").value;
       drawGrid();
     };
-    $("rcAddPerson").onchange = () => {
-      const code = $("rcAddPerson").value;
-      if (code) {
-        grid.codes.push(code);
-        grid.active = code;
-        saveTabs();
+    // ---- NRC에서 이름으로 찾기 ----
+    // 이 PC의 NRC Sync가 NRC 회원검색으로 내 산하 회원(10단계 밖 포함)을 찾아 현재 매출 값을 읽어 온다. 저장하지는 않는다.
+    const lookups = [];
+    const plain = (value) => (value == null ? '<span class="rc-na">미수집</span>' : number(value));
+    const payLabel = (payDate) => (/^\d{8}$/.test(payDate || "") ? `${payDate.slice(0, 4)}-${payDate.slice(4, 6)}-${payDate.slice(6)}` : payDate || "-");
+    const renderLookups = () => {
+      $("rcLookup").innerHTML = lookups
+        .map((item, index) => {
+          const body = item.members.length
+            ? item.members
+                .map((m) =>
+                  m.error
+                    ? `<tr><td>${safe(m.role)}</td><td>${safe(m.userId)}</td><td colspan="7" class="rc-na">조회 실패: ${safe(m.error)}</td></tr>`
+                    : `<tr><td>${safe(m.role)}</td><td>${safe(m.memberNo || m.userId)}</td><td>${safe(m.rankNewName || m.rankName || "-")}</td><td>${safe(m.sponsorName || "-")}</td><td class="num">${number(m.ordPv)}</td><td class="num">${number(m.maxPv)}</td><td class="num">${number(m.minPv)}</td><td class="num">${plain(m.realLines)}</td><td class="num">${plain(m.consumerTotalLines)}</td></tr>`,
+                )
+                .join("")
+            : `<tr><td colspan="9" class="help">내 산하 회원 중 "${safe(item.name)}"을(를) 찾지 못했습니다. 이름이 정확한지 확인해 주세요.</td></tr>`;
+          const more = item.total > item.members.length ? ` · 일치 ${number(item.total)}명 중 ${number(item.members.length)}명만 표시` : "";
+          return `<div class="rc-lookup"><div class="rc-lookup-head"><b>NRC 검색: ${safe(item.name)}</b><span class="help">${payLabel(item.payDate)} 마감차수 기준 · ${new Date(item.at).toLocaleTimeString("ko-KR")} 조회${more}</span><a href="#" data-rc-lookup-del="${index}" title="닫기">×</a></div><div class="rc-wrap"><table class="rc-table"><thead><tr><th>구분</th><th>회원번호</th><th>직급</th><th>후원인</th><th class="num">본인NV</th><th class="num">대실적</th><th class="num">소실적</th><th class="num">실회선</th><th class="num">총회선</th></tr></thead><tbody>${body}</tbody></table></div></div>`;
+        })
+        .join("");
+      $("rcLookup").querySelectorAll("[data-rc-lookup-del]").forEach((link) => {
+        link.onclick = (event) => {
+          event.preventDefault();
+          lookups.splice(Number(link.dataset.rcLookupDel), 1);
+          renderLookups();
+        };
+      });
+    };
+    let lookingUp = false;
+    const nrcLookup = async (rawName) => {
+      const name = String(rawName || "").trim();
+      if (!name || lookingUp) return;
+      if (!tools.localApi) {
+        $("rcError").textContent = "NRC 검색을 사용할 수 없습니다. 페이지를 새로고침해 주세요.";
+        return;
       }
-      $("rcAddPerson").hidden = true;
+      lookingUp = true;
+      $("rcNrcFind").disabled = true;
+      $("rcError").textContent = "";
+      $("rcLookupStatus").textContent = `NRC에서 "${name}"을(를) 찾는 중입니다. 로그인부터 하므로 30초~1분 걸립니다...`;
+      try {
+        const result = await tools.localApi("/api/member-lookup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, appUserId: me.id }),
+        });
+        lookups.unshift({ name: result.name || name, payDate: result.payDate, total: result.total || 0, members: result.members || [], at: Date.now() });
+        renderLookups();
+        $("rcAddPerson").value = "";
+      } catch (error) {
+        $("rcError").textContent = `NRC에서 찾지 못했습니다: ${error.message || error}`;
+      } finally {
+        lookingUp = false;
+        $("rcNrcFind").disabled = false;
+        $("rcLookupStatus").textContent = "";
+      }
+    };
+    $("rcNrcFind").onclick = () => nrcLookup($("rcAddPerson").value);
+    // 이름(또는 코드 일부)을 입력하면 한 명으로 정해질 때 탭이 추가된다. 이미 열린 탭이면 그 탭으로 이동한다.
+    const addByText = () => {
+      const text = $("rcAddPerson").value.trim();
+      if (!text) return;
+      const matches = matchPeople(peopleOf(), text);
+      if (!matches.length) {
+        nrcLookup(text); // 기록 목록에 없으면 NRC에서 이름으로 찾는다(10단계 밖의 하위 포함).
+        return;
+      }
+      if (matches.length !== 1) {
+        $("rcError").textContent = `"${text}"와 일치하는 사람이 ${matches.length}명입니다. 이름을 더 입력하거나 목록에서 고르세요.`;
+        return;
+      }
+      $("rcError").textContent = "";
+      const code = matches[0].code;
+      if (!grid.codes.includes(code)) grid.codes.push(code);
+      grid.active = code;
+      saveTabs();
+      $("rcAddPerson").value = "";
+      $("rcAddBox").hidden = true;
       renderGridPickers();
       drawGrid();
+    };
+    $("rcAddPerson").onchange = addByText;
+    $("rcAddPerson").onkeydown = (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        addByText();
+      }
     };
     $("rcGridCsv").onclick = () => {
       if (!grid.last) return;

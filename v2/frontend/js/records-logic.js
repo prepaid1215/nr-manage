@@ -140,3 +140,14 @@ export function toGridCsv(grid, people, metricLabel) {
   const lines = grid.map((row) => [row.date, row.final ? `최종마감${row.round}차` : row.round ? `${row.round}차 마감` : "", ...row.cells].map(csvCell).join(","));
   return "\uFEFF" + [header.map(csvCell).join(","), ...lines].join("\r\n");
 }
+
+// 이름·코드를 입력해 사람을 찾는다. 정확히 같은 이름/코드/"이름 (코드)"가 있으면 그것만, 없으면 일부 일치로 찾는다.
+export function matchPeople(people, text) {
+  const query = String(text || "").trim().toLowerCase();
+  if (!query) return [];
+  const name = (p) => String(p.name || p.code || "").toLowerCase();
+  const label = (p) => `${name(p)} (${p.code})`;
+  const exact = people.filter((p) => label(p) === query || name(p) === query || String(p.code) === query);
+  if (exact.length) return exact;
+  return people.filter((p) => label(p).includes(query));
+}

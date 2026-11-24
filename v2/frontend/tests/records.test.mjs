@@ -61,7 +61,7 @@ assert.equal(lines[0].split(",").length, lines[2].split(",").length, "열 수가
 
 console.log("Records tab tests passed: closing rounds, deltas, csv.");
 
-import { monthDates, nextDate, gridValue, buildGrid, toGridCsv } from "../js/records-logic.js";
+import { monthDates, nextDate, gridValue, buildGrid, toGridCsv, matchPeople } from "../js/records-logic.js";
 assert.equal(monthDates("2026-11").length, 30);
 assert.equal(monthDates("2026-11")[7], "2026-11-08");
 assert.equal(gridValue({ ord_pv: 10, max_pv: 100, min_pv: 5 }, "total"), 115);
@@ -91,4 +91,12 @@ assert.equal(nextDate("2026-12-31"), "2027-01-01");
 const gcsv = toGridCsv(g, [{ code: "10", name: "홍길동" }], "총실적");
 assert.ok(gcsv.includes("홍길동 서브1 총실적"));
 assert.ok(gcsv.includes("2026-11-08,1차 마감,55,67"));
+const ppl = [{ code: "100", name: "홍길동" }, { code: "200", name: "김철수" }, { code: "300", name: "김철민" }];
+assert.deepEqual(matchPeople(ppl, "홍길동").map((p) => p.code), ["100"], "이름 전체 입력");
+assert.deepEqual(matchPeople(ppl, "홍길동 (100)").map((p) => p.code), ["100"], "목록에서 고른 값");
+assert.deepEqual(matchPeople(ppl, "철수").map((p) => p.code), ["200"], "일부만 입력해도 한 명이면 찾는다");
+assert.equal(matchPeople(ppl, "김철").length, 2, "여러 명이면 정하지 않는다");
+assert.equal(matchPeople(ppl, "없는사람").length, 0);
+assert.deepEqual(matchPeople(ppl, "300").map((p) => p.code), ["300"], "코드로도 찾는다");
+assert.equal(matchPeople(ppl, "  ").length, 0);
 console.log("Records grid tests passed.");
