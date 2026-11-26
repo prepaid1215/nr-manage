@@ -1,5 +1,5 @@
 import { supabase } from "./supabase.js?v=20260829-34";
-import { closingRound, withDeltas, toPeopleCsv, labelCodes, groupPeople, personValue, GRID_METRICS, monthDates, nextDate, buildGrid, toGridCsv, matchPeople, trackedPeople, kstDate, snapshotRows, withProvisional, finalPreviewRows, FINAL_RULE_START, closingRound as closingRoundOf } from "./records-logic.js?v=20261125-18";
+import { closingRound, withDeltas, toPeopleCsv, labelCodes, groupPeople, personValue, GRID_METRICS, monthDates, nextDate, buildGrid, toGridCsv, matchPeople, trackedPeople, kstDate, snapshotRows, withProvisional, finalPreviewRows, FINAL_RULE_START, closingRound as closingRoundOf } from "./records-logic.js?v=20261125-21";
 
 // 기록 탭: 매일 저장된 코드별 대실적·소실적·실회선을 날짜별로 보고 엑셀(CSV)로 내려받는다.
 // 표는 nrc_daily_metrics(RUN_051)에서 읽는다. 내 계정 자료만 보인다(RLS).
@@ -370,6 +370,9 @@ export async function recordsPage(root, me, tools = {}) {
         target.innerHTML = `<table class="rc-table rc-grid"><thead>${head}</thead><tbody>${data
           .map(dayRows)
           .join("")}</tbody></table>`;
+        // 머리글이 두 줄(이름 줄 + 서브 줄)일 때, 아래 줄이 위 줄(이름) 바로 밑에 붙도록 첫 줄 높이를 CSS에 알려 준다.
+        const firstHeadRow = target.querySelector("thead tr");
+        if (firstHeadRow) target.style.setProperty("--rc-head1", `${firstHeadRow.offsetHeight}px`);
       } catch (error) {
         target.innerHTML = "";
         $("rcError").textContent = `기록을 불러오지 못했습니다: ${error.message || error}`;

@@ -535,3 +535,7 @@ button:active{transform:translateY(1px)}button:disabled{cursor:not-allowed;opaci
 .rc-lookup-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}.rc-lookup-actions button{width:auto;margin:0}
 .rc-prov{color:#7f84a8;font-style:italic;background:#f5f6ff}.rc-closing .rc-prov,.rc-final .rc-prov{background:transparent}
 .schedule-warn{color:#9a5a00}
+/* 날짜별 표 머리글: 사람 이름 줄(1행)과 서브1·서브2 줄(2행)을 둘 다 위에 붙이되 겹치지 않게 쌓고, 왼쪽 날짜 칸보다 위에 둔다. */
+.rc-grid thead th{z-index:5}
+.rc-grid thead .rc-stick{z-index:6}
+.rc-grid thead tr:nth-child(2) th{top:var(--rc-head1,32px)}
