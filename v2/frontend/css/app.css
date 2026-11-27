@@ -539,3 +539,4 @@ button:active{transform:translateY(1px)}button:disabled{cursor:not-allowed;opaci
 .rc-grid thead th{z-index:5}
 .rc-grid thead .rc-stick{z-index:6}
 .rc-grid thead tr:nth-child(2) th{top:var(--rc-head1,32px)}
+.seller-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}@media(max-width:600px){.seller-row{grid-template-columns:1fr}}

@@ -8,7 +8,7 @@ import {
 import {
   installRecoveryUi, signupQuiz, saveSignupQuiz, mountRecoverySettings, enforcePasswordChange,
 } from "./account-recovery.js?v=20261108-1";
-import { customersPage } from "./customers.js?v=20261127-3";
+import { customersPage } from "./customers.js?v=20261127-4";
 import { activityPage } from "./activity.js?v=20260916-4";
 import {
   checklistItemCount,
