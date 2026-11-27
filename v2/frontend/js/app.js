@@ -1563,10 +1563,26 @@ async function loadLocalStatus() {
     list?.querySelectorAll("[data-device-delete]").forEach((button) => {
       button.onclick = () => deleteDevice(button);
     });
+    // 이 컴퓨터의 NRC Sync가 직접 알려 주는 상태(재등록 필요, 자동 업데이트 실패)를 함께 보여 준다.
+    const local = await fetch(`${LOCAL_SYNC}/health`, {
+      signal: AbortSignal.timeout(1800), targetAddressSpace: "local",
+    }).then((response) => (response.ok ? response.json() : null)).catch(() => null);
+    const notes = [];
+    if (lastSharedDevicesError) notes.push(`(진단) 공유 PC 상태 조회 실패: ${lastSharedDevicesError}`);
+    if (local?.needsReregister)
+      notes.push(
+        "이 PC의 로그인 세션이 끊겨 수집 작업을 받지 못하고 있습니다. 이 PC의 NRC Sync 설정 화면(주소창에 http://127.0.0.1:5050/setup)에서 앱 아이디·비밀번호로 다시 등록해 주세요.",
+      );
+    const lastUpdate = local?.update?.lastResult;
+    if (
+      lastUpdate && ["rolled_back", "restore_failed"].includes(lastUpdate.status) &&
+      Date.now() / 1000 - (lastUpdate.failedAt || 0) < 7 * 86400
+    )
+      notes.push(
+        `이 PC의 자동 업데이트가 실패해 이전 버전을 쓰고 있습니다${lastUpdate.reason ? ` (원인: ${lastUpdate.reason})` : ""}.`,
+      );
     nrcErrorBox.classList.add("error");
-    nrcErrorBox.textContent = lastSharedDevicesError
-      ? `(진단) 공유 PC 상태 조회 실패: ${lastSharedDevicesError}`
-      : "";
+    nrcErrorBox.textContent = notes.join(" ");
   } catch (err) {
     box.textContent = "수집 PC 정보를 불러오지 못했습니다.";
     $("nrcError").textContent = /nrc_sync_devices|schema cache/i.test(err.message)

@@ -68,15 +68,34 @@ def health():
     return jsonify({"ok": True, "configured": configured(), "worker": worker_state, "worker_id": WORKER_ID})
 
 
+class AuthUnavailable(PermissionError):
+    """Supabase 인증 서버가 일시적으로 응답하지 못했다. 세션 만료(401)와 구분해 503으로 답한다."""
+
+
+def _auth_status(exc):
+    return 503 if isinstance(exc, AuthUnavailable) else 401
+
+
 def user_from_request():
     authorization = request.headers.get("Authorization", "")
     if not authorization.startswith("Bearer "):
         raise PermissionError("앱 로그인이 필요합니다.")
-    response = requests.get(
-        f"{SUPABASE_URL}/auth/v1/user",
-        headers={"apikey": SUPABASE_ANON_KEY, "Authorization": authorization},
-        timeout=20,
-    )
+    response = None
+    for attempt in range(2):
+        try:
+            response = requests.get(
+                f"{SUPABASE_URL}/auth/v1/user",
+                headers={"apikey": SUPABASE_ANON_KEY, "Authorization": authorization},
+                timeout=20,
+            )
+        except requests.RequestException:
+            response = None
+        if response is not None and response.status_code < 500:
+            break
+        if attempt == 0:
+            time.sleep(0.5)
+    if response is None or response.status_code >= 500:
+        raise AuthUnavailable("인증 서버가 잠시 응답하지 않습니다. 잠시 후 다시 시도해 주세요.")
     if response.status_code != 200:
         raise PermissionError("앱 로그인 세션이 만료되었습니다.")
     return response.json()
@@ -163,7 +182,7 @@ def credentials():
         _wake_event.set()
         return jsonify({"ok": True, "sourceAccountId": login_id})
     except PermissionError as exc:
-        return jsonify({"ok": False, "message": str(exc)}), 401
+        return jsonify({"ok": False, "message": str(exc)}), _auth_status(exc)
     except Exception as exc:
         return jsonify({"ok": False, "message": str(exc)}), 500
 
@@ -194,7 +213,7 @@ def credentials_reveal():
                 continue
         return jsonify({"ok": True, "credentials": result})
     except PermissionError as exc:
-        return jsonify({"ok": False, "message": str(exc)}), 401
+        return jsonify({"ok": False, "message": str(exc)}), _auth_status(exc)
     except Exception as exc:
         return jsonify({"ok": False, "message": str(exc)}), 500
 
@@ -235,7 +254,7 @@ def devices():
         return jsonify({"ok": True, "devices": visible, "isAdmin": admin,
                         "summary": {"total": sum(not row.get("revoked_at") for row in rows), "online": online}})
     except PermissionError as exc:
-        return jsonify({"ok": False, "message": str(exc)}), 401
+        return jsonify({"ok": False, "message": str(exc)}), _auth_status(exc)
     except Exception as exc:
         return jsonify({"ok": False, "message": str(exc)}), 500
 
@@ -279,7 +298,7 @@ def delete_device(device_id):
                       {"hidden_at": datetime.now(timezone.utc).isoformat()})
         return jsonify(ok=True)
     except PermissionError as exc:
-        return jsonify(ok=False, message=str(exc)), 401
+        return jsonify(ok=False, message=str(exc)), _auth_status(exc)
     except RuntimeError as exc:
         text = str(exc)
         if "hidden_at" in text:
@@ -306,7 +325,7 @@ def device_registration(device_id):
             _unhide_device(str(device_id))
         return jsonify(ok=True)
     except PermissionError as exc:
-        return jsonify(ok=False, message=str(exc)), 401
+        return jsonify(ok=False, message=str(exc)), _auth_status(exc)
     except Exception as exc:
         return jsonify(ok=False, message=str(exc)), 500
 
@@ -335,7 +354,7 @@ def register_pc():
             admin_request("nrc_sync_devices", "POST", {"id":device_id, **metadata})
         return jsonify(ok=True)
     except PermissionError as exc:
-        return jsonify(ok=False, message=str(exc)), 401
+        return jsonify(ok=False, message=str(exc)), _auth_status(exc)
     except (ValueError, TypeError):
         return jsonify(ok=False, message="PC 정보가 올바르지 않습니다."), 400
     except Exception as exc:
@@ -362,7 +381,7 @@ def pc_heartbeat():
             "last_error":str(body.get("error") or "")[:1000] or None})
         return jsonify(ok=True, revoked=False)
     except PermissionError as exc:
-        return jsonify(ok=False, message=str(exc)), 401
+        return jsonify(ok=False, message=str(exc)), _auth_status(exc)
     except (ValueError, TypeError):
         return jsonify(ok=False, message="PC 정보가 올바르지 않습니다."), 400
     except Exception as exc:
@@ -378,7 +397,7 @@ def wake():
         _wake_event.set()
         return jsonify({"ok": True})
     except PermissionError as exc:
-        return jsonify({"ok": False, "message": str(exc)}), 401
+        return jsonify({"ok": False, "message": str(exc)}), _auth_status(exc)
 
 
 @app.route("/ocr/visit-form", methods=["POST", "OPTIONS"])
@@ -433,7 +452,7 @@ def ocr_visit_form():
             lines.append(" ".join(current))
         return jsonify({"ok": True, "text": "\n".join(lines)})
     except PermissionError as exc:
-        return jsonify({"ok": False, "message": str(exc)}), 401
+        return jsonify({"ok": False, "message": str(exc)}), _auth_status(exc)
     except Exception as exc:
         return jsonify({"ok": False, "message": str(exc)}), 500
 
@@ -551,7 +570,7 @@ def worker_claim():
             }
         )
     except PermissionError as exc:
-        return jsonify({"ok": False, "message": str(exc)}), 401
+        return jsonify({"ok": False, "message": str(exc)}), _auth_status(exc)
     except Exception as exc:
         return jsonify({"ok": False, "message": str(exc)}), 500
 
@@ -578,7 +597,7 @@ def worker_complete():
         })
         return jsonify(result or {"ok":True})
     except PermissionError as exc:
-        return jsonify({"ok": False, "message": str(exc)}), 401
+        return jsonify({"ok": False, "message": str(exc)}), _auth_status(exc)
     except Exception as exc:
         return jsonify({"ok": False, "message": str(exc)}), 500
 

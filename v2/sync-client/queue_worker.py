@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import socket
 import sys
 import threading
@@ -34,6 +35,13 @@ CREDENTIAL_SERVICE = "NRC-Management-Manual"
 
 _auth_lock = threading.Lock()
 _cached_auth = {}
+# 갱신 토큰이 영구히 무효가 되면 needs 가 켜지고, 재등록하면 꺼진다. 그동안은 5분에 한 번만 서버에 다시 확인한다.
+_session_state = {"needs": False, "checkedAt": 0.0}
+REREGISTER_RECHECK_SECONDS = 300
+_DEAD_REFRESH = re.compile(
+    r"refresh_token_already_used|refresh_token_not_found|session_not_found|invalid_grant|Invalid Refresh Token|Refresh Token Not Found",
+    re.I,
+)
 
 
 def utc_now():
@@ -63,7 +71,25 @@ def log_throttled(key, message, interval=300):
     log_event(message + extra)
 
 
-def _json_request(url, method="GET", body=None, headers=None, timeout=60):
+RETRY_DELAY = 2  # 일시 오류 재시도 간격(초). Supabase는 같은 갱신 토큰을 10초간 다시 받아 준다.
+
+
+class ServerError(RuntimeError):
+    """서버가 HTTP 오류로 응답했다. 메시지 형식은 기존과 같고 status·detail을 따로 들고 있다."""
+
+    def __init__(self, status, message, detail=""):
+        super().__init__(f"서버 요청 실패({status}): {message}")
+        self.status = status
+        self.detail = detail
+
+
+class ReregisterNeeded(RuntimeError):
+    """이 PC의 로그인 세션이 영구히 끊겨 사람이 다시 등록해야 한다."""
+
+
+def _json_request(url, method="GET", body=None, headers=None, timeout=60, retry=False):
+    """retry=True는 같은 요청을 다시 보내도 안전한 호출(토큰 갱신·조회)에만 쓴다.
+    5xx·연결 끊김·시간 초과를 최대 3번까지 2초 간격으로 다시 시도한다."""
     request_headers = {"Content-Type": "application/json", **(headers or {})}
     payload = None if body is None else json.dumps(body).encode("utf-8")
     req = urllib.request.Request(url, data=payload, headers=request_headers, method=method)
@@ -76,14 +102,22 @@ def _json_request(url, method="GET", body=None, headers=None, timeout=60):
             detail = exc.read().decode("utf-8", errors="replace")
             try:
                 message = json.loads(detail).get("message") or detail
-            except json.JSONDecodeError:
+            except (json.JSONDecodeError, AttributeError):
                 message = detail
-            raise RuntimeError(f"서버 요청 실패({exc.code}): {message}") from exc
+            if retry and exc.code >= 500 and attempt < 2:
+                time.sleep(RETRY_DELAY)
+                continue
+            raise ServerError(exc.code, message, detail) from exc
         except urllib.error.URLError as exc:
-            if getattr(exc.reason, "winerror", None) == 10013 and attempt < 2:
-                time.sleep(attempt + 1)
+            if (retry or getattr(exc.reason, "winerror", None) == 10013) and attempt < 2:
+                time.sleep(RETRY_DELAY if retry else attempt + 1)
                 continue
             raise RuntimeError(f"서버 연결 실패: {exc.reason}") from exc
+        except (TimeoutError, ConnectionError) as exc:
+            if retry and attempt < 2:
+                time.sleep(RETRY_DELAY)
+                continue
+            raise
 
 
 def _load_device():
@@ -121,6 +155,7 @@ def _finish_configure(user_id, access_token, refresh_token, expires_in, nrc_logi
         json.dumps({"loginId": nrc_login_id, "password": nrc_password}),
     )
     with _auth_lock:
+        _session_state.update(needs=False, checkedAt=0.0)
         _cached_auth.clear()
         _cached_auth.update(
             accessToken=access_token,
@@ -162,6 +197,7 @@ def configure_worker_from_session(access_token, refresh_token, device_name=None,
     user = _json_request(
         f"{SUPABASE_URL}/auth/v1/user",
         headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {access_token}"},
+        retry=True,
     )
     user_id = user["id"]
     creds = _json_request(
@@ -196,13 +232,28 @@ def _access_token():
         saved_text = keyring.get_password(SESSION_SERVICE, _session_key(device["id"]))
         if not saved_text:
             raise RuntimeError("이 PC의 앱 로그인이 필요합니다.")
+        if _session_state["needs"] and time.time() - _session_state["checkedAt"] < REREGISTER_RECHECK_SECONDS:
+            raise ReregisterNeeded("이 PC의 로그인 세션이 끊겼습니다. 웹 설정 > 수집에서 이 PC를 다시 등록하세요.")
         saved = json.loads(saved_text)
-        auth = _json_request(
-            f"{SUPABASE_URL}/auth/v1/token?grant_type=refresh_token",
-            method="POST",
-            body={"refresh_token": saved["refreshToken"]},
-            headers={"apikey": SUPABASE_KEY},
-        )
+        try:
+            auth = _json_request(
+                f"{SUPABASE_URL}/auth/v1/token?grant_type=refresh_token",
+                method="POST",
+                body={"refresh_token": saved["refreshToken"]},
+                headers={"apikey": SUPABASE_KEY},
+                retry=True,
+            )
+        except ServerError as exc:
+            if exc.status in (400, 401) and _DEAD_REFRESH.search(exc.detail or str(exc)):
+                _session_state.update(needs=True, checkedAt=time.time())
+                log_throttled(
+                    "needs-reregister",
+                    "이 PC의 로그인 세션이 끊겼습니다(갱신 토큰 무효). 웹 설정 > 수집에서 '수동 등록'으로 다시 등록하세요.",
+                    interval=3600,
+                )
+                raise ReregisterNeeded("이 PC의 로그인 세션이 끊겼습니다. 웹 설정 > 수집에서 이 PC를 다시 등록하세요.") from exc
+            raise
+        _session_state.update(needs=False, checkedAt=0.0)
         saved["refreshToken"] = auth.get("refresh_token", saved["refreshToken"])
         keyring.set_password(SESSION_SERVICE, _session_key(device["id"]), json.dumps(saved))
         _cached_auth.update(
@@ -248,7 +299,8 @@ def heartbeat(status="ONLINE", error=None):
 
 def local_device_status():
     device = _load_device() or {}
-    return {"deviceId":device.get("id"), "deviceRevoked":bool(device.get("revoked"))}
+    return {"deviceId":device.get("id"), "deviceRevoked":bool(device.get("revoked")),
+            "needsReregister":bool(_session_state["needs"])}
 
 
 def _patch_job(job_id, values):
@@ -397,6 +449,9 @@ def worker_loop():
                         heartbeat("ERROR", message)
             if not job:
                 time.sleep(5)
+        except ReregisterNeeded:
+            # 안내는 _access_token이 한 번만 남겼다. 사람이 다시 등록할 때까지 조용히 기다린다.
+            time.sleep(30)
         except Exception as exc:
             # 네트워크가 끊긴 동안 같은 오류가 5초마다 쌓이지 않도록 줄인다.
             log_throttled("queue-error", f"Supabase 작업 대기열 오류: {exc}")

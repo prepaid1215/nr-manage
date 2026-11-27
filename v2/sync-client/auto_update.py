@@ -254,17 +254,22 @@ def apply_update(plan_path, root, wait_exit=wait_process_exit, launch=launch_pro
         atomic_json(state_path, {"status": "updated", "release": plan["manifest"]["release"],
                                 "message": "업데이트를 완료했습니다.", "time": time.time()})
         return True
-    except Exception:
+    except Exception as failure:
+        # 원인을 남겨 두어야 다음 실패 때 찾을 수 있다(경로·토큰은 담지 않고 오류 종류와 짧은 설명만).
+        reason = f"{type(failure).__name__}: {str(failure)[:200]}"
         try:
             stop(replacement_started)
             if previous_moved and backup.exists():
                 replace_when_unlocked(backup, target)
             launch(target, uuid.uuid4().hex)
             atomic_json(state_path, {"status": "rolled_back", "failedRelease": plan["manifest"]["release"],
-                                    "failedAt": time.time(), "message": "업데이트에 실패해 이전 버전으로 복구했습니다."})
-        except Exception:
+                                    "failedAt": time.time(), "reason": reason,
+                                    "message": "업데이트에 실패해 이전 버전으로 복구했습니다."})
+        except Exception as restore_failure:
             atomic_json(state_path, {"status": "restore_failed", "failedRelease": plan["manifest"]["release"],
-                                    "failedAt": time.time(), "message": "자동 복구를 완료하지 못했습니다. NRC Sync를 다시 실행해 주세요."})
+                                    "failedAt": time.time(),
+                                    "reason": reason + f" / 복구 실패 {type(restore_failure).__name__}",
+                                    "message": "자동 복구를 완료하지 못했습니다. NRC Sync를 다시 실행해 주세요."})
         return False
     finally:
         ready.unlink(missing_ok=True)
@@ -300,7 +305,8 @@ class UpdateManager:
 
     def snapshot(self):
         with self._lock:
-            return {**self._status, "enabled": self.enabled(), "activeTasks": self.gate.active}
+            return {**self._status, "enabled": self.enabled(), "activeTasks": self.gate.active,
+                    "lastResult": self.last_result()}
 
     def status(self, state, message, **values):
         with self._lock:
@@ -328,17 +334,19 @@ class UpdateManager:
             self.status("deferred", "실패한 버전의 재시도를 미뤘습니다. 기존 버전으로 계속 실행합니다.")
             return False
         identifier = uuid.uuid4().hex
-        stage = updates / f"stage-{manifest['release']}-{identifier}.exe"
-        self.status("downloading", "새 버전을 다운로드하는 중입니다.", latestVersion=manifest["collectorVersion"])
-        try:
-            self.download(manifest, stage)
-            verify_artifact(stage, manifest)
-        except Exception:
-            stage.unlink(missing_ok=True)
-            raise
+        stage = self._reusable_stage(updates, manifest)
+        if stage is None:
+            stage = updates / f"stage-{manifest['release']}-{identifier}.exe"
+            self.status("downloading", "새 버전을 다운로드하는 중입니다.", latestVersion=manifest["collectorVersion"])
+            try:
+                self.download(manifest, stage)
+                verify_artifact(stage, manifest)
+            except Exception:
+                stage.unlink(missing_ok=True)
+                raise
         self.status("waiting", "수집 또는 메모장 작업이 끝나면 업데이트합니다.")
         if not self.gate.pause():
-            stage.unlink(missing_ok=True)
+            # 받은 파일은 지우지 않는다. 다음 확인 때 해시를 다시 검증해 재사용한다(60MB 재다운로드 방지).
             self.status("deferred", "실행 중인 작업이 있어 다음에 업데이트합니다.")
             return False
         try:
@@ -363,6 +371,24 @@ class UpdateManager:
         finally:
             self.gate.resume()
 
+    def _reusable_stage(self, updates, manifest):
+        """이전에 받아 두고 적용하지 못한 같은 버전 파일이 있으면, 크기·해시를 다시 검증해 재사용한다."""
+        for path in sorted(updates.glob(f"stage-{manifest['release']}-*.exe")):
+            if not re.fullmatch(r"stage-[0-9]+-[0-9a-f]{32}\.exe", path.name):
+                continue
+            try:
+                verify_artifact(path, manifest)
+                return path
+            except (OSError, ValueError):
+                path.unlink(missing_ok=True)
+        return None
+
+    def last_result(self):
+        """직전 업데이트 시도 결과(성공·롤백·복구 실패)와 실패 사유. 화면 진단용."""
+        state = read_json(self.root / "updates" / "state.json")
+        keys = ("status", "failedRelease", "failedAt", "reason", "release", "time")
+        return {key: state[key] for key in keys if key in state}
+
     def cleanup(self):
         updates = self.root / "updates"
         if not updates.is_dir():
@@ -383,7 +409,9 @@ class UpdateManager:
                 try:
                     self.cleanup()
                     self.check_once()
-                except Exception:
-                    self.status("error", "업데이트를 확인하지 못했습니다. 기존 버전으로 계속 실행합니다.")
+                except Exception as failure:
+                    detail = f"{type(failure).__name__}: {str(failure)[:200]}"
+                    self.status("error", "업데이트를 확인하지 못했습니다. 기존 버전으로 계속 실행합니다.", detail=detail)
+                    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 자동 업데이트 확인 실패: {detail}", flush=True)
                 self._wake.wait(CHECK_SECONDS)
         threading.Thread(target=loop, daemon=True, name="nrc-auto-update").start()

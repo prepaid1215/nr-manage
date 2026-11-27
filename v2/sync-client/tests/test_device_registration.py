@@ -39,7 +39,7 @@ class WorkerRegistrationTests(unittest.TestCase):
 
     def test_health_metadata_contains_no_account_credentials(self):
         self.device['refreshToken']='must-not-leak'
-        self.assertEqual(worker.local_device_status(),{'deviceId':self.device['id'],'deviceRevoked':False})
+        self.assertEqual(worker.local_device_status(),{'deviceId':self.device['id'],'deviceRevoked':False,'needsReregister':False})
 
 
 if __name__ == '__main__':

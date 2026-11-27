@@ -231,6 +231,46 @@ class ManagerTests(unittest.TestCase):
         self.assertFalse(self.manager.check_once())
         self.fetch.assert_not_called()
 
+    def test_deferred_update_keeps_download_and_reuses_it(self):
+        with patch.object(self.gate, 'pause', return_value=False):
+            self.assertFalse(self.manager.check_once())
+        self.assertEqual(self.manager.snapshot()['status'], 'deferred')
+        self.assertEqual(self.download.call_count, 1)
+        self.assertEqual(len(list((self.root/'updates').glob('stage-*.exe'))), 1, '받은 파일을 지우지 않는다')
+        with patch.object(self.gate, 'pause', return_value=False):
+            self.assertFalse(self.manager.check_once())
+        self.assertEqual(self.download.call_count, 1, '두 번째 확인은 다시 받지 않는다')
+
+    def test_corrupt_kept_download_is_discarded_and_downloaded_again(self):
+        updates = self.root/'updates'
+        updates.mkdir()
+        bad = updates/(f"stage-{manifest()['release']}-" + 'c' * 32 + '.exe')
+        bad.write_bytes(b'broken')
+        with patch.object(self.gate, 'pause', return_value=False):
+            self.manager.check_once()
+        self.assertFalse(bad.exists())
+        self.assertEqual(self.download.call_count, 1)
+
+    def test_failure_reason_is_recorded_and_exposed(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        root = Path(folder.name)
+        updates = root/'updates'
+        updates.mkdir()
+        (root/'NRCSync.exe').write_bytes(b'previous')
+        stage = updates/('stage-123-' + 'a' * 32 + '.exe')
+        stage.write_bytes(image())
+        plan = updates/('plan-' + 'b' * 32 + '.json')
+        update.atomic_json(plan, dict(stage=stage.name, manifest=manifest(), oldPid=1))
+        launch = Mock(side_effect=[OSError('port 5050 busy'), Mock()])
+        update.apply_update(plan, root, wait_exit=lambda _: True, launch=launch, stop=Mock())
+        state = update.read_json(updates/'state.json')
+        self.assertEqual(state['status'], 'rolled_back')
+        self.assertIn('OSError', state['reason'])
+        self.assertIn('port 5050 busy', state['reason'])
+        manager = update.UpdateManager(root, root/'NRCSync.exe', True, self.gate, self.fetch, self.download)
+        self.assertEqual(manager.snapshot()['lastResult']['reason'], state['reason'])
+
 
 if __name__ == '__main__':
     unittest.main()
