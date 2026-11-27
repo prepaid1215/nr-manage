@@ -18,5 +18,11 @@
   "windowsReplacementTest": "passed (2026-11-27 11:20 KST, automatic update on a registered PC replaced 2026112506 with 2026112701 and the new version answered /health; updates/state.json status updated)",
   "settingsPreservationTest": "passed (same deviceId 9265482d-d9e8-4457-97e6-07754890db23, deviceRevoked false, needsReregister false after replacement)",
   "installedFileSha256": "e03d1d45be1e10561f5babe32520c1b629098c4546160a5d2841bc1099e61e41",
-  "installedFileScan": "not run: the replaced PC has Defender stopped (another antivirus installed). Installed file size and SHA-256 equal the file scanned on the other PC."
+  "installedFileScan": "not run on the replaced PC (Defender stopped there, another antivirus installed). Rescanned instead on a second Windows PC with Defender running, using the installed file at %LOCALAPPDATA%\\NRCSync\\NRCSync.exe: size 60036377 and SHA-256 matched before scanning.",
+  "installedFileScanHost": "Windows PC with Defender running (deviceId a769b613-cac1-4314-90ef-f5df6aeb2e51, collectorVersion 20261127-session-1, release 2026112701, needsReregister false, deviceRevoked false)",
+  "installedFileScanCompletedAt": "2026-11-27T13:43:26+09:00",
+  "installedFileScanEngineVersion": "1.1.26100.4",
+  "installedFileScanSignatureVersion": "1.463.486.0",
+  "installedFileScanDetections": 0,
+  "installedFileScanNote": "Absolute path was used. Defender events 1000 and 1001 were logged, but the scan started at 13:43:25 and completed at 13:43:26 for a 60 MB file, so it may have used cached or reputation results rather than a full read. That PC's last update check also recorded detail URLError getaddrinfo failed (DNS) while status stayed current."
 }
