@@ -1013,7 +1013,7 @@ async function organizationDashboard(targetOwner) {
 }
 const LOCAL_SYNC = "http://127.0.0.1:5050";
 const SYNC_DOWNLOAD =
-  "https://raw.githubusercontent.com/prepaid1215/nr-manage/163f80438e2705a367e2eb650c46c8a0311815bc/v2/sync-client/installer/NRCSync.exe";
+  "https://raw.githubusercontent.com/prepaid1215/nr-manage/1799347f0584b29e0eeb7e6e15c0c2c7f6f2674c/v2/sync-client/installer/NRCSync.exe";
 const CLOUD_SYNC = "https://nrc-sync-cloud-sg.onrender.com";
 function setupAdminToggle() {
   const heading = $("accountHeading");
