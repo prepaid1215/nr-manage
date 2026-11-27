@@ -14,7 +14,7 @@ import {
   checklistItemCount,
   checklistPage,
 } from "./checklist.js?v=20260906-31";
-import { educationPage } from "./education.js?v=20261127-3";
+import { educationPage, educationGo, eduSubHtml } from "./education.js?v=20261127-5";
 import { closingPage, commissionPage } from "./finance.js?v=20260916-2";
 import { performancePage } from "./performance.js?v=20261124-1";
 import { manualClosePage } from "./manual-close.js?v=20261124-1";
@@ -64,9 +64,14 @@ const visibleMenus = () => menus.filter(([id]) => id !== "admin" || appAdmin);
 const bottomNavIds = ["home", "customers", "activity", "closing"];
 function nav() {
   const html = visibleMenus()
-    .map(([id, label]) => `<button data-page="${id}">${label}</button>`)
+    .map(
+      ([id, label]) =>
+        `<button data-page="${id}">${label}</button>` +
+        (id === "education" ? eduSubHtml("nav-sub") : ""),
+    )
     .join("");
   $("topNav").innerHTML = html;
+  document.querySelectorAll("#topNav [data-edu]").forEach((b) => (b.onclick = () => educationGo(b.dataset.edu)));
   const byId = new Map(menus);
   $("bottomNav").innerHTML = bottomNavIds
     .map((id) => [id, byId.get(id)])
@@ -422,6 +427,8 @@ async function show(page, options) {
   document
     .querySelectorAll("[data-page]")
     .forEach((b) => b.classList.toggle("active", b.dataset.page === page));
+  const eduSub = document.querySelector("#topNav .nav-sub");
+  if (eduSub) eduSub.classList.toggle("open", page === "education");
   $("content").classList.toggle("home-view", page === "home");
   $("editHomeBtn").hidden = page !== "home";
   if (page === "home") return home();

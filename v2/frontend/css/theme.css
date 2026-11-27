@@ -571,3 +571,92 @@ a:focus-visible {
   margin-left: auto;
   color: var(--danger);
 }
+
+/* 교육 탭: 원본 가이드 페이지를 화면 가득 넣는다 */
+.edu-frame {
+  display: block;
+  width: 100%;
+  height: calc(100vh - 150px);
+  min-height: 560px;
+  border: 1px solid var(--line);
+  border-radius: 19px;
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+@media (min-width: 1000px) {
+  .edu-frame {
+    height: calc(100vh - 80px);
+  }
+}
+
+/* 교육: 왼쪽 메뉴 아래로 펼쳐지는 하위 메뉴 */
+#topNav .nav-sub {
+  display: none;
+}
+#topNav .nav-sub.open {
+  display: grid;
+  gap: 2px;
+  margin: 2px 0 6px 12px;
+  padding-left: 10px;
+  border-left: 2px solid rgba(255, 139, 185, 0.35);
+}
+#topNav .nav-sub .edu-sub-btn {
+  width: 100%;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #cbbfca;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+#topNav .nav-sub .edu-sub-btn:hover {
+  background: rgba(255, 255, 255, 0.09);
+  color: #fff;
+}
+#topNav .nav-sub .edu-sub-btn.active {
+  background: rgba(255, 32, 121, 0.2);
+  color: #fff;
+  font-weight: 700;
+}
+/* 1000px 미만 가로 탭에서는 교육 뒤에 이어서 나온다 */
+@media (max-width: 999px) {
+  #topNav .nav-sub.open {
+    display: contents;
+  }
+  #topNav .nav-sub .edu-sub-btn {
+    width: auto;
+    padding: 10px 13px;
+    white-space: nowrap;
+  }
+}
+/* 모바일(하단 탭만 있을 때)에는 교육 화면 위에 칩 줄을 둔다 */
+.edu-subbar {
+  display: none;
+}
+@media (max-width: 720px) {
+  .edu-subbar {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    margin-bottom: 10px;
+    padding-bottom: 2px;
+  }
+  .edu-subbar .edu-sub-btn {
+    flex: 0 0 auto;
+    padding: 9px 13px;
+    border: 1px solid var(--accent-border);
+    border-radius: 99px;
+    background: #fff;
+    color: var(--accent-dark);
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .edu-subbar .edu-sub-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+}
