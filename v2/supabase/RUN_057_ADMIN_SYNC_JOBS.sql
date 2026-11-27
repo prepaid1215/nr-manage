@@ -2,6 +2,7 @@
 -- 오류확인 화면의 "최근 수집 작업"용: 수집 작업마다 누가 요청했고 어느 PC가 처리했는지, 성공/실패와 오류 내용을 돌려줍니다.
 -- 관리자(is_app_admin)만 호출할 수 있습니다. 여러 번 실행해도 안전합니다.
 -- 해제된 PC도 기록이 남아 있으므로 이름이 그대로 나옵니다(device_revoked로 구분).
+-- 처리 PC는 옛 방식(claimed_by)과 현재 방식(cloud_worker_id의 'pc-pool:계정ID:PC ID')을 모두 읽습니다.
 
 create or replace function public.admin_recent_sync_jobs(p_limit integer default 100, p_only_failed boolean default false)
 returns table(
@@ -37,7 +38,10 @@ begin
     d.id, d.device_name, dp.name, (d.revoked_at is not null), j.worker_type
   from public.nrc_sync_jobs j
   left join public.profiles p on p.id = j.owner_id
-  left join public.nrc_sync_devices d on d.id = j.claimed_by
+  left join public.nrc_sync_devices d on d.id = coalesce(
+    j.claimed_by,
+    case when j.cloud_worker_id ~ '^pc-pool:[0-9a-fA-F-]{36}:[0-9a-fA-F-]{36}$'
+      then split_part(j.cloud_worker_id, ':', 3)::uuid end)
   left join public.profiles dp on dp.id = d.owner_id
   where (not coalesce(p_only_failed, false) or j.status = 'ERROR')
     and j.status in ('SUCCESS', 'ERROR', 'RUNNING', 'CLAIMED', 'CANCELLED')
