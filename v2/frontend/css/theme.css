@@ -240,3 +240,334 @@ a:focus-visible {
     transform: none;
   }
 }
+
+/* 교육 탭 */
+.edu-hero {
+  background: linear-gradient(125deg, #2b2030 0%, #4a2140 58%, #b01b66 100%);
+  color: #fff;
+  border: 0;
+  border-radius: 21px;
+  box-shadow: 0 20px 40px rgba(116, 34, 78, 0.12);
+}
+.edu-hero .eyebrow {
+  color: #ffb3d1;
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  font-weight: 800;
+}
+.edu-hero h2 {
+  color: #fff;
+  font-size: 24px;
+  margin: 6px 0;
+}
+.edu-hero p,
+.edu-hero small {
+  color: #f1dce7;
+}
+.edu-progress {
+  height: 10px;
+  margin: 14px 0 8px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.2);
+  overflow: hidden;
+}
+.edu-progress i {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+.edu-tracks {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 14px 0;
+}
+.edu-track {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  padding: 16px 8px;
+  border: 1px solid var(--line);
+  border-radius: 19px;
+  background: #fff;
+  color: var(--text);
+  box-shadow: var(--shadow);
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.edu-track:hover {
+  transform: translateY(-3px);
+  border-color: var(--accent-border);
+  box-shadow: 0 14px 30px rgba(129, 52, 83, 0.1);
+}
+.edu-track.active {
+  border-color: var(--accent);
+  background: #fffafd;
+}
+.edu-track-icon {
+  font-size: 26px;
+}
+.edu-track small {
+  color: var(--accent-dark);
+  font-weight: 700;
+}
+.edu-track-title {
+  margin: 22px 2px 10px;
+}
+.edu-group {
+  margin-bottom: 18px;
+}
+.edu-group-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.edu-group-head h3 {
+  margin: 0;
+}
+.edu-group-head .help {
+  margin: 2px 0 0;
+}
+.edu-group-count {
+  margin-left: auto;
+  color: var(--muted);
+  font-weight: 700;
+}
+.edu-step {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: linear-gradient(125deg, #fb237b, #d31c69);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+.edu-item {
+  margin-bottom: 8px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: var(--shadow);
+  transition: background 0.22s ease, border-color 0.22s ease;
+}
+.edu-item.done {
+  background: #ffe9f2;
+  border-color: #ff9fc6;
+}
+.edu-item > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 15px 16px;
+  cursor: pointer;
+  list-style: none;
+  font-weight: 700;
+}
+.edu-item > summary::-webkit-details-marker {
+  display: none;
+}
+.edu-check {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  padding: 0;
+  accent-color: #ff2079;
+}
+.edu-item-title {
+  flex: 1;
+  min-width: 0;
+}
+.edu-item[open] > summary .edu-item-title {
+  color: var(--accent-dark);
+}
+.edu-tag {
+  flex: 0 0 auto;
+  padding: 3px 9px;
+  border-radius: 99px;
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+}
+.edu-item-body {
+  padding: 0 16px 16px 46px;
+}
+.edu-summary {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.edu-body {
+  white-space: pre-wrap;
+  line-height: 1.8;
+  color: var(--text);
+}
+.edu-example {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px dashed var(--accent-border);
+  border-radius: 12px;
+  background: #fff7fb;
+  white-space: pre-wrap;
+  color: #8a6b79;
+  font-size: 13px;
+}
+.edu-example span {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--accent-dark);
+  font-size: 11px;
+  font-weight: 800;
+}
+.edu-note {
+  margin-top: 18px;
+}
+@media (max-width: 600px) {
+  .edu-tracks {
+    grid-template-columns: 1fr;
+  }
+  .edu-track {
+    grid-template-columns: auto 1fr auto;
+    justify-items: start;
+    align-items: center;
+    padding: 12px 14px;
+  }
+  .edu-item-body {
+    padding-left: 16px;
+  }
+}
+
+/* 교육 탭: 아래 사람 진행 현황 */
+.edu-downline {
+  margin-top: 22px;
+}
+.edu-member {
+  border-top: 1px solid var(--line);
+}
+.edu-member > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 2px;
+  cursor: pointer;
+  list-style: none;
+}
+.edu-member > summary::-webkit-details-marker {
+  display: none;
+}
+.edu-member-name {
+  font-weight: 800;
+}
+.edu-member > summary b {
+  margin-left: auto;
+  color: var(--accent-dark);
+}
+.edu-member-track {
+  padding: 4px 2px 12px 12px;
+}
+.edu-member-track ul {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  columns: 2;
+  font-size: 13px;
+  color: var(--muted);
+}
+.edu-member-track li.ok {
+  color: var(--accent-dark);
+  font-weight: 700;
+}
+@media (max-width: 600px) {
+  .edu-member-track ul {
+    columns: 1;
+  }
+}
+
+/* 교육 탭: 관리자 편집 */
+.edu-admin-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  border: 1px dashed var(--accent-border);
+  border-radius: 14px;
+  background: #fff7fb;
+  font-size: 13px;
+  color: #8a6b79;
+}
+.edu-admin-bar button {
+  width: auto;
+  margin: 0 0 0 auto;
+}
+.edu-admin-bar button + button {
+  margin-left: 0;
+}
+.edu-photo {
+  margin: 12px 0 0;
+}
+.edu-photo img {
+  display: block;
+  max-width: 100%;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+}
+.edu-photo figcaption {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+.edu-edit-item {
+  margin-bottom: 10px;
+  padding: 14px;
+  border: 1px solid var(--accent-border);
+  border-radius: 16px;
+  background: #fff;
+}
+.edu-edit-item label {
+  margin-top: 8px;
+}
+.edu-edit-item textarea {
+  resize: vertical;
+}
+.edu-photo-edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.edu-photo-edit img {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+}
+.edu-photo-edit input {
+  flex: 1;
+}
+.edu-photo-edit button {
+  width: auto;
+  margin: 0;
+}
+.edu-edit-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.edu-edit-actions .compact {
+  width: auto;
+  margin: 0;
+  display: inline-block;
+  cursor: pointer;
+  text-align: center;
+}
+.edu-edit-actions .edu-danger {
+  margin-left: auto;
+  color: var(--danger);
+}

@@ -14,6 +14,7 @@ import {
   checklistItemCount,
   checklistPage,
 } from "./checklist.js?v=20260906-31";
+import { educationPage } from "./education.js?v=20261127-3";
 import { closingPage, commissionPage } from "./finance.js?v=20260916-2";
 import { performancePage } from "./performance.js?v=20261124-1";
 import { manualClosePage } from "./manual-close.js?v=20261124-1";
@@ -48,6 +49,7 @@ const menus = [
   ["customers", "고객"],
   ["activity", "활동"],
   ["checklist", "체크"],
+  ["education", "교육"],
   ["organization", "조직"],
   ["mytree", "내 계보도"],
   ["records", "기록"],
@@ -426,6 +428,7 @@ async function show(page, options) {
   if (page === "customers") return customersPage($("content"), me, options);
   if (page === "activity") return activityPage($("content"), me);
   if (page === "checklist") return checklistPage($("content"), me);
+  if (page === "education") return educationPage($("content"), me);
   if (page === "organization") return organizationDashboard();
   if (page === "mytree") return customTreePage($("content"), me);
   if (page === "records") return recordsPage($("content"), me, { lookupMember: lookupMemberOnPc });
