@@ -1,0 +1,242 @@
+/* NRC 사업관리 — 초기 사업자 가이드(V98) 디자인 스타일 레이어.
+   app.css 뒤에 불러와서 색·글꼴·모서리·그림자만 바꾼다. 레이아웃·계산·동작은 건드리지 않는다.
+   되돌리려면 index.html에서 이 파일의 <link> 한 줄만 빼면 된다. */
+
+:root {
+  --accent: #ff2079;
+  --accent-dark: #d81461;
+  --accent-soft: #fff0f6;
+  --accent-border: #ffc6dc;
+  --plum-1: #28202d;
+  --plum-2: #201b26;
+  --plum-3: #33222f;
+
+  --brand: var(--accent);
+  --brand2: var(--accent-dark);
+  --brand-soft: var(--accent-soft);
+  --bg: #faf8fb;
+  --text: #221b2b;
+  --muted: #706979;
+  --line: #eee7ee;
+  --shadow: 0 6px 22px rgba(52, 31, 48, 0.045);
+}
+
+:root,
+body,
+button,
+input,
+select,
+textarea {
+  font-family: "NanumSquareNeo", "NanumSquare Neo", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+}
+body {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+h1,
+h2,
+h3 {
+  letter-spacing: -0.4px;
+}
+.logo {
+  font-weight: 900;
+  letter-spacing: -0.8px;
+}
+
+/* 상단 바와 탭: 어두운 자두색 */
+header {
+  background: linear-gradient(170deg, var(--plum-1) 0%, var(--plum-2) 68%, var(--plum-3) 100%);
+}
+header,
+header h1,
+header .icon {
+  color: #fff;
+}
+header small {
+  color: #d3b6c6;
+}
+header .icon {
+  color: #ff8cb9;
+}
+#topNav {
+  background: var(--plum-2);
+  padding: 0 16px 14px;
+}
+#topNav button {
+  color: #ded4dd;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  transition: background 0.23s ease, color 0.23s ease, border-color 0.23s ease;
+}
+#topNav button:hover {
+  background: rgba(255, 255, 255, 0.095);
+  color: #fff;
+}
+#topNav button.active {
+  background: linear-gradient(105deg, rgba(255, 32, 121, 0.3), rgba(255, 32, 121, 0.14));
+  border-color: rgba(255, 139, 185, 0.28);
+  color: #fff;
+}
+#bottomNav button.active {
+  color: var(--accent-dark);
+}
+
+/* 큰 강조 카드: 어두운 바탕에 분홍 빛 */
+.hero,
+.activity-hero {
+  background: linear-gradient(125deg, #2b2030 0%, #4a2140 58%, #b01b66 100%);
+  color: #fff;
+  border-radius: 21px;
+  box-shadow: 0 20px 40px rgba(116, 34, 78, 0.12);
+}
+
+/* 카드와 입력 */
+.card,
+.kpis article,
+.auth-card {
+  border-color: var(--line);
+  border-radius: 19px;
+  box-shadow: var(--shadow);
+}
+.auth-card {
+  box-shadow: 0 20px 60px rgba(52, 31, 48, 0.1);
+}
+input,
+select,
+textarea {
+  border-color: var(--line);
+}
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid #ff9bc4;
+  outline-offset: 0;
+  border-color: var(--accent-border);
+}
+
+/* 버튼 */
+.primary {
+  background: var(--accent);
+  box-shadow: 0 2px 6px rgba(255, 32, 121, 0.12);
+  transition: transform 0.2s cubic-bezier(0.2, 0.7, 0.2, 1), background 0.2s ease, box-shadow 0.2s ease;
+}
+.primary:hover:not(:disabled) {
+  background: var(--accent-dark);
+  transform: translateY(-2px);
+  box-shadow: 0 9px 20px rgba(255, 32, 121, 0.2);
+}
+.primary:active:not(:disabled) {
+  transform: translateY(0) scale(0.975);
+}
+.secondary {
+  border-color: var(--accent-border);
+  color: var(--accent-dark);
+}
+.secondary:hover {
+  background: #fff5f9;
+}
+button:focus-visible,
+a:focus-visible {
+  outline: 3px solid #ff94c1;
+  outline-offset: 3px;
+}
+
+/* 앱 안에 남아 있던 파란 계열 연한 배경 → 분홍 기운이 도는 중립색 */
+.stats-kpis article,
+.perf-grid article,
+.transfer-history > summary {
+  background: #fbf6f9;
+}
+.due-pill {
+  background: var(--accent-soft) !important;
+  color: var(--accent-dark) !important;
+}
+.view-tabs button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* PC(1000px 이상): 왼쪽 세로 메뉴. 모바일·태블릿의 상단/하단 탭은 그대로 둔다. */
+@media (min-width: 1000px) {
+  .app {
+    max-width: none;
+    padding: 0;
+    display: grid;
+    grid-template-columns: 242px minmax(0, 1fr);
+    grid-template-rows: 124px 1fr;
+    min-height: 100vh;
+  }
+  header {
+    grid-column: 1;
+    grid-row: 1;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    height: 124px;
+    padding: 28px 18px 8px;
+    align-items: flex-start;
+    background: var(--plum-1);
+    box-shadow: none;
+  }
+  header h1 {
+    font-size: 21px;
+    margin: 4px 0 0;
+  }
+  header .header-actions {
+    position: absolute;
+    top: 16px;
+    right: 10px;
+    display: flex;
+    gap: 2px;
+  }
+  header .icon {
+    font-size: 20px;
+  }
+  #topNav {
+    grid-column: 1;
+    grid-row: 2;
+    position: sticky;
+    top: 124px;
+    height: calc(100vh - 124px);
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 4px;
+    padding: 4px 18px 24px;
+    overflow-y: auto;
+    background: var(--plum-2);
+    border-bottom: 0;
+    box-shadow: 4px 0 28px rgba(32, 20, 29, 0.075);
+  }
+  #topNav button {
+    width: 100%;
+    text-align: left;
+    padding: 12px 14px;
+    color: #ded4dd;
+    background: transparent;
+    border-radius: 11px;
+  }
+  #topNav button:hover {
+    transform: translateX(3px);
+  }
+  main#content {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    width: 100%;
+    max-width: 1170px;
+    margin: 0 auto;
+    padding: 34px 40px 80px;
+  }
+  #bottomNav {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .primary,
+  #topNav button {
+    transition: none;
+  }
+  .primary:hover:not(:disabled) {
+    transform: none;
+  }
+}
