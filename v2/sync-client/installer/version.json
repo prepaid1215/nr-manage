@@ -1,8 +1,8 @@
 {
   "schema": 1,
-  "release": 2026112506,
-  "collectorVersion": "20261125-worker-log-1",
-  "builtAt": "2026-11-24T10:59:37.689314+00:00",
-  "bytes": 60002894,
-  "sha256": "54a7e2e4401395c9f27fee58174cfc7896d0d64eb7ca41690097826ddab0a053"
+  "release": 2026112701,
+  "collectorVersion": "20261127-session-1",
+  "builtAt": "2026-11-27T01:07:54.773392+00:00",
+  "bytes": 60036377,
+  "sha256": "e03d1d45be1e10561f5babe32520c1b629098c4546160a5d2841bc1099e61e41"
 }
