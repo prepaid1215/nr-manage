@@ -26,7 +26,7 @@ import { teamPage } from "./team.js?v=20261101-10";
 import { localDate, monthRange } from "./date.js?v=20260829-25";
 import { memberLineMetrics } from "./line-metrics.js?v=20261108-2";
 import { friendlyError } from "./errors.js?v=20260830-1";
-import { adminPage, isAppAdmin } from "./admin.js?v=20261124-1";
+import { adminPage, isAppAdmin } from "./admin.js?v=20261128-2";
 import {
   loadManualLinks,
   mergeManualLinks,

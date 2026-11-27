@@ -24,7 +24,7 @@ export async function isAppAdmin() {
 }
 
 export async function adminPage(root) {
-  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>오류확인 사용현황</h2><p class="help">가입자별 접속·수집·마감 사용 현황입니다. 비밀번호와 입력 내용은 기록하지 않습니다.</p></div><button id="adminReload" class="secondary compact" type="button">새로고침</button></div><div id="adminSummary" class="admin-summary"></div><label>사용자 검색<input id="adminSearch" type="search" placeholder="이름, 앱 아이디, 회원번호"></label><div id="adminError" class="error"></div></section><section class="card"><h2>가입자 현황</h2><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>사용자</th><th>최근 활동</th><th>최근 화면</th><th>수집 (성공/실패)</th><th>마감 계획</th></tr></thead><tbody id="adminUsers"></tbody></table></div></section><section class="card"><h2>최근 행동</h2><div id="adminEvents" class="admin-events"></div></section><dialog id="adminGenealogyDialog" class="member-dialog admin-genealogy-dialog"><div class="dialog-head"><h2 id="adminGenealogyTitle">사용자 계보도</h2><button class="secondary compact" id="adminGenealogyDownload" type="button" hidden>💾 JSON 다운로드</button><button id="adminGenealogyClose" type="button">×</button></div><div class="admin-genealogy-body"><p id="adminGenealogyMeta" class="help"></p><div id="adminPlanSummary" class="admin-plan-summary"></div><div id="adminGenealogyError" class="error"></div><div class="tree-focus-bar admin-tree-tools"><span>기준: <b id="adminTreeFocus">-</b></span><div><button class="secondary compact" id="adminTreeHome" type="button">맨 위로</button><button class="secondary compact" id="adminTreeUp" type="button">상위로</button><span class="tree-zoom-controls"><button class="secondary compact" id="adminZoomOut" type="button">−</button><button class="secondary compact" id="adminZoomReset" type="button">100%</button><button class="secondary compact" id="adminZoomIn" type="button">＋</button></span></div></div><p class="help">회원을 클릭하면 그 사람을 맨 위로 놓고 다시 그립니다. 빈 공간을 끌면 계보도가 이동합니다.</p><div id="adminGenealogyTree" class="box-tree pannable-tree"><div class="tree-stage" id="adminGenealogyStage"><p class="help">계보도를 불러오는 중...</p></div></div></div></dialog>`;
+  root.innerHTML = `<section class="card"><div class="section-head"><div><h2>오류확인 사용현황</h2><p class="help">가입자별 접속·수집·마감 사용 현황입니다. 비밀번호와 입력 내용은 기록하지 않습니다.</p></div><button id="adminReload" class="secondary compact" type="button">새로고침</button></div><div id="adminSummary" class="admin-summary"></div><label>사용자 검색<input id="adminSearch" type="search" placeholder="이름, 앱 아이디, 회원번호"></label><div id="adminError" class="error"></div></section><section class="card"><h2>가입자 현황</h2><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>사용자</th><th>최근 활동</th><th>최근 화면</th><th>수집 (성공/실패)</th><th>마감 계획</th></tr></thead><tbody id="adminUsers"></tbody></table></div></section><section class="card"><div class="section-head"><div><h2>최근 수집 작업</h2><p class="help">수집 한 건마다 누가 요청했고 어느 PC가 처리했는지 보여줍니다. PC 소유자가 요청자와 다르면 함께 표시합니다.</p></div><label style="display:flex;align-items:center;gap:6px;white-space:nowrap"><input id="adminJobsFailedOnly" type="checkbox" style="width:auto"> 실패만</label></div><div id="adminJobsError" class="error"></div><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>요청 시각</th><th>요청자</th><th>처리 PC</th><th>결과</th></tr></thead><tbody id="adminJobs"></tbody></table></div></section><section class="card"><h2>최근 행동</h2><div id="adminEvents" class="admin-events"></div></section><dialog id="adminGenealogyDialog" class="member-dialog admin-genealogy-dialog"><div class="dialog-head"><h2 id="adminGenealogyTitle">사용자 계보도</h2><button class="secondary compact" id="adminGenealogyDownload" type="button" hidden>💾 JSON 다운로드</button><button id="adminGenealogyClose" type="button">×</button></div><div class="admin-genealogy-body"><p id="adminGenealogyMeta" class="help"></p><div id="adminPlanSummary" class="admin-plan-summary"></div><div id="adminGenealogyError" class="error"></div><div class="tree-focus-bar admin-tree-tools"><span>기준: <b id="adminTreeFocus">-</b></span><div><button class="secondary compact" id="adminTreeHome" type="button">맨 위로</button><button class="secondary compact" id="adminTreeUp" type="button">상위로</button><span class="tree-zoom-controls"><button class="secondary compact" id="adminZoomOut" type="button">−</button><button class="secondary compact" id="adminZoomReset" type="button">100%</button><button class="secondary compact" id="adminZoomIn" type="button">＋</button></span></div></div><p class="help">회원을 클릭하면 그 사람을 맨 위로 놓고 다시 그립니다. 빈 공간을 끌면 계보도가 이동합니다.</p><div id="adminGenealogyTree" class="box-tree pannable-tree"><div class="tree-stage" id="adminGenealogyStage"><p class="help">계보도를 불러오는 중...</p></div></div></div></dialog>`;
   const $ = (id) => document.getElementById(id);
   const openPasswordReset = installAdminPasswordReset(root);
   let users = [], genealogyModel = null, genealogyHomeId = null,
@@ -91,8 +91,32 @@ export async function adminPage(root) {
         }).join("")
       : '<p class="help">아직 기록된 행동이 없습니다.</p>';
   };
+  const jobStatusNames = { SUCCESS: "성공", ERROR: "실패", RUNNING: "수집 중", CLAIMED: "배정됨", CANCELLED: "취소" };
+  const loadJobs = async () => {
+    $("adminJobsError").textContent = "";
+    const { data, error } = await supabase.rpc("admin_recent_sync_jobs", {
+      p_limit: 100, p_only_failed: $("adminJobsFailedOnly").checked,
+    });
+    if (error) {
+      $("adminJobs").innerHTML = "";
+      $("adminJobsError").textContent = friendlyError(error, "수집 작업을 불러오지 못했습니다. RUN_057을 먼저 실행해 주세요.");
+      return;
+    }
+    $("adminJobs").innerHTML = (data || []).length
+      ? data.map((row) => {
+          const requester = row.requester_name || row.requester_username || "알 수 없음";
+          const device = row.device_name
+            ? `<b>${safe(row.device_name)}</b>${row.device_revoked ? "<small>해제된 PC</small>" : ""}${row.device_owner_name && row.device_owner_name !== row.requester_name ? `<small>PC 소유자 ${safe(row.device_owner_name)}</small>` : ""}`
+            : `<small>${row.status === "ERROR" ? "PC 배정 전 실패" : "배정 전"}</small>`;
+          const detail = row.status === "ERROR" ? (row.error || row.message) : row.message;
+          const failed = row.status === "ERROR";
+          return `<tr${failed ? ' class="admin-event-error"' : ""}><td>${safe(date(row.requested_at))}<small>${row.completed_at ? `완료 ${safe(date(row.completed_at))}` : ""}</small></td><td><b>${safe(requester)}</b><small>${safe(row.requester_username || "")}${row.source_account_id ? ` · NRC ${safe(row.source_account_id)}` : ""}</small></td><td>${device}</td><td><b>${safe(jobStatusNames[row.status] || row.status)}</b>${detail ? `<small${failed ? ' class="error"' : ""}>${safe(detail)}</small>` : ""}</td></tr>`;
+        }).join("")
+      : '<tr><td colspan="4">표시할 수집 작업이 없습니다.</td></tr>';
+  };
+  $("adminJobsFailedOnly").onchange = loadJobs;
   $("adminSearch").oninput = renderUsers;
-  $("adminReload").onclick = load;
+  $("adminReload").onclick = () => { load(); loadJobs(); };
   $("adminGenealogyClose").onclick = () => $("adminGenealogyDialog").close();
   $("adminGenealogyDownload").onclick = () => {
     if (!genealogyPayload) return;
@@ -208,4 +232,5 @@ export async function adminPage(root) {
     event.preventDefault(); event.stopPropagation(); panMoved = false;
   }, true);
   await load();
+  await loadJobs();
 }
