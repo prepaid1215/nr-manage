@@ -15,6 +15,8 @@
   "cloudTestsPassed": 44,
   "databaseIntegration": "not rerun; this release has no database change",
   "scope": "Local scan at the recorded time; not a guarantee of all security products or future verdicts",
-  "windowsReplacementTest": "not yet run for this release",
-  "settingsPreservationTest": "not yet run for this release"
+  "windowsReplacementTest": "passed (2026-11-27 11:20 KST, automatic update on a registered PC replaced 2026112506 with 2026112701 and the new version answered /health; updates/state.json status updated)",
+  "settingsPreservationTest": "passed (same deviceId 9265482d-d9e8-4457-97e6-07754890db23, deviceRevoked false, needsReregister false after replacement)",
+  "installedFileSha256": "e03d1d45be1e10561f5babe32520c1b629098c4546160a5d2841bc1099e61e41",
+  "installedFileScan": "not run: the replaced PC has Defender stopped (another antivirus installed). Installed file size and SHA-256 equal the file scanned on the other PC."
 }
