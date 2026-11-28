@@ -90,6 +90,11 @@ header .icon {
   box-shadow: 0 20px 40px rgba(116, 34, 78, 0.12);
 }
 
+/* 홈 "오늘 현황" 카드: app.css의 홈 전용 규칙이 밝은 분홍색(--brand2)으로 덮어써서 흰 글자가 눈부시게 보였다. 어두운 자두색 바탕으로 되돌린다. */
+#content.home-view .hero {
+  background: linear-gradient(125deg, #2b2030 0%, #4a2140 62%, #7a1d4f 100%);
+}
+
 /* 카드와 입력 */
 .card,
 .kpis article,
