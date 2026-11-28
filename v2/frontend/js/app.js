@@ -15,15 +15,16 @@ import {
   checklistPage,
 } from "./checklist.js?v=20260906-31";
 import { educationPage, educationGo, eduSubHtml } from "./education.js?v=20261128-3";
-import { closingPage, commissionPage } from "./finance.js?v=20261128-5";
+import { closingPage, commissionPage } from "./finance.js?v=20261128-6";
 import { performancePage } from "./performance.js?v=20261128-1";
 import { manualClosePage } from "./manual-close.js?v=20261128-1";
 import { customTreePage } from "./custom-tree.js?v=20261128-1";
 import { closingLabPage } from "./closing-lab.js?v=20261124-1";
-import { recordsPage } from "./records.js?v=20261128-3";
+import { recordsPage } from "./records.js?v=20261128-4";
 import { scheduleTimeNote, missingRecordSchedules, scheduleKind } from "./schedule-hint.js?v=20261125-20";
 import { teamPage } from "./team.js?v=20261101-10";
 import { localDate, monthRange } from "./date.js?v=20260829-25";
+import { weekAt, weekDashboard, monthDates, nextDate, kstDate } from "./records-logic.js?v=20261128-3";
 import { memberLineMetrics } from "./line-metrics.js?v=20261108-2";
 import { friendlyError } from "./errors.js?v=20260830-1";
 import { adminPage, isAppAdmin } from "./admin.js?v=20261128-3";
@@ -258,7 +259,7 @@ async function home() {
   );
   $("content").querySelector(".home-summary").insertAdjacentHTML(
     "afterend",
-    `<details class="card home-nrc" id="homeNrcSection"${localStorage.getItem("homeNrcOpen") === "1" ? " open" : ""}><summary><h2 class="card-title">${icon('<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>')}NRC 매출 대시보드</h2><p class="help" id="homeNrcUpdated">최근 수집 데이터를 불러오는 중...</p></summary><div id="homePcStatus" class="pc-status-badge"><span class="device-dot"></span><span>수집 PC 상태 확인 중...</span></div><div id="homeCollectStatus" class="connection-status" hidden></div><div id="homeCollectError" class="error"></div><button class="secondary home-collect-btn" id="homeCollect" type="button">매출받기 (마감할 때만 눌러도 됩니다)</button><div id="homeNrcDashboard"><p class="help">수집된 매출 데이터가 없습니다.</p></div></details>`,
+    `<details class="card home-nrc" id="homeNrcSection"${localStorage.getItem("homeNrcOpen") === "1" ? " open" : ""}><summary><h2 class="card-title">${icon('<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>')}NRC 매출 대시보드</h2><p class="help" id="homeNrcUpdated">최근 수집 데이터를 불러오는 중...</p></summary><div id="homePcStatus" class="pc-status-badge"><span class="device-dot"></span><span>수집 PC 상태 확인 중...</span></div><div id="homeCollectStatus" class="connection-status" hidden></div><div id="homeCollectError" class="error"></div><button class="secondary home-collect-btn" id="homeCollect" type="button">매출받기 (마감할 때만 눌러도 됩니다)</button><div class="nrc-week-nav" id="nrcWeekNav"><button type="button" id="nrcWeekPrev" aria-label="이전 주차">◀</button><b id="nrcWeekTitle"></b><button type="button" id="nrcWeekNext" aria-label="다음 주차">▶</button><span class="rc-badge" id="nrcWeekBadge">진행 중</span><span class="nrc-week-phase" id="nrcWeekPhase" hidden><button type="button" data-phase="before" class="active">마감 전</button><button type="button" data-phase="after">마감 후</button></span></div><div id="homeNrcDashboard"><p class="help">수집된 매출 데이터가 없습니다.</p></div></details>`,
   );
   $("homeNrcSection").addEventListener("toggle", (e) =>
     localStorage.setItem("homeNrcOpen", e.target.open ? "1" : "0"),
@@ -280,6 +281,69 @@ async function home() {
   $("balanceForm").onsubmit = submitBalanceDialog;
   $("balanceDialogClose").onclick = () => $("balanceDialog").close();
   $("balanceDialogCancel").onclick = () => $("balanceDialog").close();
+  // ---- NRC 매출 대시보드 주차 이동: 이번 주차는 최신 수집값, 지난 주차는 기록 탭에 저장된 값(마감 전·후) ----
+  let nrcLive = null;
+  const nrcWeek = { offset: 0, phase: "before", token: 0 },
+    NRC_WEEK_BACK_LIMIT = -48, // 12개월
+    mdText = (date) => `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`,
+    noLiveHtml = '<p class="help">수집된 매출 데이터가 없습니다.</p>',
+    renderNrcWeek = async () => {
+      const week = weekAt(kstDate(new Date()), nrcWeek.offset),
+        past = nrcWeek.offset < 0;
+      $("nrcWeekTitle").textContent = `${week.round}주차 ${mdText(week.from)} ~ ${mdText(week.to)}`;
+      $("nrcWeekPrev").disabled = nrcWeek.offset <= NRC_WEEK_BACK_LIMIT;
+      $("nrcWeekNext").disabled = nrcWeek.offset >= 0;
+      $("nrcWeekBadge").textContent = past ? "완료" : "진행 중";
+      $("nrcWeekBadge").classList.toggle("rc-badge-wait", !past);
+      $("nrcWeekPhase").hidden = !past;
+      $("nrcWeekPhase").querySelectorAll("[data-phase]").forEach((button) => button.classList.toggle("active", button.dataset.phase === nrcWeek.phase));
+      const token = ++nrcWeek.token;
+      if (!past) {
+        $("homeNrcDashboard").innerHTML = nrcLive ? nrcLive.html : noLiveHtml;
+        if (nrcLive) $("homeNrcUpdated").textContent = nrcLive.updated;
+        return;
+      }
+      const memberNo = Number(String(me.member_no || "").replace(/[^0-9]/g, ""));
+      if (!memberNo) {
+        $("homeNrcDashboard").innerHTML = '<p class="help">프로필에 회원번호가 없어 지난 주차를 볼 수 없습니다. 설정 > 내 정보에서 회원번호를 입력해 주세요.</p>';
+        return;
+      }
+      $("homeNrcDashboard").innerHTML = '<p class="help">불러오는 중...</p>';
+      try {
+        const records = await fetchWeekRecords(week.month, memberNo);
+        if (token !== nrcWeek.token) return; // 읽는 사이 다른 주차로 옮겼으면 그대로 둔다
+        const info = weekDashboard({ rows: records.rows, finalRows: records.finalRows, memberNo, month: week.month, round: week.round }),
+          after = nrcWeek.phase === "after",
+          side = after ? info.after : info.before,
+          caption = after ? (info.afterStrict ? `${mdText(nextDate(week.to))} 새벽 최종마감 기록` : `${side ? mdText(side.date) : mdText(nextDate(week.to))} 기록`) : `${mdText(week.to)} 저녁 기록`;
+        $("homeNrcUpdated").textContent = `${week.round}주차 ${after ? "마감 후" : "마감 전"} · ${caption}`;
+        if (!side) {
+          $("homeNrcDashboard").innerHTML = `<p class="help">${week.round}주차 ${after ? "마감 후" : "마감 전"} 기록이 없습니다.</p>`;
+          return;
+        }
+        const show = (value) => (value == null ? "-" : number(value));
+        $("homeNrcDashboard").innerHTML =
+          nrcDashboardHtml({ own: show(side.own), major: show(side.major), minor: show(side.minor), rank: side.rank ? safe(side.rank) : "-", certified: "-", lines: [show(side.totalLines), "-", show(side.realLines), "-"], org: ["-", "-"] }) +
+          '<p class="help">지난 주차는 기록 탭에 저장된 값만 보여 줍니다. 인증직급·실인증회선·KT/LG·조직 현황은 기록하지 않아 "-"로 나옵니다.</p>';
+      } catch (error) {
+        if (token === nrcWeek.token) $("homeNrcDashboard").innerHTML = `<p class="error">지난 주차를 불러오지 못했습니다: ${safe(friendlyError(error, "잠시 후 다시 시도해 주세요."))}</p>`;
+      }
+    };
+  $("nrcWeekPrev").onclick = () => {
+    if (nrcWeek.offset > NRC_WEEK_BACK_LIMIT) nrcWeek.offset -= 1;
+    renderNrcWeek();
+  };
+  $("nrcWeekNext").onclick = () => {
+    if (nrcWeek.offset < 0) nrcWeek.offset += 1;
+    renderNrcWeek();
+  };
+  $("nrcWeekPhase").querySelectorAll("[data-phase]").forEach((button) => {
+    button.onclick = () => {
+      nrcWeek.phase = button.dataset.phase;
+      renderNrcWeek();
+    };
+  });
+  renderNrcWeek();
   const date = new Date(),
     today = localDate(date),
     month = today.slice(0, 7),
@@ -347,8 +411,24 @@ async function home() {
     const consumer = payload.consumerSummary || null;
     $("homeNrcUpdated").textContent =
       `최종 업데이트 ${new Date(snapshot.data.collected_at).toLocaleString("ko-KR")}`;
-    $("homeNrcDashboard").innerHTML =
-      `<div class="nrc-overview"><article><h3>본인 매출 현황</h3><div><span>본인매출 NV<b>${number(own)}</b></span><span>대실적<b>${number(major)}</b></span><span>소실적<b>${number(minor)}</b></span></div></article><article><h3>직급 현황</h3><div><span>현재직급<b>${safe(rank)}</b></span><span>인증직급<b>${safe(certified)}</b></span></div></article><article><h3>소비자회선 현황</h3><div class="consumer-kpis"><span>총회선<b>${consumer ? number(consumer["총회선"]) : "미수집"}</b></span><span>실인증회선<b>${consumer ? number(consumer["실인증회선"]) : "-"}</b></span><span>실회선<b>${consumer ? number(consumer["실회선"]) : "-"}</b></span><span>KT / LG<b>${consumer ? `${number(consumer["KT망"])} / ${number(consumer["LG망"])}` : "-"}</b></span></div></article><article><h3>조직 현황</h3><div><span>전체 회원<b>${treeRows.length.toLocaleString()}명</b></span><span>활동 회원<b>${treeRows.filter((item) => String(item.status) === "1" && !item.dormant).length.toLocaleString()}명</b></span></div></article></div><div class="nrc-gauges"><article><div class="nrc-gauge major"><span>대실적<b>${number(major)}</b></span></div></article><article><div class="nrc-gauge minor"><span>소실적<b>${number(minor)}</b></span></div></article></div>`;
+    nrcLive = {
+      updated: `최종 업데이트 ${new Date(snapshot.data.collected_at).toLocaleString("ko-KR")}`,
+      html: nrcDashboardHtml({
+        own: number(own),
+        major: number(major),
+        minor: number(minor),
+        rank: safe(rank),
+        certified: safe(certified),
+        lines: [
+          consumer ? number(consumer["총회선"]) : "미수집",
+          consumer ? number(consumer["실인증회선"]) : "-",
+          consumer ? number(consumer["실회선"]) : "-",
+          consumer ? `${number(consumer["KT망"])} / ${number(consumer["LG망"])}` : "-",
+        ],
+        org: [`${treeRows.length.toLocaleString()}명`, `${treeRows.filter((item) => String(item.status) === "1" && !item.dormant).length.toLocaleString()}명`],
+      }),
+    };
+    renderNrcWeek();
   }
   const todayActivationCount = cs.filter(
     (c) => c.activation_date === today,
@@ -559,6 +639,36 @@ async function organization() {
   }
 }
 const number = (value) => Number(value || 0).toLocaleString("ko-KR");
+// NRC 매출 대시보드 본문. 값은 이미 화면에 쓸 글자로 만들어 받는다(최신 수집값과 지난 주차 기록이 같은 모양을 쓴다).
+function nrcDashboardHtml(v) {
+  const kpi = (label, value) => `<span>${label}<b>${value}</b></span>`;
+  return `<div class="nrc-overview"><article><h3>본인 매출 현황</h3><div>${kpi("본인매출 NV", v.own)}${kpi("대실적", v.major)}${kpi("소실적", v.minor)}</div></article><article><h3>직급 현황</h3><div>${kpi("현재직급", v.rank)}${kpi("인증직급", v.certified)}</div></article><article><h3>소비자회선 현황</h3><div class="consumer-kpis">${kpi("총회선", v.lines[0])}${kpi("실인증회선", v.lines[1])}${kpi("실회선", v.lines[2])}${kpi("KT / LG", v.lines[3])}</div></article><article><h3>조직 현황</h3><div>${kpi("전체 회원", v.org[0])}${kpi("활동 회원", v.org[1])}</div></article></div><div class="nrc-gauges"><article><div class="nrc-gauge major"><span>대실적<b>${v.major}</b></span></div></article><article><div class="nrc-gauge minor"><span>소실적<b>${v.minor}</b></span></div></article></div>`;
+}
+// 지난 주차 값을 읽는다: 그 달의 일반 기록과 최종마감 기록(내 본코드·서브1·서브2). 달마다 한 번만 읽는다.
+const weekRecordCache = new Map();
+async function fetchWeekRecords(month, memberNo) {
+  const key = `${me.id}|${month}`;
+  if (weekRecordCache.has(key)) return weekRecordCache.get(key);
+  const dates = monthDates(month),
+    last = dates[dates.length - 1],
+    codes = [memberNo, memberNo + 1, memberNo + 2].map(String),
+    cols = "metric_date,user_id,rank_name,ord_pv,max_pv,min_pv,real_lines,consumer_total_lines",
+    probe = await supabase.from("nrc_daily_metrics").select("record_kind").limit(1),
+    hasKind = !probe.error;
+  let daily = supabase.from("nrc_daily_metrics").select(cols).eq("owner_id", me.id).in("user_id", codes).gte("metric_date", dates[0]).lte("metric_date", nextDate(last));
+  if (hasKind) daily = daily.eq("record_kind", "daily");
+  const dailyRes = await daily;
+  if (dailyRes.error) throw dailyRes.error;
+  let finalRows = null;
+  if (hasKind) {
+    const finalRes = await supabase.from("nrc_daily_metrics").select(cols).eq("owner_id", me.id).eq("record_kind", "final").in("user_id", codes).gte("metric_date", dates[0]).lte("metric_date", last);
+    if (finalRes.error) throw finalRes.error;
+    finalRows = finalRes.data || [];
+  }
+  const result = { rows: dailyRes.data || [], finalRows };
+  weekRecordCache.set(key, result);
+  return result;
+}
 async function organizationTree() {
   $("content").innerHTML =
     `<section class="card genealogy-card"><div class="section-head"><div><h2>10단계 계보도</h2><p class="help" id="orgCollected">최신 데이터를 불러오는 중...</p></div><button class="secondary compact" id="orgReload" type="button">새로고침</button></div><div class="org-summary" id="orgSummary"></div><label>회원 검색<input id="orgSearch" type="search" placeholder="이름 또는 회원번호"></label><div id="orgError" class="error"></div><div id="genealogy" class="genealogy"></div></section><dialog id="memberDialog" class="member-dialog"><div class="dialog-head"><h2>본인 매출 현황</h2><button id="closeMember" type="button" aria-label="닫기">×</button></div><div id="memberDetail"></div></dialog>`;

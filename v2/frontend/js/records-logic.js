@@ -181,6 +181,56 @@ export function weekSummaries(grid, dates) {
   });
 }
 
+// 오늘(YYYY-MM-DD)이 속한 주차에서 offset만큼(음수 = 이전 주차) 이동한 주차. 한 달은 항상 4주차이다.
+// 결과: { month: "YYYY-MM", round: 1~4, from, to(마감일) }
+export function weekAt(todayText, offset = 0) {
+  const [year, month] = String(todayText).split("-").map(Number);
+  const dates = monthDates(`${year}-${String(month).padStart(2, "0")}`);
+  const closings = dates.filter((date) => closingRound(date));
+  const current = Math.max(0, closings.findIndex((date) => date >= todayText));
+  const total = year * 12 + (month - 1) + Math.floor((current + offset) / 4);
+  const round = (((current + offset) % 4) + 4) % 4 + 1;
+  const targetMonth = `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, "0")}`;
+  const targetDates = monthDates(targetMonth);
+  const targetClosings = targetDates.filter((date) => closingRound(date));
+  const to = targetClosings[round - 1];
+  return { month: targetMonth, round, from: round === 1 ? targetDates[0] : nextDate(targetClosings[round - 2]), to };
+}
+
+// 홈 대시보드의 지난 주차 값: 내 본코드(memberNo)·서브1·서브2 기록에서 마감 전(마감일 당일 저녁)과 마감 후(최종마감)를 각각 만든다.
+// 대실적·소실적은 서브1·서브2 총실적(본인+대+소)을 비교한 큰 값·작은 값이고(NRC 화면과 같음), 둘 다 없으면 본코드 줄의 값을 쓴다.
+// rows = 일반 기록, finalRows = 최종마감 기록(없으면 null). 기록이 없으면 해당 항목은 null.
+export function weekDashboard({ rows, finalRows = null, memberNo, month, round }) {
+  const dates = monthDates(month);
+  const closing = dates.filter((date) => closingRound(date))[round - 1];
+  if (!closing) return { closing: "", before: null, after: null, afterStrict: false };
+  const strict = Boolean(finalRows) && closing >= FINAL_RULE_START;
+  const side = (list, date) => {
+    const pick = (code) => list.find((row) => row.metric_date === date && String(row.user_id) === String(code));
+    const main = pick(memberNo), s1 = pick(memberNo + 1), s2 = pick(memberNo + 2);
+    if (!main && !s1 && !s2) return null;
+    const t1 = gridValue(s1, "total"), t2 = gridValue(s2, "total");
+    let major = null, minor = null;
+    if (t1 != null && t2 != null) [major, minor] = [Math.max(t1, t2), Math.min(t1, t2)];
+    else if (main) [major, minor] = [gridValue(main, "max_pv"), gridValue(main, "min_pv")];
+    return {
+      date,
+      own: main ? Number(main.ord_pv || 0) : null,
+      major,
+      minor,
+      rank: (main && main.rank_name) || "",
+      totalLines: main && main.consumer_total_lines != null ? Number(main.consumer_total_lines) : null,
+      realLines: main && main.real_lines != null ? Number(main.real_lines) : null,
+    };
+  };
+  return {
+    closing,
+    before: side(rows, closing),
+    after: strict ? side(finalRows, closing) : side(rows, nextDate(closing)),
+    afterStrict: strict,
+  };
+}
+
 // 두 값 중 큰 쪽이 대실적, 작은 쪽이 소실적(같으면 앞쪽이 대실적). 하나라도 비어 있으면 알 수 없어 빈 문자열.
 export function lineNames(a, b) {
   if (a == null || b == null) return ["", ""];

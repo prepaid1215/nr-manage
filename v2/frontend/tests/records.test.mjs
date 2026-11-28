@@ -200,3 +200,32 @@ assert.deepEqual(lineNames(300000, 500000), ["소실적", "대실적"]);
 assert.deepEqual(lineNames(5, 5), ["대실적", "소실적"], "같으면 앞쪽이 대실적");
 assert.deepEqual(lineNames(null, 5), ["", ""], "한쪽이 비면 알 수 없음");
 console.log("Records weekly tests passed.");
+
+import { weekAt, weekDashboard } from "../js/records-logic.js";
+assert.deepEqual(weekAt("2026-11-28", 0), { month: "2026-11", round: 4, from: "2026-11-24", to: "2026-11-30" }, "오늘이 속한 주차");
+assert.deepEqual(weekAt("2026-11-28", -1), { month: "2026-11", round: 3, from: "2026-11-16", to: "2026-11-23" }, "이전 주차");
+assert.deepEqual(weekAt("2026-11-28", -3), { month: "2026-11", round: 1, from: "2026-11-01", to: "2026-11-08" });
+assert.deepEqual(weekAt("2026-11-28", -4), { month: "2026-10", round: 4, from: "2026-10-24", to: "2026-10-31" }, "달을 넘어 이전 달 4주차");
+assert.deepEqual(weekAt("2026-01-05", -1), { month: "2025-12", round: 4, from: "2025-12-24", to: "2025-12-31" }, "해를 넘어 이동");
+assert.deepEqual(weekAt("2026-11-23", 0).round, 3, "마감일 당일은 그 주차");
+assert.deepEqual(weekAt("2026-11-24", 0).round, 4);
+assert.deepEqual(weekAt("2026-11-28", -48).month, "2025-11", "12개월 전");
+assert.deepEqual(weekAt("2026-11-28", 1), { month: "2026-12", round: 1, from: "2026-12-01", to: "2026-12-08" }, "다음 주차");
+{
+  const r = (date, id, o, max, min, rank = "GD", lines = 5, total = 9) => ({ metric_date: date, user_id: String(id), ord_pv: o, max_pv: max, min_pv: min, rank_name: rank, real_lines: lines, consumer_total_lines: total });
+  const rows = [r("2026-11-23", 2893496, 32400, 0, 0), r("2026-11-23", 2893497, 0, 813726, 0), r("2026-11-23", 2893498, 0, 465520, 0)];
+  const w = weekDashboard({ rows, finalRows: [], memberNo: 2893496, month: "2026-11", round: 3 });
+  assert.equal(w.closing, "2026-11-23");
+  assert.deepEqual([w.before.own, w.before.major, w.before.minor, w.before.rank, w.before.realLines, w.before.totalLines], [32400, 813726, 465520, "GD", 5, 9], "NRC 3주차 화면과 같은 값");
+  assert.equal(w.after, null, "최종마감 기록이 없으면 마감 후 없음");
+  assert.equal(w.afterStrict, true);
+  const swapped = weekDashboard({ rows: [r("2026-11-23", 2893497, 0, 300000, 0), r("2026-11-23", 2893498, 0, 500000, 0)], finalRows: [], memberNo: 2893496, month: "2026-11", round: 3 });
+  assert.deepEqual([swapped.before.major, swapped.before.minor], [500000, 300000], "서브1이 작아도 큰 값이 대실적");
+  const old = weekDashboard({ rows: [r("2026-11-09", 2893497, 0, 7, 0), r("2026-11-09", 2893498, 0, 3, 0)], finalRows: [], memberNo: 2893496, month: "2026-11", round: 1 });
+  assert.deepEqual([old.afterStrict, old.after && old.after.major], [false, 7], "규칙 이전 주차는 다음 날 기록을 마감 후로 씀");
+  const mainOnly = weekDashboard({ rows: [r("2026-11-08", 2893496, 10, 400, 100)], finalRows: null, memberNo: 2893496, month: "2026-11", round: 1 });
+  assert.deepEqual([mainOnly.before.major, mainOnly.before.minor], [400, 100], "서브 기록이 없으면 본코드 줄의 대·소실적");
+  const none = weekDashboard({ rows: [], finalRows: [], memberNo: 2893496, month: "2026-11", round: 2 });
+  assert.deepEqual([none.before, none.after], [null, null]);
+}
+console.log("Records dashboard week tests passed.");

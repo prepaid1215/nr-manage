@@ -542,6 +542,14 @@ button:active{transform:translateY(1px)}button:disabled{cursor:not-allowed;opaci
 .rc-week .rc-table{min-width:0}.rc-week .rc-table th{position:static;cursor:default;white-space:normal}.rc-week .rc-table th small{display:block;font-weight:400;font-size:11px}
 .rc-week .rc-table td small.rc-lt{display:block;font-size:11px;color:var(--muted);font-weight:400}
 .rc-badge-wait{background:#eef0fb;color:#5b55b9}
+/* 홈 NRC 매출 대시보드의 주차 이동 막대 */
+.nrc-week-nav{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px;margin:12px 0 4px;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:#f7f9fc}
+.nrc-week-nav>button{width:34px;margin:0;padding:6px 0;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--brand);box-shadow:none;font-size:13px}
+.nrc-week-nav>button:disabled{opacity:.35;cursor:default}
+.nrc-week-nav b{min-width:170px;text-align:center;font-size:15px}
+.nrc-week-phase{display:inline-flex;gap:4px}.nrc-week-phase[hidden]{display:none}
+.nrc-week-phase button{width:auto;margin:0;padding:6px 12px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--muted);font-size:12px;font-weight:700;box-shadow:none}
+.nrc-week-phase button.active{background:var(--brand);border-color:var(--brand);color:#fff}
 /* 날짜 칸은 내용 폭만 쓰고 남는 폭은 값 칸이 나눠 가진다. 최종마감 줄의 설명 글자는 줄바꿈해서 날짜 칸이 넓어지지 않게 한다. */
 .rc-grid .rc-stick,.rc-grid .rc-dayno{width:1%;white-space:nowrap}.rc-grid .rc-dayno small{white-space:normal}
 .rc-addbox{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 8px}.rc-addbox input{margin:0}.rc-addbox button{width:auto;margin:0}
