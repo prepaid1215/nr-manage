@@ -15,12 +15,12 @@ import {
   checklistPage,
 } from "./checklist.js?v=20260906-31";
 import { educationPage, educationGo, eduSubHtml } from "./education.js?v=20261128-3";
-import { closingPage, commissionPage } from "./finance.js?v=20261128-4";
+import { closingPage, commissionPage } from "./finance.js?v=20261128-5";
 import { performancePage } from "./performance.js?v=20261128-1";
 import { manualClosePage } from "./manual-close.js?v=20261128-1";
 import { customTreePage } from "./custom-tree.js?v=20261128-1";
 import { closingLabPage } from "./closing-lab.js?v=20261124-1";
-import { recordsPage } from "./records.js?v=20261128-2";
+import { recordsPage } from "./records.js?v=20261128-3";
 import { scheduleTimeNote, missingRecordSchedules, scheduleKind } from "./schedule-hint.js?v=20261125-20";
 import { teamPage } from "./team.js?v=20261101-10";
 import { localDate, monthRange } from "./date.js?v=20260829-25";

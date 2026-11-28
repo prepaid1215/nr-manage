@@ -1,5 +1,5 @@
 import { supabase } from "./supabase.js?v=20260829-34";
-import { closingRound, withDeltas, toPeopleCsv, labelCodes, groupPeople, personValue, GRID_METRICS, monthDates, nextDate, buildGrid, toGridCsv, matchPeople, trackedPeople, kstDate, snapshotRows, withProvisional, finalPreviewRows, FINAL_RULE_START, closingRound as closingRoundOf, moveCode, dropCode } from "./records-logic.js?v=20261128-1";
+import { closingRound, withDeltas, toPeopleCsv, labelCodes, groupPeople, personValue, GRID_METRICS, monthDates, nextDate, buildGrid, toGridCsv, matchPeople, trackedPeople, kstDate, snapshotRows, withProvisional, finalPreviewRows, FINAL_RULE_START, closingRound as closingRoundOf, moveCode, dropCode, weekSummaries, lineNames } from "./records-logic.js?v=20261128-2";
 
 // 기록 탭: 매일 저장된 코드별 대실적·소실적·실회선을 날짜별로 보고 엑셀(CSV)로 내려받는다.
 // 표는 nrc_daily_metrics(RUN_051)에서 읽는다. 내 계정 자료만 보인다(RLS).
@@ -191,7 +191,7 @@ export async function recordsPage(root, me, tools = {}) {
     }
     const accounts = [...new Set(recent.map((row) => row.source_account_id))].sort();
     $("rcInfo").textContent = "매일 저장된 사람별 서브1·서브2의 대실적·소실적·회선수입니다. 이전 기록일과 비교한 증감이 함께 나옵니다.";
-    $("rcBody").innerHTML = `<div class="view-tabs"><button class="active" id="rcTabDay" type="button">날짜별 보기</button><button id="rcTabOne" type="button">하루 보기</button></div><div id="rcGridPane"><div class="rc-controls"><label>기간(월)<input id="rcMonth" type="month"></label><label>값<select id="rcMetric">${GRID_METRICS.map(([key, label]) => `<option value="${key}">${label}</option>`).join("")}</select></label><button class="secondary compact" id="rcGridCsv" type="button">엑셀(CSV) 내려받기</button></div><div class="rc-ptabs" id="rcPTabs"></div><div id="rcAddBox" class="rc-addbox" hidden><input id="rcAddPerson" list="rcPeopleList" placeholder="이름 입력 (목록에 없으면 NRC에서 검색)" autocomplete="off"><button class="secondary compact" id="rcNrcFind" type="button">NRC에서 찾기</button><datalist id="rcPeopleList"></datalist></div><p class="help" id="rcLookupStatus"></p><div id="rcLookup"></div><div class="rc-wrap" id="rcGridTable"></div><p class="help">"전체" 탭은 탭으로 열어 둔 사람들의 서브1·서브2를 한 표로 보여 주고, 이름 탭은 그 사람만 보여 줍니다. 이름 탭 끝의 ×는 탭 닫기, +는 사람 추가입니다. 10단계 밖의 하위는 "NRC에서 찾기"로 찾은 뒤 "표에 등록"하면 다음 수집부터 매일 기록됩니다. 노란 줄은 마감일(8일·15일·23일·말일)입니다. 기록이 없는 날은 "-"입니다. 오늘 칸은 오늘 수집한 최신 값을 회색 기울임으로 미리 보여 주고, 공식 기록이 만들어지면 그 값으로 바뀝니다. 날짜 칸은 그날 저녁 6시~자정에 마지막으로 수집한 값이고, 마감일 아래의 "최종마감" 줄은 마감 다음날 0~6시에 마지막으로 수집한 값입니다. 공식 기록은 다음 날 오전 6시 30분 이후에 만들어지며, 그 시간대에 수집이 없으면 "-"로 둡니다. 기록은 매일 한 번 쌓이므로 처음에는 비어 있고 날이 지날수록 채워집니다.</p></div><div id="rcDayPane" hidden><div class="rc-controls"><label>계정<select id="rcAccount">${accounts.map((a) => `<option value="${safe(a)}">${safe(a)}</option>`).join("")}</select></label><div class="rc-datebox"><button class="secondary compact" id="rcPrev" type="button">◀ 이전</button><input id="rcDate" type="date"><button class="secondary compact" id="rcNext" type="button">다음 ▶</button></div><label>검색<input id="rcSearch" placeholder="이름 또는 코드"></label><label class="check"><input id="rcMain" type="checkbox"> 본코드도 보기</label><button class="secondary compact" id="rcCsv" type="button">엑셀(CSV) 내려받기</button></div><p class="help"><span id="rcRound"></span> <span id="rcMeta"></span> · <span id="rcCount"></span></p><div class="rc-wrap" id="rcTable"></div><p class="help">증감은 바로 이전에 기록된 날짜와 비교한 값입니다. 실회선이 "미수집"이면 그날 읽지 못한 값이며 0과 다릅니다. 마감일은 8일·15일·23일·말일입니다. 본코드는 마감 계산에만 쓰여서 기본으로 숨겼습니다(“본코드도 보기”로 표시). 이름 아래 작은 숫자는 본코드 번호입니다.</p></div>`;
+    $("rcBody").innerHTML = `<div class="view-tabs"><button class="active" id="rcTabDay" type="button">날짜별 보기</button><button id="rcTabWeek" type="button">주차별 보기</button><button id="rcTabOne" type="button">하루 보기</button></div><div id="rcGridPane"><div class="rc-controls"><label>기간(월)<input id="rcMonth" type="month"></label><label>값<select id="rcMetric">${GRID_METRICS.map(([key, label]) => `<option value="${key}">${label}</option>`).join("")}</select></label><button class="secondary compact" id="rcGridCsv" type="button">엑셀(CSV) 내려받기</button></div><div class="rc-ptabs" id="rcPTabs"></div><div id="rcAddBox" class="rc-addbox" hidden><input id="rcAddPerson" list="rcPeopleList" placeholder="이름 입력 (목록에 없으면 NRC에서 검색)" autocomplete="off"><button class="secondary compact" id="rcNrcFind" type="button">NRC에서 찾기</button><datalist id="rcPeopleList"></datalist></div><p class="help" id="rcLookupStatus"></p><div id="rcLookup"></div><div class="rc-wrap" id="rcGridTable"></div><p class="help">"전체" 탭은 탭으로 열어 둔 사람들의 서브1·서브2를 한 표로 보여 주고, 이름 탭은 그 사람만 보여 줍니다. 이름 탭 끝의 ×는 탭 닫기, +는 사람 추가입니다. 10단계 밖의 하위는 "NRC에서 찾기"로 찾은 뒤 "표에 등록"하면 다음 수집부터 매일 기록됩니다. 노란 줄은 마감일(8일·15일·23일·말일)입니다. 기록이 없는 날은 "-"입니다. 오늘 칸은 오늘 수집한 최신 값을 회색 기울임으로 미리 보여 주고, 공식 기록이 만들어지면 그 값으로 바뀝니다. 날짜 칸은 그날 저녁 6시~자정에 마지막으로 수집한 값이고, 마감일 아래의 "최종마감" 줄은 마감 다음날 0~6시에 마지막으로 수집한 값입니다. 공식 기록은 다음 날 오전 6시 30분 이후에 만들어지며, 그 시간대에 수집이 없으면 "-"로 둡니다. 기록은 매일 한 번 쌓이므로 처음에는 비어 있고 날이 지날수록 채워집니다.</p></div><div id="rcWeekPane" hidden><div class="rc-controls"><label>기간(월)<input id="rcWeekMonth" type="month"></label><button class="secondary compact" id="rcWeekPrev" type="button">◀ 이전 달</button><button class="secondary compact" id="rcWeekNext" type="button">다음 달 ▶</button></div><div class="rc-weeks" id="rcWeeks"></div><p class="help">내 서브1·서브2의 주차별 값입니다. 1주차는 1~8일, 2주차는 9~15일, 3주차는 16~23일, 4주차는 24일~말일이며, 마감일이 지나면 완료로 표시됩니다. <b>마감 전</b>은 마감일 당일 저녁(18~24시)에 마지막으로 수집한 총실적(본인+대+소)이고, <b>마감 후</b>는 마감 다음 날 0~6시에 수집한 최종마감 기록입니다. 값 옆의 대실적·소실적은 두 값을 비교해 큰 쪽·작은 쪽에 붙입니다. 기록은 지우지 않고 계속 보관되어 이전 달로 돌아가 볼 수 있습니다. 기록이 없는 곳은 "-"입니다.</p></div><div id="rcDayPane" hidden><div class="rc-controls"><label>계정<select id="rcAccount">${accounts.map((a) => `<option value="${safe(a)}">${safe(a)}</option>`).join("")}</select></label><div class="rc-datebox"><button class="secondary compact" id="rcPrev" type="button">◀ 이전</button><input id="rcDate" type="date"><button class="secondary compact" id="rcNext" type="button">다음 ▶</button></div><label>검색<input id="rcSearch" placeholder="이름 또는 코드"></label><label class="check"><input id="rcMain" type="checkbox"> 본코드도 보기</label><button class="secondary compact" id="rcCsv" type="button">엑셀(CSV) 내려받기</button></div><p class="help"><span id="rcRound"></span> <span id="rcMeta"></span> · <span id="rcCount"></span></p><div class="rc-wrap" id="rcTable"></div><p class="help">증감은 바로 이전에 기록된 날짜와 비교한 값입니다. 실회선이 "미수집"이면 그날 읽지 못한 값이며 0과 다릅니다. 마감일은 8일·15일·23일·말일입니다. 본코드는 마감 계산에만 쓰여서 기본으로 숨겼습니다(“본코드도 보기”로 표시). 이름 아래 작은 숫자는 본코드 번호입니다.</p></div>`;
 
     const first = async (account) => {
       const rows = await latest(account);
@@ -427,17 +427,80 @@ export async function recordsPage(root, me, tools = {}) {
       renderGridPickers();
       drawGrid();
     };
-    $("rcTabDay").onclick = () => {
-      $("rcTabDay").classList.add("active");
-      $("rcTabOne").classList.remove("active");
-      $("rcGridPane").hidden = false;
-      $("rcDayPane").hidden = true;
+    // ---- 주차별 보기: 내 서브1·서브2의 마감 전·후 값 ----
+    const week = { month: "" };
+    const mdText = (date) => `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`;
+    const shiftMonth = (monthText, delta) => {
+      const [year, month] = monthText.split("-").map(Number);
+      const moved = new Date(year, month - 1 + delta, 1);
+      return `${moved.getFullYear()}-${String(moved.getMonth() + 1).padStart(2, "0")}`;
     };
-    $("rcTabOne").onclick = () => {
-      $("rcTabOne").classList.add("active");
-      $("rcTabDay").classList.remove("active");
-      $("rcGridPane").hidden = true;
-      $("rcDayPane").hidden = false;
+    const drawWeeks = async () => {
+      const box = $("rcWeeks");
+      const memberNo = Number(String(me.member_no || "").replace(/[^0-9]/g, ""));
+      if (!memberNo) {
+        box.innerHTML = '<p class="help">프로필에 회원번호가 없어 내 서브코드를 알 수 없습니다. 설정 > 내 정보에서 회원번호를 입력해 주세요.</p>';
+        return;
+      }
+      if (!week.month) week.month = kstDate(new Date()).slice(0, 7);
+      $("rcWeekMonth").value = week.month;
+      box.innerHTML = '<p class="help" style="padding:12px">불러오는 중...</p>';
+      try {
+        const dates = monthDates(week.month);
+        const last = dates[dates.length - 1];
+        const codes = [String(memberNo + 1), String(memberNo + 2)];
+        const cols = "metric_date,user_id,ord_pv,max_pv,min_pv";
+        const dailyRes = await dailyOnly(supabase.from("nrc_daily_metrics").select(cols).eq("owner_id", me.id).in("user_id", codes).gte("metric_date", dates[0]).lte("metric_date", nextDate(last)));
+        if (dailyRes.error) throw dailyRes.error;
+        let finals = null;
+        if (!state.noKind) {
+          const finalRes = await supabase.from("nrc_daily_metrics").select(cols).eq("owner_id", me.id).eq("record_kind", "final").in("user_id", codes).gte("metric_date", dates[0]).lte("metric_date", last);
+          if (finalRes.error) throw finalRes.error;
+          finals = finalRes.data || [];
+        }
+        const summaries = weekSummaries(buildGrid(dailyRes.data || [], [{ code: String(memberNo), name: "", s1: codes[0], s2: codes[1] }], dates, "total", finals), dates);
+        const today = kstDate(new Date());
+        const value = (v) => (v == null ? "-" : number(v));
+        const tag = (pair, index) => {
+          const name = lineNames(pair[0], pair[1])[index];
+          return name ? `<small class="rc-lt">${name}</small>` : "";
+        };
+        box.innerHTML = summaries
+          .map((w) => {
+            const done = w.to < today;
+            const head = `<h3>${w.round}주차 <small>${mdText(w.from)} ~ ${mdText(w.to)}</small> <span class="rc-badge${done ? "" : " rc-badge-wait"}">${done ? "완료" : "진행 중"}</span></h3>`;
+            if (!done) return `<article class="rc-week">${head}<p class="help">마감일(${mdText(w.to)})이 지나면 마감 전·후 값이 여기에 나타납니다.</p></article>`;
+            const afterCaption = w.afterStrict ? `${mdText(nextDate(w.to))} 새벽 최종마감` : "다음 날 기록";
+            const line = (label, code, i) => `<tr><th>${label}<small>${code}</small></th><td class="num">${value(w.before[i])}${tag(w.before, i)}</td><td class="num">${value(w.after[i])}${tag(w.after, i)}</td></tr>`;
+            const empty = [...w.before, ...w.after].every((v) => v == null);
+            return `<article class="rc-week">${head}<table class="rc-table"><thead><tr><th></th><th class="num">마감 전<small>${mdText(w.to)} 저녁</small></th><th class="num">마감 후<small>${afterCaption}</small></th></tr></thead><tbody>${line("서브1", codes[0], 0)}${line("서브2", codes[1], 1)}</tbody></table>${empty ? '<p class="help">이 주차는 기록이 없습니다.</p>' : ""}</article>`;
+          })
+          .join("");
+      } catch (error) {
+        box.innerHTML = `<p class="error" style="padding:12px">주차별 기록을 불러오지 못했습니다: ${safe(error.message || error)}</p>`;
+      }
+    };
+    const showPane = (name) => {
+      [["Day", "rcGridPane", "day"], ["Week", "rcWeekPane", "week"], ["One", "rcDayPane", "one"]].forEach(([tab, pane, key]) => {
+        $(`rcTab${tab}`).classList.toggle("active", key === name);
+        $(pane).hidden = key !== name;
+      });
+      if (name === "week") drawWeeks();
+    };
+    $("rcTabDay").onclick = () => showPane("day");
+    $("rcTabWeek").onclick = () => showPane("week");
+    $("rcTabOne").onclick = () => showPane("one");
+    $("rcWeekMonth").onchange = () => {
+      week.month = $("rcWeekMonth").value || week.month;
+      drawWeeks();
+    };
+    $("rcWeekPrev").onclick = () => {
+      week.month = shiftMonth(week.month || kstDate(new Date()).slice(0, 7), -1);
+      drawWeeks();
+    };
+    $("rcWeekNext").onclick = () => {
+      week.month = shiftMonth(week.month || kstDate(new Date()).slice(0, 7), 1);
+      drawWeeks();
     };
     $("rcMetric").onchange = () => {
       grid.metric = $("rcMetric").value;

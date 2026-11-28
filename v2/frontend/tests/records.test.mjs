@@ -178,3 +178,25 @@ assert.deepEqual(dropCode(["a", "b", "c", "d"], "a", "c"), ["b", "c", "a", "d"],
 assert.deepEqual(dropCode(["a", "b", "c"], "b", "b"), ["a", "b", "c"], "제자리");
 assert.deepEqual(dropCode(["a", "b"], "x", "b"), ["a", "b"], "없는 코드는 그대로");
 console.log("Records order tests passed.");
+
+import { weekSummaries, lineNames } from "../js/records-logic.js";
+{
+  const dates = monthDates("2026-11");
+  const people = [{ code: "100", name: "A", s1: "101", s2: "102" }];
+  const row = (date, id, total) => ({ metric_date: date, user_id: id, ord_pv: 0, max_pv: total, min_pv: 0 });
+  const daily = [row("2026-11-08", "101", 10), row("2026-11-08", "102", 20), row("2026-11-23", "101", 813726), row("2026-11-23", "102", 465520)];
+  const finals = [row("2026-11-23", "101", 7), row("2026-11-23", "102", 9)];
+  const weeks = weekSummaries(buildGrid(daily, people, dates, "total", finals), dates);
+  assert.deepEqual(weeks.map((w) => [w.round, w.from, w.to]), [[1, "2026-11-01", "2026-11-08"], [2, "2026-11-09", "2026-11-15"], [3, "2026-11-16", "2026-11-23"], [4, "2026-11-24", "2026-11-30"]], "주차 기간");
+  assert.deepEqual(weeks[0].before, [10, 20], "1주차 마감 전");
+  assert.deepEqual(weeks[0].after, [null, null], "1주차는 새 규칙 이전이라 다음 날 기록(없음)을 씀");
+  assert.deepEqual(weeks[2].before, [813726, 465520], "3주차 마감 전");
+  assert.deepEqual(weeks[2].after, [7, 9], "3주차 마감 후(최종마감 기록)");
+  assert.equal(weeks[2].afterStrict, true);
+  assert.deepEqual(weeks[3].before, [null, null], "기록이 없으면 비움");
+}
+assert.deepEqual(lineNames(813726, 465520), ["대실적", "소실적"]);
+assert.deepEqual(lineNames(300000, 500000), ["소실적", "대실적"]);
+assert.deepEqual(lineNames(5, 5), ["대실적", "소실적"], "같으면 앞쪽이 대실적");
+assert.deepEqual(lineNames(null, 5), ["", ""], "한쪽이 비면 알 수 없음");
+console.log("Records weekly tests passed.");

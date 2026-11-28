@@ -163,6 +163,30 @@ export function buildGrid(rows, people, dates, metric, finalRows = null) {
   });
 }
 
+// 주차 요약: 마감일(8·15·23일·말일)마다 한 주차. 1주차 = 1일~8일, 2주차 = 9~15일, 3주차 = 16~23일, 4주차 = 24일~말일.
+// 마감 전 = 마감일 당일 저녁 기록(날짜 줄), 마감 후 = 마감일 아래 최종마감 줄. buildGrid 결과(grid)와 그 달 날짜 목록(dates)을 받는다.
+export function weekSummaries(grid, dates) {
+  const closings = dates.filter((date) => closingRound(date));
+  return closings.map((closing, index) => {
+    const before = grid.find((row) => row.date === closing && !row.final);
+    const after = grid.find((row) => row.date === closing && row.final);
+    return {
+      round: closingRound(closing),
+      from: index === 0 ? dates[0] : nextDate(closings[index - 1]),
+      to: closing,
+      before: before ? before.cells : [null, null],
+      after: after ? after.cells : [null, null],
+      afterStrict: Boolean(after && after.strict),
+    };
+  });
+}
+
+// 두 값 중 큰 쪽이 대실적, 작은 쪽이 소실적(같으면 앞쪽이 대실적). 하나라도 비어 있으면 알 수 없어 빈 문자열.
+export function lineNames(a, b) {
+  if (a == null || b == null) return ["", ""];
+  return Number(a) >= Number(b) ? ["대실적", "소실적"] : ["소실적", "대실적"];
+}
+
 export function toGridCsv(grid, people, metricLabel) {
   const header = ["날짜", "마감", ...people.flatMap((p) => [`${p.name || p.code} 서브1 ${metricLabel}`, `${p.name || p.code} 서브2 ${metricLabel}`])];
   const lines = grid.map((row) => [row.date, row.final ? `최종마감${row.round}차` : row.round ? `${row.round}차 마감` : "", ...row.cells].map(csvCell).join(","));
