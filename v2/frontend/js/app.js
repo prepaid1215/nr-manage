@@ -15,7 +15,7 @@ import {
   checklistPage,
 } from "./checklist.js?v=20260906-31";
 import { educationPage, educationGo, eduSubHtml } from "./education.js?v=20261128-3";
-import { closingPage, commissionPage } from "./finance.js?v=20260916-2";
+import { closingPage, commissionPage } from "./finance.js?v=20261128-1";
 import { performancePage } from "./performance.js?v=20261128-1";
 import { manualClosePage } from "./manual-close.js?v=20261128-1";
 import { customTreePage } from "./custom-tree.js?v=20261128-1";

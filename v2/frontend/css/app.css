@@ -532,6 +532,8 @@ button:active{transform:translateY(1px)}button:disabled{cursor:not-allowed;opaci
 .rc-grid .rc-stick,.rc-grid .rc-dayno{position:sticky;left:0;z-index:2;background:#f7f9fc;min-width:110px}
 .rc-grid tbody .rc-dayno{background:#fff}.rc-grid .rc-closing .rc-dayno{background:#fff3b0}.rc-grid .rc-final .rc-dayno{background:#ffe08a}
 .rc-grid{min-width:0}
+/* 마감매출 입력칸 중 기록에서 자동으로 채운 칸 */
+.finance-rounds input.auto-filled{background:#fff8d6;border-color:#e9c75a}
 /* 날짜 칸은 내용 폭만 쓰고 남는 폭은 값 칸이 나눠 가진다. 최종마감 줄의 설명 글자는 줄바꿈해서 날짜 칸이 넓어지지 않게 한다. */
 .rc-grid .rc-stick,.rc-grid .rc-dayno{width:1%;white-space:nowrap}.rc-grid .rc-dayno small{white-space:normal}
 .rc-addbox{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 8px}.rc-addbox input{margin:0}.rc-addbox button{width:auto;margin:0}
