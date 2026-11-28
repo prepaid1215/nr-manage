@@ -155,6 +155,13 @@ a:focus-visible {
   background: var(--accent);
   border-color: var(--accent);
 }
+/* 고객 탭: 고객 등록 버튼은 접히는 "고객 관리" 밖, 탭 줄 오른쪽 끝에 항상 보인다 */
+.view-tabs .customer-add-quick {
+  margin-left: auto;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
 
 /* PC(1000px 이상): 왼쪽 세로 메뉴. 모바일·태블릿의 상단/하단 탭은 그대로 둔다. */
 @media (min-width: 1000px) {
