@@ -130,7 +130,9 @@ export function boxTreeHtml(ctx, rootId, options = {}) {
     if (level > 1 && hiddenIds.has(id) && !showHidden) {
       return `<li><div class="box-node box-node-collapsed"><small>${safe(row?.userName || "이름 없음")}</small><span class="box-hide restore" data-restore-member="${safe(id)}" role="button" tabindex="0" title="다시 보기">↺ 숨김</span></div>${childrenHtml}</li>`;
     }
-    return `<li>${boxCardHtml(row, {
+    // 연결선 위에 "하위 총"(이 박스 아래 전체 실적 합계)을 보여 준다. 실적 > 추천제외 탭과 같은 표시.
+    const edge = options.edgeTotals && level > 1 ? `<span class="cl-edge" title="이 박스 아래 전체 실적 합계">하위 총 ${number(totalOf(row))}</span>` : "";
+    return `<li>${edge}${boxCardHtml(row, {
       lines: options.showLines ? { own: memberLineMetrics(row).real } : null,
       badge: badges[id],
       note: notes[id],

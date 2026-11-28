@@ -1,5 +1,5 @@
 import { supabase } from "./supabase.js?v=20260829-34";
-import { boxTreeHtml } from "./box-tree.js?v=20261124-1";
+import { boxTreeHtml } from "./box-tree.js?v=20261128-1";
 import { buildPerformanceModel } from "./performance-calculator.js?v=20261108-3";
 import { buildPersons, litPersonTree, buildCodeView, litCodesOf, codeNotes } from "./custom-tree-logic.js?v=20261123-1";
 
@@ -95,6 +95,7 @@ export async function customTreePage(root, me) {
       litIds: litCodesOf(persons, picks),
       hideDate: true,
       showLines: true,
+      edgeTotals: true,
     });
   const sectionHtml = (id) => {
     const row = model.byId.get(id);
@@ -107,7 +108,7 @@ export async function customTreePage(root, me) {
     const lit = litPersonTree(codeView, litCodesOf(persons, picks));
     const ctx = { byId: model.byId, children: lit.children };
     return lit.tops
-      .map((top) => `<div class="box-tree pannable-tree" style="margin-top:8px"><div class="tree-stage" style="zoom:${zoom}">${boxTreeHtml(ctx, top, { depth: 16, notes, litIds: lit.keep, hideDate: true, showLines: true, clickable: false })}</div></div>`)
+      .map((top) => `<div class="box-tree pannable-tree" style="margin-top:8px"><div class="tree-stage" style="zoom:${zoom}">${boxTreeHtml(ctx, top, { depth: 16, notes, litIds: lit.keep, hideDate: true, showLines: true, edgeTotals: true, clickable: false })}</div></div>`)
       .join("");
   };
   const summary = () =>

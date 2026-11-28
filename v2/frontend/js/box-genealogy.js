@@ -1,5 +1,5 @@
 import { supabase } from "./supabase.js?v=20260829-34";
-import { boxCardHtml, boxTreeHtml } from "./box-tree.js?v=20261124-1";
+import { boxCardHtml, boxTreeHtml } from "./box-tree.js?v=20261128-1";
 import { friendlyError } from "./errors.js?v=20260830-1";
 
 const number = (value) => Number(value || 0).toLocaleString("ko-KR");

@@ -16,9 +16,9 @@ import {
 } from "./checklist.js?v=20260906-31";
 import { educationPage, educationGo, eduSubHtml } from "./education.js?v=20261127-5";
 import { closingPage, commissionPage } from "./finance.js?v=20260916-2";
-import { performancePage } from "./performance.js?v=20261124-1";
-import { manualClosePage } from "./manual-close.js?v=20261124-1";
-import { customTreePage } from "./custom-tree.js?v=20261124-2";
+import { performancePage } from "./performance.js?v=20261128-1";
+import { manualClosePage } from "./manual-close.js?v=20261128-1";
+import { customTreePage } from "./custom-tree.js?v=20261128-1";
 import { closingLabPage } from "./closing-lab.js?v=20261124-1";
 import { recordsPage } from "./records.js?v=20261125-21";
 import { scheduleTimeNote, missingRecordSchedules, scheduleKind } from "./schedule-hint.js?v=20261125-20";
@@ -26,7 +26,7 @@ import { teamPage } from "./team.js?v=20261101-10";
 import { localDate, monthRange } from "./date.js?v=20260829-25";
 import { memberLineMetrics } from "./line-metrics.js?v=20261108-2";
 import { friendlyError } from "./errors.js?v=20260830-1";
-import { adminPage, isAppAdmin } from "./admin.js?v=20261128-2";
+import { adminPage, isAppAdmin } from "./admin.js?v=20261128-3";
 import {
   loadManualLinks,
   mergeManualLinks,
