@@ -166,3 +166,15 @@ assert.equal(finalPreviewRows(dawn, ["11"], "2026-11-30")[0].metric_date, "2026-
 assert.deepEqual(finalPreviewRows({ ...dawn, collected_at: "2026-11-30T21:30:00Z" }, ["11"], "2026-11-30"), [], "오전 6시 30분 수집은 시간대 밖");
 assert.deepEqual(finalPreviewRows({ ...dawn, collected_at: "2026-11-30T10:00:00Z" }, ["11"], "2026-11-30"), [], "마감 당일 저녁 수집은 최종마감이 아님");
 console.log("Records grid tests passed.");
+
+import { moveCode, dropCode } from "../js/records-logic.js";
+assert.deepEqual(moveCode(["a", "b", "c"], "b", -1), ["b", "a", "c"], "앞으로 한 칸");
+assert.deepEqual(moveCode(["a", "b", "c"], "b", 1), ["a", "c", "b"], "뒤로 한 칸");
+assert.deepEqual(moveCode(["a", "b", "c"], "a", -1), ["a", "b", "c"], "맨 앞은 더 못 감");
+assert.deepEqual(moveCode(["a", "b", "c"], "c", 1), ["a", "b", "c"], "맨 뒤는 더 못 감");
+assert.deepEqual(moveCode(["a", "b", "c"], "x", 1), ["a", "b", "c"], "없는 코드는 그대로");
+assert.deepEqual(dropCode(["a", "b", "c", "d"], "d", "b"), ["a", "d", "b", "c"], "뒤에서 앞으로 끌면 놓은 자리 앞");
+assert.deepEqual(dropCode(["a", "b", "c", "d"], "a", "c"), ["b", "c", "a", "d"], "앞에서 뒤로 끌면 놓은 자리 뒤");
+assert.deepEqual(dropCode(["a", "b", "c"], "b", "b"), ["a", "b", "c"], "제자리");
+assert.deepEqual(dropCode(["a", "b"], "x", "b"), ["a", "b"], "없는 코드는 그대로");
+console.log("Records order tests passed.");

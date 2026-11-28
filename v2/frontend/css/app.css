@@ -523,11 +523,17 @@ button:active{transform:translateY(1px)}button:disabled{cursor:not-allowed;opaci
 .rc-ptab button{margin:0;padding:9px 6px 9px 14px;border:0;border-radius:0;background:transparent;color:var(--text);box-shadow:none;font-weight:700;width:auto}
 .rc-ptab a{padding:9px 12px 9px 4px;color:var(--muted);text-decoration:none}
 .rc-ptab.active{border-color:var(--brand);background:var(--brand)}.rc-ptab.active button,.rc-ptab.active a{color:#fff}
+.rc-ptab[draggable="true"]{cursor:grab}.rc-ptab.dragging{opacity:.45}.rc-ptab.dragover{outline:2px dashed var(--brand);outline-offset:2px}
+.rc-ptab a[data-rc-move]{padding:9px 3px;font-size:11px}.rc-ptab.active a[data-rc-move]{color:#fff}
+/* PC: 기록 표는 안쪽 스크롤 없이 페이지 스크롤 하나로 본다(머리글·날짜 칸은 화면에 붙어 따라온다). 표가 카드보다 넓으면 테두리째 옆으로 늘어난다. */
+@media(min-width:1000px){.rc-wrap{overflow:visible;max-height:none;width:max-content;min-width:100%}}
 .rc-ptab-add{margin:0;width:42px;padding:8px 0;border:1px dashed var(--line);border-radius:12px;background:#fff;color:var(--brand);font-size:20px;line-height:1;box-shadow:none}
 #rcAddPerson{width:100%;max-width:300px;margin:0 0 8px}
 .rc-grid .rc-stick,.rc-grid .rc-dayno{position:sticky;left:0;z-index:2;background:#f7f9fc;min-width:110px}
 .rc-grid tbody .rc-dayno{background:#fff}.rc-grid .rc-closing .rc-dayno{background:#fff3b0}.rc-grid .rc-final .rc-dayno{background:#ffe08a}
 .rc-grid{min-width:0}
+/* 날짜 칸은 내용 폭만 쓰고 남는 폭은 값 칸이 나눠 가진다. 최종마감 줄의 설명 글자는 줄바꿈해서 날짜 칸이 넓어지지 않게 한다. */
+.rc-grid .rc-stick,.rc-grid .rc-dayno{width:1%;white-space:nowrap}.rc-grid .rc-dayno small{white-space:normal}
 .rc-addbox{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 8px}.rc-addbox input{margin:0}.rc-addbox button{width:auto;margin:0}
 .rc-lookup{margin:10px 0;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#fbfbff}
 .rc-lookup-head{display:flex;flex-wrap:wrap;gap:10px;align-items:baseline;margin-bottom:6px}.rc-lookup-head a{margin-left:auto;color:var(--danger);text-decoration:none;font-size:18px}

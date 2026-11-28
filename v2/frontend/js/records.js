@@ -1,5 +1,5 @@
 import { supabase } from "./supabase.js?v=20260829-34";
-import { closingRound, withDeltas, toPeopleCsv, labelCodes, groupPeople, personValue, GRID_METRICS, monthDates, nextDate, buildGrid, toGridCsv, matchPeople, trackedPeople, kstDate, snapshotRows, withProvisional, finalPreviewRows, FINAL_RULE_START, closingRound as closingRoundOf } from "./records-logic.js?v=20261125-21";
+import { closingRound, withDeltas, toPeopleCsv, labelCodes, groupPeople, personValue, GRID_METRICS, monthDates, nextDate, buildGrid, toGridCsv, matchPeople, trackedPeople, kstDate, snapshotRows, withProvisional, finalPreviewRows, FINAL_RULE_START, closingRound as closingRoundOf, moveCode, dropCode } from "./records-logic.js?v=20261128-1";
 
 // 기록 탭: 매일 저장된 코드별 대실적·소실적·실회선을 날짜별로 보고 엑셀(CSV)로 내려받는다.
 // 표는 nrc_daily_metrics(RUN_051)에서 읽는다. 내 계정 자료만 보인다(RLS).
@@ -256,7 +256,7 @@ export async function recordsPage(root, me, tools = {}) {
       if (grid.active !== ALL && !activePerson()) grid.active = ALL;
       $("rcPeopleList").innerHTML = all.filter((p) => !grid.codes.includes(p.code)).map((p) => `<option value="${safe(p.name || p.code)} (${safe(p.code)})"></option>`).join("");
       $("rcPTabs").innerHTML = `<div class="rc-ptab${grid.active === ALL ? " active" : ""}"><button type="button" data-rc-tab="${ALL}" title="모든 사람을 한 번에 보기">전체</button></div>${people
-        .map((p) => `<div class="rc-ptab${p.code === grid.active ? " active" : ""}"><button type="button" data-rc-tab="${safe(p.code)}">${safe(p.name || p.code)}</button><a href="#" data-rc-del="${safe(p.code)}" title="탭 닫기">×</a></div>`)
+        .map((p) => `<div class="rc-ptab${p.code === grid.active ? " active" : ""}" draggable="true" data-rc-drag="${safe(p.code)}" title="끌어서 순서를 바꿀 수 있습니다"><button type="button" data-rc-tab="${safe(p.code)}">${safe(p.name || p.code)}</button>${p.code === grid.active ? `<a href="#" data-rc-move="-1" data-rc-code="${safe(p.code)}" title="앞으로">◀</a><a href="#" data-rc-move="1" data-rc-code="${safe(p.code)}" title="뒤로">▶</a>` : ""}<a href="#" data-rc-del="${safe(p.code)}" title="탭 닫기">×</a></div>`)
         .join("")}<button type="button" class="rc-ptab-add" id="rcAddTab" title="사람 추가·NRC에서 찾기">+</button>${grid.active !== ALL && isTracked(grid.active) ? '<button type="button" class="secondary compact" id="rcUntrack" title="이 사람을 매일 기록에서 뺍니다">등록 해제</button>' : ""}`;
       $("rcPTabs").querySelectorAll("[data-rc-tab]").forEach((button) => {
         button.onclick = () => {
@@ -264,6 +264,45 @@ export async function recordsPage(root, me, tools = {}) {
           saveTabs();
           renderGridPickers();
           drawGrid();
+        };
+      });
+      const reorder = (next) => {
+        grid.codes = next;
+        saveTabs();
+        renderGridPickers();
+        drawGrid();
+      };
+      $("rcPTabs").querySelectorAll("[data-rc-move]").forEach((link) => {
+        link.onclick = (event) => {
+          event.preventDefault();
+          reorder(moveCode(grid.codes, link.dataset.rcCode, Number(link.dataset.rcMove)));
+        };
+      });
+      let dragging = "";
+      $("rcPTabs").querySelectorAll("[data-rc-drag]").forEach((tab) => {
+        tab.ondragstart = (event) => {
+          dragging = tab.dataset.rcDrag;
+          tab.classList.add("dragging");
+          if (event.dataTransfer) {
+            event.dataTransfer.effectAllowed = "move";
+            event.dataTransfer.setData("text/plain", dragging);
+          }
+        };
+        tab.ondragend = () => {
+          dragging = "";
+          $("rcPTabs").querySelectorAll(".dragging,.dragover").forEach((el) => el.classList.remove("dragging", "dragover"));
+        };
+        tab.ondragover = (event) => {
+          if (!dragging || dragging === tab.dataset.rcDrag) return;
+          event.preventDefault();
+          tab.classList.add("dragover");
+        };
+        tab.ondragleave = () => tab.classList.remove("dragover");
+        tab.ondrop = (event) => {
+          event.preventDefault();
+          const from = dragging;
+          dragging = "";
+          if (from) reorder(dropCode(grid.codes, from, tab.dataset.rcDrag));
         };
       });
       $("rcPTabs").querySelectorAll("[data-rc-del]").forEach((link) => {
@@ -363,7 +402,7 @@ export async function recordsPage(root, me, tools = {}) {
         };
         const dayRows = (row) =>
           row.final
-            ? `<tr class="rc-final"><td class="rc-dayno">최종마감${row.round}차<small>${safe(nextDate(row.date))}${row.strict ? " 새벽(0~6시) 수집" : " 기록"}</small></td>${cells(row)}</tr>`
+            ? `<tr class="rc-final"><td class="rc-dayno">최종마감${row.round}차<small>${row.strict ? `${row.round}차(마감)` : `${safe(nextDate(row.date))} 기록`}</small></td>${cells(row)}</tr>`
             : `<tr class="${row.round ? "rc-closing" : ""}"><td class="rc-dayno">${safe(row.date)}${row.date === today ? "<small>오늘 · 진행 중</small>" : ""}${row.round ? `<small>${row.round}차 마감일</small>` : ""}</td>${cells(row)}</tr>`;
         const head = everyone
           ? `<tr><th rowspan="2" class="rc-stick">날짜</th>${people.map((p) => `<th colspan="2" class="rc-group">${safe(p.name || p.code)}</th>`).join("")}</tr><tr>${people.map((p) => `<th class="num">서브1<small class="rc-d">${safe(p.s1 || "-")}</small></th><th class="num">서브2<small class="rc-d">${safe(p.s2 || "-")}</small></th>`).join("")}</tr>`

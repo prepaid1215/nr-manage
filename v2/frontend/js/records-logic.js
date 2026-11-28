@@ -69,6 +69,24 @@ export function groupPeople(rows) {
   return { people, singles };
 }
 
+// 날짜별 표의 사람 순서: 한 칸 앞/뒤로 옮기기, 끌어다 놓기(놓은 자리 앞/뒤로 들어감).
+export function moveCode(codes, code, delta) {
+  const from = codes.indexOf(code);
+  const to = from + delta;
+  if (from < 0 || to < 0 || to >= codes.length) return codes.slice();
+  const next = codes.slice();
+  [next[from], next[to]] = [next[to], next[from]];
+  return next;
+}
+export function dropCode(codes, from, target) {
+  const i = codes.indexOf(from);
+  const j = codes.indexOf(target);
+  if (i < 0 || j < 0 || i === j) return codes.slice();
+  const next = codes.filter((code) => code !== from);
+  next.splice(j, 0, from);
+  return next;
+}
+
 export const personValue = (obj, path) => path.split(".").reduce((value, key) => (value == null ? value : value[key]), obj);
 
 // 한 사람이 한 줄: 서브1·서브2 각각의 대실적·소실적·회선수와 이전 기록일 대비 증감.
