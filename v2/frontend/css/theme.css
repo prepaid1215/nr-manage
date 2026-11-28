@@ -583,9 +583,18 @@ a:focus-visible {
   background: #fff;
   box-shadow: var(--shadow);
 }
+/* PC: main 위 여백 34px + 아래 여백 80px = 114px. 이만큼 빼야 바깥 페이지가 화면보다 길어지지 않아 스크롤바가 안쪽 하나만 남는다. */
 @media (min-width: 1000px) {
   .edu-frame {
-    height: calc(100vh - 80px);
+    height: calc(100vh - 114px);
+  }
+  @supports selector(:has(*)) {
+    main#content:has(> .edu-frame) {
+      padding-bottom: 20px;
+    }
+    .edu-frame {
+      height: calc(100vh - 54px);
+    }
   }
 }
 
