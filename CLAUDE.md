@@ -30,7 +30,7 @@
 ## 개발·배포 주의사항
 
 - 먼저 `git status`와 최근 커밋을 확인하고 사용자 변경을 보존한다.
-- 운영 DB에는 RUN_046~RUN_054, RUN_058 변경이 적용돼 있다. RUN_055·056(교육 탭)·057(관리자 수집 작업 조회)은 저장소에 있으나 운영 적용 여부를 아직 확인하지 못했다. 전체 SQL 재실행이나 DB 초기화를 하지 않는다.
+- 운영 DB에는 RUN_046~RUN_058 변경이 모두 적용돼 있다(11/28 확인). 전체 SQL 재실행이나 DB 초기화를 하지 않는다.
 - RUN 번호는 파일 이름으로 겹치지 않게 쓴다. 새 SQL은 저장소의 가장 큰 번호 다음 번호로 만든다(RUN_055가 두 파일에 쓰여 RUN_058로 바꾼 적이 있다).
 - 고객 등록의 "방문 지점"(`customers.visit_branch`, RUN_058)은 개통방법이 "지점방문"일 때만 보인다. 후보 목록은 BP FINDER+(`https://bp-finder.vercel.app/data/centers.json`)의 센터명이며 브라우저에 계속 저장하고 뒤에서 갱신한다. 규칙은 `v2/frontend/js/customer-visit.js`, 테스트는 `v2/frontend/tests/customer-visit.test.mjs`다. 열이 없는 DB에서는 메모 끝에 "방문 지점: ○○"으로 저장한다.
 - 새 표를 만들면 `authenticated`뿐 아니라 Render 서버가 쓰는 `service_role`에도 GRANT한다(빠뜨리면 서버가 오류를 삼켜 기능이 조용히 안 된다).

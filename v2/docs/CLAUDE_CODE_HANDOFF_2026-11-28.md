@@ -21,8 +21,9 @@
 |---|---|---|
 | RUN_046~052, RUN_054 | 이전 문서 참고 | 적용됨 |
 | RUN_053 | 기록 종류(`record_kind`)와 시간대 규칙 | **적용됨** (11/28 확인: `record_kind` 열·`nrc_daily_metrics_kind_check`·기본 키의 `record_kind`·`nrc_daily_metrics_kind_date` 인덱스 모두 있음) |
-| RUN_055_EDUCATION_PROGRESS, RUN_056_EDUCATION_CONTENT | 교육 탭 완료 체크·내용 편집 | 저장소에 있음, **운영 적용 여부 미확인** |
-| RUN_057_ADMIN_SYNC_JOBS | 관리자 수집 작업 조회 | 저장소에 있음, **운영 적용 여부 미확인** |
+| RUN_055_EDUCATION_PROGRESS | 교육 완료 체크(`nrc_education_progress`, `get_downline_education_progress`) | **적용됨** (11/28 확인: 표·함수·`service_role` 권한 있음) |
+| RUN_056_EDUCATION_CONTENT | 교육 내용 편집(`nrc_education_content`)·사진 저장소 `education` | **적용됨** (11/28 확인: 표·`service_role` 권한·버킷·사진 정책 있음) |
+| RUN_057_ADMIN_SYNC_JOBS | 관리자 수집 작업 조회(`admin_recent_sync_jobs`) | **적용됨** (11/28 확인: 함수 있음) |
 | **RUN_058_CUSTOMER_VISIT_BRANCH** | `customers.visit_branch` 열 추가 | **적용됨** (확인 쿼리 결과 `visit_branch | text` 확인) |
 
 - 전체 SQL 재실행·DB 초기화는 하지 않는다. 위 파일은 여러 번 실행해도 안전하게 작성돼 있다.
@@ -73,9 +74,8 @@
    - 고객 등록: 지점방문 선택 시 입력칸·센터명 목록, 저장 후 목록 카드의 "지점방문 ○○", 메모에 "방문 지점:" 문구가 없는지, 수정 시 값 유지·비우면 지워짐, 칸 좌우 여백
    - 내 계보도: 연결선 위 "하위 총"이 큰 계보에서 서로 겹치지 않는지
    - 교육 탭: 스크롤이 한 겹인지, 이미지·편집 팝업이 화면 안에 뜨는지, 과정을 바꿨을 때 높이가 따라가는지
-2. **RUN_055~057 적용 여부 확인** 후 이 문서와 `CLAUDE.md`의 적용 목록을 고친다. (RUN_053은 11/28에 적용 확인함)
-3. 교육 탭 모바일(좁은 화면) 동작은 확인하지 않았다. 팝업 중 `photoViewer`(이미지 확대)는 편집 팝업과 같은 방식이지만 따로 열어 보지 않았다.
-4. 방문 지점이 RUN_058 적용 전에 메모로 저장된 고객이 있으면 열로 옮기는 SQL이 필요할 수 있다.
+2. 교육 탭 모바일(좁은 화면) 동작은 확인하지 않았다. 팝업 중 `photoViewer`(이미지 확대)는 편집 팝업과 같은 방식이지만 따로 열어 보지 않았다.
+3. 방문 지점이 RUN_058 적용 전에 메모로 저장된 고객이 있으면 열로 옮기는 SQL이 필요할 수 있다.
 
 ## 6. 이번에 배운 것 (같은 실수 방지)
 - 푸시가 거절되면(원격에 새 커밋) 내용과 겹치는 파일을 먼저 본다. 한 줄로 길게 쓴 코드(`customers.js`)는 줄 단위로 합쳐지지 않으므로,
