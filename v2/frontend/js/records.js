@@ -24,7 +24,8 @@ async function fetchAll(build) {
 
 export async function recordsPage(root, me, tools = {}) {
   root.innerHTML = `<section class="card"><div class="section-head"><div><h2>기록</h2><p class="help" id="rcInfo">불러오는 중...</p></div></div><div id="rcError" class="error"></div><div id="rcBody"></div></section>`;
-  const $ = (id) => document.getElementById(id);
+  // 서버 응답을 기다리는 사이 다른 화면으로 이동하면 칸이 사라진다. 그때는 화면에 없는 임시 칸에 써서 오류 없이 넘어간다.
+  const $ = (id) => document.getElementById(id) || document.createElement("input");
   const state = { account: "", date: "", rows: [], sort: { key: "code", dir: 1 }, query: "", showMain: false, tracked: [] };
 
   // RUN_053의 record_kind 열이 있으면 일반 기록('daily')만 날짜별 기록으로 읽는다. 아직 없으면 필터 없이 이전 방식으로 읽는다.
