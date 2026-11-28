@@ -59,7 +59,20 @@ function autoSize(el) {
     if (modal || !el.isConnected) return;
     el.style.height = `${Math.ceil(doc.body.getBoundingClientRect().height)}px`;
   };
-  new ResizeObserver(fit).observe(doc.body);
+  // 크기 변화는 다음 프레임에 처리하고(관찰 콜백 안에서 바로 높이를 바꾸면 "ResizeObserver loop" 오류가 기록된다),
+  // 가이드가 닫히거나 화면을 떠나면 관찰을 끝낸다.
+  let frameId = 0;
+  const observer = new ResizeObserver(() => {
+    cancelAnimationFrame(frameId);
+    frameId = requestAnimationFrame(fit);
+  });
+  observer.observe(doc.body);
+  const stop = () => {
+    observer.disconnect();
+    cancelAnimationFrame(frameId);
+  };
+  win.addEventListener("pagehide", stop);
+  win.addEventListener("beforeunload", stop);
   fit();
   win.scrollTo = (a, b) => {
     if (modal) return origScrollTo(a, b);
