@@ -2,11 +2,12 @@
 
 작업을 시작할 때 다음 문서를 먼저 읽는다.
 
-1. [최신 인계 문서 — 2026-11-24 (기록 탭·NRC 검색·등록 회원·수집기 로그)](v2/docs/CLAUDE_CODE_HANDOFF_2026-11-24.md)
-2. [인계 문서 — 2026-11-09 (추가분)](v2/docs/CLAUDE_CODE_HANDOFF_2026-11-09.md)
-3. [기준 인계 문서 — 2026-11-08](v2/docs/CLAUDE_CODE_HANDOFF_2026-11-08.md)
-4. [기존 작업 기록](v2/docs/HANDOFF.md)
-5. 기능에 따라 `v2/docs/account-recovery.md`, `v2/docs/line-metrics.md`, `v2/docs/closing-calculator.md`, `v2/docs/record-windows.md`, `v2/docs/tracked-members.md`
+1. [최신 인계 문서 — 2026-11-28 (고객 방문 지점·고객 등록 화면·내 계보도 하위 총·교육 탭 스크롤)](v2/docs/CLAUDE_CODE_HANDOFF_2026-11-28.md)
+2. [인계 문서 — 2026-11-24 (기록 탭·NRC 검색·등록 회원·수집기 로그)](v2/docs/CLAUDE_CODE_HANDOFF_2026-11-24.md)
+3. [인계 문서 — 2026-11-09 (추가분)](v2/docs/CLAUDE_CODE_HANDOFF_2026-11-09.md)
+4. [기준 인계 문서 — 2026-11-08](v2/docs/CLAUDE_CODE_HANDOFF_2026-11-08.md)
+5. [기존 작업 기록](v2/docs/HANDOFF.md)
+6. 기능에 따라 `v2/docs/account-recovery.md`, `v2/docs/line-metrics.md`, `v2/docs/closing-calculator.md`, `v2/docs/record-windows.md`, `v2/docs/tracked-members.md`
 
 ## 현재 구조
 
